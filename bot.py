@@ -10,13 +10,7 @@ import random
 import threading
 import datetime
 import showerThoughtFetcher
-
-SOCKET_ARGS = {
-    'pw': "oauth:3lce99a01lnbt1xqzpxfu9t7jut402",
-    'user': "n0tb0t",
-    'channel': "rizorty"
-}
-
+from config import SOCKET_ARGS
 
 class Bot(object):
     def __init__(self, ts, gcs):
@@ -271,6 +265,7 @@ class Bot(object):
         self.ts.send_message(showerThoughtFetcher.main())
 
     def uptime(self, message):
+        user = self.ts.get_user(message)
         channel = SOCKET_ARGS['channel']
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
         r = requests.get(url)
