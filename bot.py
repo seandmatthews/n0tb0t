@@ -280,7 +280,7 @@ class Bot(object):
             uptime_str = 'The channel has been live for {hours} hours, {minutes} minutes and {seconds} seconds.'.format(hours=hours, minutes=minutes, seconds=seconds)
             self.ts.send_message(uptime_str)
         except requests.exceptions.HTTPError:
-            self.ts.send_message('Hey {}, that\'s not a real streamer!'.format(user))
+            self.ts.send_message('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
         except TypeError:
             self.ts.send_message('Sorry, the channel doesn\'t seem to be live at the moment. Thus, no uptime can be produced')
             
