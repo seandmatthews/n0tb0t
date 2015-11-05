@@ -10,6 +10,7 @@ import random
 import threading
 import datetime
 import showerThoughtFetcher
+import collections
 from config import SOCKET_ARGS
 
 class Bot(object):
@@ -64,6 +65,9 @@ class Bot(object):
             time = quote_sub_list[1]
             self._auto_quote(index=index, quote=quote, time=time)
 
+        self.chat_message_queue = collections.deque()
+        self.whisper_message_queue = collections.deque()
+
         self.db_path = os.path.join(self.cur_dir, 'DarkSouls.db')
         self.conn = sqlite3.connect(self.db_path)
         self.conn.execute('''CREATE TABLE IF NOT EXISTS USERS
@@ -74,7 +78,14 @@ class Bot(object):
             POINTS         INTEGER);''')
         self.conn.commit()
         self.conn.close()
-        
+
+
+    def _add_to_chat_queue(self, message):
+        self.chat_message_queue.appendleft(message)
+
+    def _add_to_whisper_queue(self, user, message):
+        whisper_tuple = (user, message)
+        self.whisper_message_queue.appendleft(whisper_tuple)
 
     def _send_whisper(self, user, msg):
         try:
@@ -91,7 +102,7 @@ class Bot(object):
             if fword[1:] in self.my_funcs:
                 eval('self.' + fword[1:] + '(message)')
             elif fword[1:] in self.commands_dict:
-                self.ts.send_message(self.commands_dict[fword[1:]])
+                self._add_to_chat_queue(self.commands_dict[fword[1:]])
 
     def _get_mods(self):
         url = 'http://tmi.twitch.tv/group/user/{channel}/chatters'.format(channel=self.ts.channel)
@@ -104,7 +115,7 @@ class Bot(object):
             if self.ts.get_user(message) in self._get_mods():
                 func(self, message)
             else:
-                self.ts.send_message("Sorry {}, that's a mod only command".format(self.ts.get_user(message)))
+                self._add_to_chat_queue("Sorry {}, that's a mod only command".format(self.ts.get_user(message)))
         new_func.__name__ = func.__name__
         new_func._mods_only = True
         return new_func
@@ -113,7 +124,7 @@ class Bot(object):
         key = 'AQ{}'.format(index)
         self.auto_quotes_timers[key] = threading.Timer(time, self._auto_quote, kwargs={'index': index,'quote': quote, 'time': time})
         self.auto_quotes_timers[key].start()
-        self.ts.send_message(quote)
+        self._add_to_chat_queue(quote)
 
     @_mod_only
     def start_auto_quotes(self, message):
@@ -226,7 +237,7 @@ class Bot(object):
                 with open(self.quotes_file, 'w') as cf:
                     cf.write(json.dumps(self.quotes_list))
             else:
-                self.ts.send_message('Sorry, there aren\'t that many quotes. Use a lower number')
+                self._add_to_chat_queue('Sorry, there aren\'t that many quotes. Use a lower number')
 
     def show_quotes(self, message):
         user = self.ts.get_user(message)
@@ -238,12 +249,12 @@ class Bot(object):
         if len(msg_list) > 1 and msg_list[1].isdigit():
             if int(msg_list[1]) <= len(self.quotes_list):
                 index = int(msg_list[1]) - 1
-                self.ts.send_message('#{} {}'.format(str(index+1), self.quotes_list[index]))
+                self._add_to_chat_queue('#{} {}'.format(str(index+1), self.quotes_list[index]))
             else:
-                 self.ts.send_message('Sorry, there aren\'t that many quotes. Use a lower number')
+                 self._add_to_chat_queue('Sorry, there aren\'t that many quotes. Use a lower number')
         else:
             random_quote_index = random.randrange(len(self.quotes_list))
-            self.ts.send_message('#{} {}'.format(str(random_quote_index+1), self.quotes_list[random_quote_index]))
+            self._add_to_chat_queue('#{} {}'.format(str(random_quote_index+1), self.quotes_list[random_quote_index]))
 
     @_mod_only
     def SO(self, message):
@@ -257,12 +268,12 @@ class Bot(object):
             game = r.json()['game']
             channel_url = r.json()['url']
             shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url} Tell \'em Riz sent you!'.format(channel=channel, game=game, url=channel_url)
-            self.ts.send_message(shout_out_str)
+            self._add_to_chat_queue(shout_out_str)
         except requests.exceptions.HTTPError:
-            self.ts.send_message('Hey {}, that\'s not a real streamer!'.format(user))
+            self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
             
     def shower_thought(self, message):
-        self.ts.send_message(showerThoughtFetcher.main())
+        self._add_to_chat_queue(showerThoughtFetcher.main())
 
     def uptime(self, message):
         user = self.ts.get_user(message)
@@ -278,11 +289,11 @@ class Bot(object):
             hours, remainder = divmod(td.seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             uptime_str = 'The channel has been live for {hours} hours, {minutes} minutes and {seconds} seconds.'.format(hours=hours, minutes=minutes, seconds=seconds)
-            self.ts.send_message(uptime_str)
+            self._add_to_chat_queue(uptime_str)
         except requests.exceptions.HTTPError:
-            self.ts.send_message('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
+            self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
         except TypeError:
-            self.ts.send_message('Sorry, the channel doesn\'t seem to be live at the moment. Thus, no uptime can be produced')
+            self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment. Thus, no uptime can be produced')
             
     def enter_contest(self, message):
         user = self.ts.get_user(message)
@@ -298,9 +309,9 @@ class Bot(object):
     def show_contest_winner(self, message):
         if len(self.users_contest_list) > 0:
             winner = random.choice(self.users_contest_list)
-            self.ts.send_message('The winner is {}!'.format(winner))
+            self._add_to_chat_queue('The winner is {}!'.format(winner))
         else:
-            self.ts.send_message('There are currently no entrants for the contest.')
+            self._add_to_chat_queue('There are currently no entrants for the contest.')
     @_mod_only
     def clear_contest_entrants(self, message):
         self.users_contest_list = []
@@ -310,12 +321,12 @@ class Bot(object):
     @_mod_only
     def enable_guessing(self, message):
         self.guessing_enabled = True
-        self.ts.send_message("Guessing is now enabled.")
+        self._add_to_chat_queue("Guessing is now enabled.")
 
     @_mod_only
     def disable_guessing(self, message):
         self.guessing_enabled = False
-        self.ts.send_message("Guessing is now disabled.")
+        self._add_to_chat_queue("Guessing is now disabled.")
 
     def guess(self, message):
         user = self.ts.get_user(message)
@@ -342,7 +353,7 @@ class Bot(object):
         misc_values_dict['guess-total-enabled'] = True
         with open(self.misc_values_file, 'w') as mvf:
             mvf.write(json.dumps(misc_values_dict))
-        self.ts.send_message("Guessing for the total amount of deaths is now enabled.")
+        self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
     @_mod_only
     def disable_guesstotal(self, message):
@@ -351,7 +362,7 @@ class Bot(object):
         misc_values_dict['guess-total-enabled'] = False
         with open(self.misc_values_file, 'w') as mvf:
             mvf.write(json.dumps(misc_values_dict))
-        self.ts.send_message("Guessing for the total amount of deaths is now disabled.")
+        self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
 
     def guesstotal(self, message):
         user = self.ts.get_user(message)
@@ -381,11 +392,11 @@ class Bot(object):
         ''')
         self.conn.commit()
         self.conn.close()
-        self.ts.send_message("Guesses have been cleared.")
+        self._add_to_chat_queue("Guesses have been cleared.")
 
     @_mod_only
     def show_guesses(self, message):
-        self.ts.send_message("Hello friends, formatting the google sheet with the latest information about all the guesses might take a little bit. I'll let you know when it's done.")
+        self._add_to_chat_queue("Hello friends, formatting the google sheet with the latest information about all the guesses might take a little bit. I'll let you know when it's done.")
         gc = gspread.authorize(self.credentials)
         sh = gc.open("Dark Souls Guesses")
         ws = sh.worksheet('Dark Souls Guesses')
@@ -399,7 +410,7 @@ class Bot(object):
             row_num = index + 3
             ws.update_acell('A{}'.format(row_num), row[1])
             ws.update_acell('B{}'.format(row_num), row[2])
-        self.ts.send_message("Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
+        self._add_to_chat_queue("Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
 
     @_mod_only
     def set_deaths(self, message):
@@ -450,7 +461,7 @@ class Bot(object):
     def show_deaths(self, message):
         deaths = self._get_deaths()
         total_deaths = self._get_total_deaths()
-        self.ts.send_message("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
+        self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
 
     def show_winner(self, message):
         winners_list = []
@@ -473,7 +484,7 @@ class Bot(object):
             winners_str = '{} and {}!'.format(winners_str[:-2], winners_list[-1])
         else:
             winners_str = 'You all gussed too high. You should have had more faith in Rizorty. Rizorty wins!'
-        self.ts.send_message(winners_str)
+        self._add_to_chat_queue(winners_str)
 
     def _check_for_user(self, user):
         self.conn = sqlite3.connect(self.db_path)
