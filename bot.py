@@ -87,14 +87,30 @@ class Bot(object):
         whisper_tuple = (user, message)
         self.whisper_message_queue.appendleft(whisper_tuple)
 
-    def _send_whisper(self, user, msg):
+    def _process_chat_queue(self, chat_queue):
+        while True:
+            if len(chat_queue) > 0:
+                self._send_message(chat_queue.pop())
+                time.sleep(1.6)
+
+    def _process_chat_queue(self, whisper_queue):
+        while True:
+            if len(whisper_queue) > 0:
+                self._send_message(whisper_queue.pop())
+                time.sleep(1.6)
+
+    def _send_whisper(self, user, message):
         try:
-            self.gcs.send_whisper(user, msg)
+            self.gcs.send_whisper(user, message)
             time.sleep(1)
-            self.gcs.send_whisper(self.gcs.user, msg)
+            self.gcs.send_whisper(self.gcs.user, message)
         except BrokenPipeError:
             self.gcs.join_room()
-            self.gcs.send_whisper(user, msg)
+            self.gcs.send_whisper(user, message)
+
+    # useless abstractions are useless, but pretty        
+    def _send_message(self, message):
+        self.ts.send_message(message)
 
     def _act_on(self, message):
         fword = self.ts.get_hr_message(message).split(' ')[0]
@@ -150,7 +166,7 @@ class Bot(object):
             hr_index = index + 1
             msg = aq[0]
             user = self.ts.get_user(message)
-            self._send_whisper(user, '#{hr_index} {msg}'.format(hr_index=hr_index, msg=msg))
+            self._add_to_whisper_queue(user, '#{hr_index} {msg}'.format(hr_index=hr_index, msg=msg))
             
     @_mod_only
     def add_auto_quote(self, message):
@@ -194,7 +210,7 @@ class Bot(object):
             with open(self.commands_file, 'w') as cf:
                 cf.write(json.dumps(self.commands_dict))
         except KeyError:
-            self._send_whisper(user, 'Sorry, that command can\'t be deleted.')
+            self._add_to_whisper_queue(user, 'Sorry, that command can\'t be deleted.')
 
     def show_commands(self, message):
         user = self.ts.get_user(message)
@@ -203,14 +219,14 @@ class Bot(object):
             commands_str += "!{} ".format(func)
         for func in self.commands_dict:
             commands_str += "!{} ".format(func)
-        self._send_whisper(user, commands_str)
+        self._add_to_whisper_queue(user, commands_str)
 
     def show_mod_commands(self, message):
         user = self.ts.get_user(message)
         commands_str = "Command List: "
         for func in self.for_mods:
             commands_str += "!{} ".format(func)
-        self._send_whisper(user, commands_str)
+        self._add_to_whisper_queue(user, commands_str)
 
     @_mod_only
     def show_deletable_commands(self, message):
@@ -218,7 +234,7 @@ class Bot(object):
         commands_str = "Command List: "
         for func in self.commands_dict:
             commands_str += "!{} ".format(func)
-        self._send_whisper(user, commands_str)
+        self._add_to_whisper_queue(user, commands_str)
 
     def add_quote(self, message):
         msg_list = self.ts.get_hr_message(message).split(' ')
@@ -242,7 +258,7 @@ class Bot(object):
     def show_quotes(self, message):
         user = self.ts.get_user(message)
         for index, quote in enumerate(self.quotes_list):
-            self._send_whisper(user, '#{}, {}'.format(index+1, quote))
+            self._add_to_whisper_queue(user, '#{}, {}'.format(index+1, quote))
 
     def quote(self, message):
         msg_list = self.ts.get_hr_message(message).split(' ')
@@ -301,9 +317,9 @@ class Bot(object):
             self.users_contest_list.append(user)
             with open(self.users_contest_list_file, 'w') as uclf:
                 uclf.write(json.dumps(self.users_contest_list))
-            self._send_whisper(user, 'You\'re entered into the contest!')
+            self._add_to_whisper_queue(user, 'You\'re entered into the contest!')
         else:
-            self._send_whisper(user, 'You\'re already entered into the contest, you can\'t enter again.')
+            self._add_to_whisper_queue(user, 'You\'re already entered into the contest, you can\'t enter again.')
         
     @_mod_only
     def show_contest_winner(self, message):
@@ -337,14 +353,14 @@ class Bot(object):
                 results = self._check_for_user(user)
                 if results:
                     self._update_guess(user, guess)
-                    self._send_whisper(user, "{} your guess has been recorded.".format(user))
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._insert_guess(user, guess)
-                    self._send_whisper(user, "{} your guess has been recorded.".format(user))
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
             else:
-                self._send_whisper(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
         else:
-            self._send_whisper(user, "Sorry {}, guessing is disabled.".format(user))
+            self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
 
     @_mod_only
     def enable_guesstotal(self, message):
@@ -375,14 +391,14 @@ class Bot(object):
                 results = self._check_for_user(user)
                 if results:
                     self._update_guesstotal(user, guess)
-                    self._send_whisper(user, "{} your guess has been recorded.".format(user))
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._insert_guesstotal(user, guess)
-                    self._send_whisper(user, "{} your guess has been recorded.".format(user))
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
             else:
-                self._send_whisper(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
         else:
-            self._send_whisper(user, "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
+            self._add_to_whisper_queue(user, "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
             
     @_mod_only
     def clear_guesses(self, message):
@@ -420,11 +436,11 @@ class Bot(object):
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
                 self._set_deaths(deaths_num)
-                self._send_whisper(user, 'Current deaths: {}'.format(deaths_num))
+                self._add_to_whisper_queue(user, 'Current deaths: {}'.format(deaths_num))
             else: 
-                self._send_whisper(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
+                self._add_to_whisper_queue(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
         else:
-            self._send_whisper(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
+            self._add_to_whisper_queue(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
 
 
     @_mod_only
@@ -435,11 +451,11 @@ class Bot(object):
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
                 self._set_total_deaths(total_deaths_num)
-                self._send_whisper(user, 'Total deaths: {}'.format(total_deaths_num))
+                self._add_to_whisper_queue(user, 'Total deaths: {}'.format(total_deaths_num))
             else: 
-                self._send_whisper(user, 'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(user))
+                self._add_to_whisper_queue(user, 'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(user))
         else:
-            self._send_whisper(user, 'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(user))
+            self._add_to_whisper_queue(user, 'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(user))
 
     @_mod_only
     def add_death(self, message):
@@ -451,7 +467,7 @@ class Bot(object):
         self._set_deaths(str(deaths))
         self._set_total_deaths(str(total_deaths))
         whisper_msg = 'Current Deaths: {}, Total Deaths: {}'.format(deaths, total_deaths)
-        self._send_whisper(user, whisper_msg)
+        self._add_to_whisper_queue(user, whisper_msg)
 
     @_mod_only
     def clear_deaths(self, message):
