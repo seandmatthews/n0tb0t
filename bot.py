@@ -28,7 +28,7 @@ class Bot(object):
         
         for func in self.my_funcs:
             try:
-                if eval('self.' + func + '._mods_only') == True:
+                if eval('self.' + func + '._mods_only'):
                     self.for_mods.append(func)
             except AttributeError:
                 self.for_all.append(func)
@@ -79,6 +79,13 @@ class Bot(object):
         self.conn.commit()
         self.conn.close()
 
+        chat_thread = threading.Thread(target=self._process_chat_queue, args=(self.chat_message_queue))
+        chat_thread.daemon = True
+        chat_thread.start()
+
+        whisper_thread = threading.Thread(target=self._process_whisper_queue, args=(self.whisper_message_queue))
+        whisper_thread.daemon = True
+        whisper_thread.start()
 
     def _add_to_chat_queue(self, message):
         self.chat_message_queue.appendleft(message)
@@ -93,7 +100,7 @@ class Bot(object):
                 self._send_message(chat_queue.pop())
                 time.sleep(1.6)
 
-    def _process_chat_queue(self, whisper_queue):
+    def _process_whisper_queue(self, whisper_queue):
         while True:
             if len(whisper_queue) > 0:
                 self._send_message(whisper_queue.pop())
