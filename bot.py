@@ -32,6 +32,9 @@ class Bot(object):
                     self.for_mods.append(func)
             except AttributeError:
                 self.for_all.append(func)
+                
+        self.chat_message_queue = collections.deque()
+        self.whisper_message_queue = collections.deque()
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -65,9 +68,6 @@ class Bot(object):
             time = quote_sub_list[1]
             self._auto_quote(index=index, quote=quote, time=time)
 
-        self.chat_message_queue = collections.deque()
-        self.whisper_message_queue = collections.deque()
-
         self.db_path = os.path.join(self.cur_dir, 'DarkSouls.db')
         self.conn = sqlite3.connect(self.db_path)
         self.conn.execute('''CREATE TABLE IF NOT EXISTS USERS
@@ -78,12 +78,12 @@ class Bot(object):
             POINTS         INTEGER);''')
         self.conn.commit()
         self.conn.close()
-
-        chat_thread = threading.Thread(target=self._process_chat_queue, args=(self.chat_message_queue))
+        
+        chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
         chat_thread.daemon = True
         chat_thread.start()
 
-        whisper_thread = threading.Thread(target=self._process_whisper_queue, args=(self.whisper_message_queue))
+        whisper_thread = threading.Thread(target=self._process_whisper_queue, kwargs={'whisper_queue': self.whisper_message_queue})
         whisper_thread.daemon = True
         whisper_thread.start()
 
@@ -98,13 +98,14 @@ class Bot(object):
         while True:
             if len(chat_queue) > 0:
                 self._send_message(chat_queue.pop())
-                time.sleep(1.6)
+                time.sleep(2)
 
     def _process_whisper_queue(self, whisper_queue):
         while True:
             if len(whisper_queue) > 0:
-                self._send_message(whisper_queue.pop())
-                time.sleep(1.6)
+                whisper_tuple = (whisper_queue.pop())
+                self._send_whisper(whisper_tuple[0], whisper_tuple[1])
+                time.sleep(1)
 
     def _send_whisper(self, user, message):
         try:
