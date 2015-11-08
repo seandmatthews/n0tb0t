@@ -312,7 +312,21 @@ class Bot(object):
             td = now_dt - start_time_dt
             hours, remainder = divmod(td.seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
-            uptime_str = 'The channel has been live for {hours} hours, {minutes} minutes and {seconds} seconds.'.format(hours=hours, minutes=minutes, seconds=seconds)
+            if hours == 1:
+                hours_end = 's'
+            else:
+                hours_end = ''
+            if minutes == 1:
+                minutes_end = 's'
+            else:
+                minutes_end = ''
+            if seconds == 1:
+                seconds_end = 's'
+            else:
+                seconds_end = ''
+            uptime_str = 'The channel has been live for {hours} hour{he}, {minutes} minute{me} and {seconds} second{se}.'.format(
+                hours=hours, he=hours_end, minutes=minutes, me=minutes_end, seconds=seconds, se=seconds_end)
+
             self._add_to_chat_queue(uptime_str)
         except requests.exceptions.HTTPError:
             self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
