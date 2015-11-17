@@ -441,18 +441,19 @@ class Bot(object):
         msg_list = self.ts.get_hr_message(message).split(' ')
         if len(msg_list) > 1:
             channel = msg_list[1]
+            url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
+            r = requests.get(url)
+            try:
+                r.raise_for_status()
+                game = r.json()['game']
+                channel_url = r.json()['url']
+                shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url} Tell \'em Riz sent you!'.format(channel=channel, game=game, url=channel_url)
+                self._add_to_chat_queue(shout_out_str)
+            except requests.exceptions.HTTPError:
+                self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
         else:
             self._add_to_chat_queue('Sorry {}, you need to specify a caster to shout out.'.format(user))
-        url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
-        r = requests.get(url)
-        try:
-            r.raise_for_status()
-            game = r.json()['game']
-            channel_url = r.json()['url']
-            shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url} Tell \'em Riz sent you!'.format(channel=channel, game=game, url=channel_url)
-            self._add_to_chat_queue(shout_out_str)
-        except requests.exceptions.HTTPError:
-            self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
+        
             
     def shower_thought(self, message):
         """

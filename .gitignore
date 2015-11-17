@@ -1,2 +1,8 @@
 .idea/
 config.py
+DarkSouls.db
+auto-quotes.json
+quotes.json
+commands.json
+misc-values.json
+users-contest-list.json
