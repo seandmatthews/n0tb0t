@@ -477,23 +477,20 @@ class Bot(object):
             start_time_str = r.json()['stream']['created_at']
             start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')
             now_dt = datetime.datetime.utcnow()
-            td = now_dt - start_time_dt
-            hours, remainder = divmod(td.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            if hours == 1:
-                hours_end = 's'
-            else:
-                hours_end = ''
-            if minutes == 1:
-                minutes_end = 's'
-            else:
-                minutes_end = ''
-            if seconds == 1:
-                seconds_end = 's'
-            else:
-                seconds_end = ''
-            uptime_str = 'The channel has been live for {hours} hour{he}, {minutes} minute{me} and {seconds} second{se}.'.format(
-                hours=hours, he=hours_end, minutes=minutes, me=minutes_end, seconds=seconds, se=seconds_end)
+            time_delta = now_dt - start_time_dt
+            time_dict = {'hour': None,
+                         'minute': None,
+                         'second': None}
+            time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
+            time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
+            for time_var in time_dict:
+                if time_dict[time_var] == 1:
+                    time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
+                else:
+                    time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
+
+            uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
+                hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
 
             self._add_to_chat_queue(uptime_str)
         except requests.exceptions.HTTPError:
