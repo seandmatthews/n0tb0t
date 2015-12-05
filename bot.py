@@ -502,9 +502,10 @@ class Bot(object):
         Sends a message to stream saying how long the caster has been streaming for.
         """
         time_dict = self._get_live_time(message)
-        uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
-                hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
-        self._add_to_chat_queue(uptime_str)
+        if time_dict is not None:
+            uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
+                    hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+            self._add_to_chat_queue(uptime_str)
 
 
     def highlight(self, message):
@@ -513,13 +514,26 @@ class Bot(object):
         Takes an optional short sentence describing the event.
         Writes that data to a google spreadsheet.
         """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_hr_message(message).split(' ')
+        if len(msg_list) > 1:
+            user_note = ' '.join(msg_list[1:])
+        else:
+            user_note = ''
         time_dict = self._get_live_time(message)
-        gc = gspread.authorize(self.credentials)
-        sh = gc.open("Highlight list")
-        ws = sh.worksheet('Sheet1')
-        rc = ws.row_count
-        print(rc)
-
+        if time_dict is not None:
+            time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
+                    hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+            gc = gspread.authorize(self.credentials)
+            sh = gc.open("Highlight list")
+            ws = sh.worksheet('Sheet1')
+            records = ws.get_all_records() # Doesn't include the first row
+            next_row = len(records) + 2
+            ws.update_cell(next_row, 1, user)
+            ws.update_cell(next_row, 2, time_dict['stream_start'])
+            ws.update_cell(next_row, 3, time_str)
+            ws.update_cell(next_row, 4, user_note)
+            self._add_to_chat_queue('The highlight has ben added to the spreadsheet for review.')
 
     def enter_contest(self, message):
         """
