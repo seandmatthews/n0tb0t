@@ -467,7 +467,7 @@ class Bot(object):
     def _get_live_time(self, message):
         """
         Uses the kraken API to fetch the start time of the current stream.
-        Computes how long the stream has been running, returns that value.
+        Computes how long the stream has been running, returns that value in a dictionary.
         """
         user = self.ts.get_user(message)
         channel = SOCKET_ARGS['channel']
@@ -481,7 +481,9 @@ class Bot(object):
             time_delta = now_dt - start_time_dt
             time_dict = {'hour': None,
                          'minute': None,
-                         'second': None}
+                         'second': None,
+                         'now': now_dt,
+                         'stream_start': start_time_dt}
             time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
             time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
             for time_var in time_dict:
@@ -498,7 +500,6 @@ class Bot(object):
     def uptime(self, message):
         """
         Sends a message to stream saying how long the caster has been streaming for.
-        Uses the kraken API to fetch stream start time.
         """
         time_dict = self._get_live_time(message)
         uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
@@ -512,6 +513,12 @@ class Bot(object):
         Takes an optional short sentence describing the event.
         Writes that data to a google spreadsheet.
         """
+        time_dict = self._get_live_time(message)
+        gc = gspread.authorize(self.credentials)
+        sh = gc.open("Highlight list")
+        ws = sh.worksheet('Sheet1')
+        records = ws.get_all_records()
+        print(records)
 
 
     def enter_contest(self, message):
