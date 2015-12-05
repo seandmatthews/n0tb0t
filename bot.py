@@ -495,7 +495,7 @@ class Bot(object):
         except requests.exceptions.HTTPError:
             self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
         except TypeError:
-            self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment. Thus, no uptime can be produced')
+            self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
 
     def uptime(self, message):
         """
@@ -517,8 +517,8 @@ class Bot(object):
         gc = gspread.authorize(self.credentials)
         sh = gc.open("Highlight list")
         ws = sh.worksheet('Sheet1')
-        records = ws.get_all_records()
-        print(records)
+        rc = ws.row_count
+        print(rc)
 
 
     def enter_contest(self, message):
