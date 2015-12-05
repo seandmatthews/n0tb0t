@@ -9,6 +9,7 @@ import time
 import random
 import threading
 import datetime
+import pytz
 import showerThoughtFetcher
 import collections
 from config import SOCKET_ARGS
@@ -482,8 +483,8 @@ class Bot(object):
             time_dict = {'hour': None,
                          'minute': None,
                          'second': None,
-                         'now': now_dt,
-                         'stream_start': start_time_dt}
+                        }
+            
             time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
             time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
             for time_var in time_dict:
@@ -491,6 +492,8 @@ class Bot(object):
                     time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
                 else:
                     time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
+            time_dict['stream_start'] = start_time_dt
+            time_dict['now'] = now_dt
             return time_dict
         except requests.exceptions.HTTPError:
             self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
@@ -522,6 +525,9 @@ class Bot(object):
             user_note = ''
         time_dict = self._get_live_time(message)
         if time_dict is not None:
+            est_tz = pytz.timezone('US/Eastern')
+            start_time_utc = time_dict['stream_start']
+            start_time_est = est_tz.normalize(start_time_utc.replace(tzinfo=pytz.utc).astimezone(est_tz))
             time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
                     hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
             gc = gspread.authorize(self.credentials)
@@ -530,10 +536,10 @@ class Bot(object):
             records = ws.get_all_records() # Doesn't include the first row
             next_row = len(records) + 2
             ws.update_cell(next_row, 1, user)
-            ws.update_cell(next_row, 2, time_dict['stream_start'])
+            ws.update_cell(next_row, 2, str(start_time_est)[:-6])
             ws.update_cell(next_row, 3, time_str)
             ws.update_cell(next_row, 4, user_note)
-            self._add_to_chat_queue('The highlight has ben added to the spreadsheet for review.')
+            self._add_to_chat_queue('The highlight has been added to the spreadsheet for review.')
 
     def enter_contest(self, message):
         """
