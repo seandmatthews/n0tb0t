@@ -464,10 +464,10 @@ class Bot(object):
         """
         self._add_to_chat_queue(showerThoughtFetcher.main())
 
-    def uptime(self, message):
+    def _get_live_time(self, message):
         """
-        Sends a message to stream saying how long the caster has been streaming for.
-        Uses the kraken API to fetch stream start time.
+        Uses the kraken API to fetch the start time of the current stream.
+        Computes how long the stream has been running, returns that value.
         """
         user = self.ts.get_user(message)
         channel = SOCKET_ARGS['channel']
@@ -489,16 +489,31 @@ class Bot(object):
                     time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
                 else:
                     time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
-
-            uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
-                hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
-
-            self._add_to_chat_queue(uptime_str)
+            return time_dict
         except requests.exceptions.HTTPError:
             self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
         except TypeError:
             self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment. Thus, no uptime can be produced')
-            
+
+    def uptime(self, message):
+        """
+        Sends a message to stream saying how long the caster has been streaming for.
+        Uses the kraken API to fetch stream start time.
+        """
+        time_dict = self._get_live_time(message)
+        uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
+                hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+        self._add_to_chat_queue(uptime_str)
+
+
+    def highlight(self, message):
+        """
+        Logs the time in the video when something amusing happened.
+        Takes an optional short sentence describing the event.
+        Writes that data to a google spreadsheet.
+        """
+
+
     def enter_contest(self, message):
         """
         Adds the user to the file of contest entrants
