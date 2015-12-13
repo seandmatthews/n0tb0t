@@ -300,60 +300,13 @@ class Bot(object):
     def add_command(self, message):
         """
         Adds a new command.
-        The first word after !add_command is the command.
-        It should start with an exclamation mark.
+        The first word after !add_command with an exclamation mark is the command.
         The rest of the sentence is the reply.
+        Optionally takes the names of twitch users before the command.
+        This would make the command only available to those users.
 
         !add_command !test This is a test.
-        """
-        user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
-        command = msg_list[1][1:] # exclude the exclamation mark
-        response = ' '.join(msg_list[2:])
-        self.commands_dict[command] = response
-        with open(self.commands_file, 'w') as cf:
-            cf.write(json.dumps(self.commands_dict))
-        self._add_to_whisper_queue(user, 'Command added.')
-
-    @_mod_only
-    def delete_command(self, message):
-        """
-        Removes a user created command.
-        Takes a 1 indexed quote index.
-
-        !delete_command 1
-        """
-        user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
-        command = msg_list[1]
-        try:
-            del self.commands_dict[command]
-            with open(self.commands_file, 'w') as cf:
-                cf.write(json.dumps(self.commands_dict))
-            self._add_to_whisper_queue(user, 'Command deleted.')
-        except KeyError:
-            self._add_to_whisper_queue(user, 'Sorry, that command can\'t be deleted.')
-
-    @_mod_only
-    def show_deletable_commands(self, message):
-        """
-        Sends a whisper containing all user
-        created commands.
-
-        !show_deletable_commands
-        """
-        user = self.ts.get_user(message)
-        commands_str = "Command List: "
-        for func in self.commands_dict:
-            commands_str += "!{} ".format(func)
-        self._add_to_whisper_queue(user, commands_str)
-
-    @_mod_only
-    def add_user_command(self, message):
-        """
-        Creates a command usable by a specific subset of people
-
-        !add_user_command TestUser1 TestUser2 !test_command Here's what the test command says.
+        !add_user_command TestUser1 TestUser2 !test_command This is a test
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_hr_message(message).split(' ')
@@ -363,18 +316,69 @@ class Bot(object):
                 users = msg_list[1:index]
                 response = ' '.join(msg_list[index+1:])
                 command_found = True
-        if command_found:
-            key = command
-            value = [users, response]
-            self.user_commands_dict[key] = value
+        if command in self.user_commands_dict or command in self.commands_dict:
+            self._add_to_whisper_queue(user, 'Sorry, that command already exists. Please delete it first.')
+        else:
+            if command_found and len(users) != 0:
+                key = command
+                value = [users, response]
+                self.user_commands_dict[key] = value
+                with open(self.commands_file, 'w') as cf:
+                    cf.write(json.dumps(self.commands_dict))
+                self._add_to_whisper_queue(user, 'Command added.')
+            elif command_found and len(users) == 0:
+                command = msg_list[1][1:] # exclude the exclamation mark
+                response = ' '.join(msg_list[2:])
+                key = command
+                value = response
+                self.commands_dict[key] = value
+                with open(self.commands_file, 'w') as cf:
+                    cf.write(json.dumps(self.commands_dict))
+                self._add_to_whisper_queue(user, 'Command added.')
+            else:
+                self._add_to_whisper_queue(user, 'Sorry, the command needs to have an ! in it.')
+
+
+    @_mod_only
+    def delete_command(self, message):
+        """
+        Removes a user created command.
+        Takes the name of the command.
+
+        !delete_command !test
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_hr_message(message).split(' ')
+        command = msg_list[1][1:]
+        if command in self.commands_dict:
+            del self.commands_dict[command]
             with open(self.commands_file, 'w') as cf:
                 cf.write(json.dumps(self.commands_dict))
-            self._add_to_whisper_queue(user, 'Command added.')
+            self._add_to_whisper_queue(user, 'Command deleted.')
+        elif command in self.user_commands_dict:
+            del self.user_commands_dict[command]
+            with open(self.commands_file, 'w') as cf:
+                cf.write(json.dumps(self.commands_dict))
+            self._add_to_whisper_queue(user, 'Command deleted.')
         else:
-            self._add_to_whisper_queue(user, 'Sorry, the command needs to have an ! in it.')
+            self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t seem to exist.')
 
+    @_mod_only
+    def show_deletable_commands(self, message):
+        """
+        Sends a whisper containing all user
+        created commands, including specific
+        user commands.
 
-
+        !show_deletable_commands
+        """
+        user = self.ts.get_user(message)
+        commands_str = "Command List: "
+        for command in self.commands_dict:
+            commands_str += "!{} ".format(command)
+        for command in self.user_commands_dict:
+            commands_str += "!{} ".format(command)
+        self._add_to_whisper_queue(user, commands_str)
 
 
     def show_commands(self, message):
@@ -388,8 +392,11 @@ class Bot(object):
         commands_str = "Command List: "
         for func in self.for_all:
             commands_str += "!{} ".format(func)
-        for func in self.commands_dict:
-            commands_str += "!{} ".format(func)
+        for command in self.commands_dict:
+            commands_str += "!{} ".format(command)
+        for command in self.user_commands_dict:
+            if user in self.user_commands_dict[command][1]:
+                commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, commands_str)
 
     def show_mod_commands(self, message):
