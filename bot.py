@@ -175,11 +175,15 @@ class Bot(object):
         to the chat queue.
         """
         fword = self.ts.get_hr_message(message).split(' ')[0]
+        user = self.ts.get_user(message)
         if len(fword) > 1 and fword[0] == '!':
             if fword[1:] in self.my_methods:
                 eval('self.' + fword[1:] + '(message)')
             elif fword[1:] in self.commands_dict:
                 self._add_to_chat_queue(self.commands_dict[fword[1:]])
+            elif fword[1:] in self.user_commands_dict:
+                if user in self.user_commands_dict[fword[1:]][0]:
+                    self._add_to_chat_queue(self.user_commands_dict[fword[1:]][1])
 
     def _get_mods(self):
         """
@@ -310,26 +314,28 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_hr_message(message).split(' ')
-        for index, word in msg_list[1:]: # exclude !add_user_command
+        command_found = False
+        for index, word in enumerate(msg_list[1:]): # exclude !add_user_command
             if word[0] == '!':
                 command = word
-                users = msg_list[1:index]
-                response = ' '.join(msg_list[index+1:])
+                users = msg_list[1:index+1]
+                response = ' '.join(msg_list[index+2:])
                 command_found = True
-        if command in self.user_commands_dict or command in self.commands_dict:
+        if command_found and (command[1:] in self.user_commands_dict or command in self.commands_dict):
             self._add_to_whisper_queue(user, 'Sorry, that command already exists. Please delete it first.')
         else:
             if command_found and len(users) != 0:
-                key = command
+                users = [user.lower() for user in users]
+                key = command[1:] # exclude the exclamation mark
                 value = [users, response]
                 self.user_commands_dict[key] = value
-                with open(self.commands_file, 'w') as cf:
-                    cf.write(json.dumps(self.commands_dict))
+                with open(self.user_commands_file, 'w') as cf:
+                    cf.write(json.dumps(self.user_commands_dict))
                 self._add_to_whisper_queue(user, 'Command added.')
             elif command_found and len(users) == 0:
-                command = msg_list[1][1:] # exclude the exclamation mark
+                command = msg_list[1]
                 response = ' '.join(msg_list[2:])
-                key = command
+                key = command[1:] # exclude the exclamation mark
                 value = response
                 self.commands_dict[key] = value
                 with open(self.commands_file, 'w') as cf:
@@ -357,8 +363,8 @@ class Bot(object):
             self._add_to_whisper_queue(user, 'Command deleted.')
         elif command in self.user_commands_dict:
             del self.user_commands_dict[command]
-            with open(self.commands_file, 'w') as cf:
-                cf.write(json.dumps(self.commands_dict))
+            with open(self.user_commands_file, 'w') as cf:
+                cf.write(json.dumps(self.user_commands_dict))
             self._add_to_whisper_queue(user, 'Command deleted.')
         else:
             self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t seem to exist.')
@@ -395,7 +401,7 @@ class Bot(object):
         for command in self.commands_dict:
             commands_str += "!{} ".format(command)
         for command in self.user_commands_dict:
-            if user in self.user_commands_dict[command][1]:
+            if user in self.user_commands_dict[command][0]:
                 commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, commands_str)
 
