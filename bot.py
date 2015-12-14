@@ -581,7 +581,8 @@ class Bot(object):
         """
         self.users_contest_list = []
         with open(self.users_contest_list_file, 'w') as uclf:
-            uclf.write(json.dumps(self.users_contest_list))        
+            uclf.write(json.dumps(self.users_contest_list))
+        self._add_to_chat_queue("Contest entrants cleared.")        
         
     @_mod_only
     def enable_guessing(self, message):
