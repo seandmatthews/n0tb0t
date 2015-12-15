@@ -492,7 +492,7 @@ class Bot(object):
 
         !SO $caster
         """
-        # TODO: Add a command to be able to set the shout_out_str from within twitch chat
+        # TODO: Add a command to be able to set the shout_out_str from within twitch chat, or at least somewhere
         user = self.ts.get_user(message)
         me = SOCKET_ARGS['channel']
         msg_list = self.ts.get_hr_message(message).split(' ')
@@ -504,7 +504,7 @@ class Bot(object):
                 r.raise_for_status()
                 game = r.json()['game']
                 channel_url = r.json()['url']
-                shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url}. Tell \'em {I} sent you!'.format(channel=channel, game=game, url=channel_url, I=me)
+                shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url}! Tell \'em {I} sent you!'.format(channel=channel, game=game, url=channel_url, I=me)
                 self._add_to_chat_queue(shout_out_str)
             except requests.exceptions.HTTPError:
                 self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
