@@ -403,22 +403,23 @@ class Bot(object):
         for command in self.user_commands_dict:
             if user in self.user_commands_dict[command][0]:
                 commands_str += "!{} ".format(command)
+        if user in self._get_mods():
+            for func in self.for_mods:
+                commands_str += "!{} ".format(func)
         self._add_to_whisper_queue(user, commands_str)
 
-    def show_mod_commands(self, message):
-        """
-        Sends a whisper containing all commands
-        that are available to mods
-
-        !show_mod_commands
-        """
-        user = self.ts.get_user(message)
-        commands_str = "Command List: "
-        for func in self.for_mods:
-            commands_str += "!{} ".format(func)
-        self._add_to_whisper_queue(user, commands_str)
-
-
+    # def show_mod_commands(self, message):
+    #     """
+    #     Sends a whisper containing all commands
+    #     that are available to mods
+    #
+    #     !show_mod_commands
+    #     """
+    #     user = self.ts.get_user(message)
+    #     commands_str = "Command List: "
+    #     for func in self.for_mods:
+    #         commands_str += "!{} ".format(func)
+    #     self._add_to_whisper_queue(user, commands_str)
 
     def add_quote(self, message):
         """
