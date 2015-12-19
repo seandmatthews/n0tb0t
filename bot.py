@@ -396,17 +396,21 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         commands_str = "Command List: "
+        regular_commands_str = "Dynamic/User Command List: "
+        mod_commands_str = "Mod Command List: "
         for func in self.for_all:
             commands_str += "!{} ".format(func)
+        self._add_to_whisper_queue(user, commands_str)
         for command in self.commands_dict:
-            commands_str += "!{} ".format(command)
+            regular_commands_str += "!{} ".format(command)
         for command in self.user_commands_dict:
             if user in self.user_commands_dict[command][0]:
-                commands_str += "!{} ".format(command)
+                regular_commands_str += "!{} ".format(command)
+        self._add_to_whisper_queue(user, regular_commands_str)
         if user in self._get_mods():
             for func in self.for_mods:
-                commands_str += "!{} ".format(func)
-        self._add_to_whisper_queue(user, commands_str)
+                mod_commands_str += "!{} ".format(func)
+            self._add_to_whisper_queue(user, mod_commands_str)
 
     # def show_mod_commands(self, message):
     #     """
@@ -433,7 +437,7 @@ class Bot(object):
         self.quotes_list.append(quote)
         with open(self.quotes_file, 'w') as qf:
             qf.write(json.dumps(self.quotes_list))
-        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(len(self.quotes_list)+1))
+        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(len(self.quotes_list)))
 
     @_mod_only
     def delete_quote(self, message):
