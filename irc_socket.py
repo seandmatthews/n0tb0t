@@ -36,6 +36,8 @@ class TwitchSocket(object):
             else:
                 loading = True
         self.send_message("{USER} is now online".format(USER=self.user))
+        self.s.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
+        self.s.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
 
     def get_user(self, line):
@@ -50,6 +52,13 @@ class TwitchSocket(object):
             return hr_message
         else:
             return ''
+
+    def check_mod(self, line):
+        line_list = line.split(':', 2)
+        if ('user-type=mod' in line_list[0]) or (self.get_user(line) == self.channel):
+            return True
+        else:
+            return False
 
 
 class GroupChatSocket(object):
@@ -84,6 +93,7 @@ class GroupChatSocket(object):
                 loading = True
         self.send_message("{USER} is now online".format(USER=self.user))
         self.s.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
+        self.s.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def send_message(self, message):
         message_temp = "PRIVMSG #" + self.channel + " :" + message

@@ -12,6 +12,7 @@ import datetime
 import pytz
 import showerThoughtFetcher
 import collections
+import logging
 from config import SOCKET_ARGS
 
 class Bot(object):
@@ -191,9 +192,18 @@ class Bot(object):
         Returns a list of all moderators currently in the channel.
         """
         url = 'http://tmi.twitch.tv/group/user/{channel}/chatters'.format(channel=self.ts.channel)
-        r = requests.get(url)
-        mods = r.json()['chatters']['moderators']
-        return mods
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                mods = r.json()['chatters']['moderators']
+            except ValueError as e:
+                continue
+            else:
+                return mods
+        else:
+            self._add_to_chat_queue("Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+        
 
     def _mod_only(func):
         """
@@ -201,7 +211,7 @@ class Bot(object):
         Also set's the method's _mods_only property to True
         """
         def new_func(self, message):
-            if self.ts.get_user(message) in self._get_mods():
+            if self.ts.check_mod(message):
                 func(self, message)
             else:
                 self._add_to_chat_queue("Sorry {}, that's a mod only command".format(self.ts.get_user(message)))
@@ -395,7 +405,7 @@ class Bot(object):
         !show_commands
         """
         user = self.ts.get_user(message)
-        commands_str = "Command List: "
+        commands_str = "Regular Command List: "
         regular_commands_str = "Dynamic/User Command List: "
         mod_commands_str = "Mod Command List: "
         for func in self.for_all:
@@ -407,7 +417,7 @@ class Bot(object):
             if user in self.user_commands_dict[command][0]:
                 regular_commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, regular_commands_str)
-        if user in self._get_mods():
+        if self.ts.check_mod(message):
             for func in self.for_mods:
                 mod_commands_str += "!{} ".format(func)
             self._add_to_whisper_queue(user, mod_commands_str)
@@ -484,7 +494,7 @@ class Bot(object):
                 index = int(msg_list[1]) - 1
                 self._add_to_chat_queue('#{} {}'.format(str(index+1), self.quotes_list[index]))
             else:
-                 self._add_to_chat_queue('Sorry, there aren\'t that many quotes. Use a lower number')
+                 self._add_to_chat_queue('Sorry, there are only {} quotes.'.format(len(self.quotes_list)))
         else:
             random_quote_index = random.randrange(len(self.quotes_list))
             self._add_to_chat_queue('#{} {}'.format(str(random_quote_index+1), self.quotes_list[random_quote_index]))
@@ -504,15 +514,22 @@ class Bot(object):
         if len(msg_list) > 1:
             channel = msg_list[1]
             url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
-            r = requests.get(url)
-            try:
-                r.raise_for_status()
-                game = r.json()['game']
-                channel_url = r.json()['url']
-                shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url}! Tell \'em {I} sent you!'.format(channel=channel, game=game, url=channel_url, I=me)
-                self._add_to_chat_queue(shout_out_str)
-            except requests.exceptions.HTTPError:
-                self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
+            for attempt in range(5):
+                try:
+                    r = requests.get(url)
+                    r.raise_for_status()
+                    game = r.json()['game']
+                    channel_url = r.json()['url']
+                    shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url}! Tell \'em {I} sent you!'.format(channel=channel, game=game, url=channel_url, I=me)
+                    self._add_to_chat_queue(shout_out_str)
+                except requests.exceptions.HTTPError:
+                    self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
+                except ValueError:
+                    continue
+                else:
+                    break
+            else:
+                self._add_to_chat_queue("Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
         else:
             self._add_to_chat_queue('Sorry {}, you need to specify a caster to shout out.'.format(user))
         
@@ -533,32 +550,39 @@ class Bot(object):
         user = self.ts.get_user(message)
         channel = SOCKET_ARGS['channel']
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
-        r = requests.get(url)
-        try:
-            r.raise_for_status()
-            start_time_str = r.json()['stream']['created_at']
-            start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')
-            now_dt = datetime.datetime.utcnow()
-            time_delta = now_dt - start_time_dt
-            time_dict = {'hour': None,
-                         'minute': None,
-                         'second': None,
-                        }
-            
-            time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
-            time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
-            for time_var in time_dict:
-                if time_dict[time_var] == 1:
-                    time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
-                else:
-                    time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
-            time_dict['stream_start'] = start_time_dt
-            time_dict['now'] = now_dt
-            return time_dict
-        except requests.exceptions.HTTPError:
-            self._add_to_chat_queue('Sorry {}, something seems to have gone wrong. I\'m having trouble querying the twitch api.'.format(user))
-        except TypeError:
-            self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                r.raise_for_status()
+                start_time_str = r.json()['stream']['created_at']
+                start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')
+                now_dt = datetime.datetime.utcnow()
+                time_delta = now_dt - start_time_dt
+                time_dict = {'hour': None,
+                             'minute': None,
+                             'second': None,
+                            }
+                
+                time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
+                time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
+                for time_var in time_dict:
+                    if time_dict[time_var] == 1:
+                        time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
+                    else:
+                        time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
+                time_dict['stream_start'] = start_time_dt
+                time_dict['now'] = now_dt
+            except requests.exceptions.HTTPError:
+                continue
+            except TypeError:
+                self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
+                break
+            except ValueError:
+                continue
+            else:
+                return time_dict
+        else:
+            self._add_to_chat_queue("Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
 
     def uptime(self, message):
         """
@@ -680,17 +704,20 @@ class Bot(object):
         user = self.ts.get_user(message)
         if self.guessing_enabled:
             msg_list = self.ts.get_hr_message(message).split(' ')
-            guess = msg_list[1]
-            if guess.isdigit() and int(guess) >= 0:
-                results = self._check_for_user(user)
-                if results:
-                    self._update_guess(user, guess)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
-                else:
-                    self._insert_guess(user, guess)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+            if len(msg_list) > 1:
+                guess = msg_list[1]
             else:
-                self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                self._add_to_whisper_queue(user, "Sorry {}, !guess must be followed by a non-negative integer.".format(user))
+                if guess.isdigit() and int(guess) >= 0:
+                    results = self._check_for_user(user)
+                    if results:
+                        self._update_guess(user, guess)
+                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    else:
+                        self._insert_guess(user, guess)
+                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                else:
+                    self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
         else:
             self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
 
@@ -741,17 +768,20 @@ class Bot(object):
              misc_values_dict = json.load(mvf)
         if misc_values_dict['guess-total-enabled'] is True:
             msg_list = self.ts.get_hr_message(message).split(' ')
-            guess = msg_list[1]
-            if guess.isdigit() and int(guess) > 0:
-                results = self._check_for_user(user)
-                if results:
-                    self._update_guesstotal(user, guess)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+            if len(msg_list) > 1:
+                guess = msg_list[1]
+                if guess.isdigit() and int(guess) > 0:
+                    results = self._check_for_user(user)
+                    if results:
+                        self._update_guesstotal(user, guess)
+                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    else:
+                        self._insert_guesstotal(user, guess)
+                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
-                    self._insert_guesstotal(user, guess)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
             else:
-                self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                self._add_to_whisper_queue(user, "Sorry {}, you need to include a number after your guess.".format(user))
         else:
             self._add_to_whisper_queue(user, "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
             
@@ -1034,8 +1064,7 @@ class Bot(object):
             mvf.write(json.dumps(misc_values_dict))
 
 
-
-
+logging.basicConfig(filename='error-log.txt',level=logging.DEBUG)
 TS = irc_socket.TwitchSocket(**SOCKET_ARGS)
 GCS = irc_socket.GroupChatSocket(**SOCKET_ARGS)
 bot = Bot(TS, GCS)
@@ -1043,7 +1072,8 @@ bot = Bot(TS, GCS)
 messages = ""
 
 while True:
-    read_buffer = TS.s.recv(1024)
+    read_buffer = TS.s.recv(1024) # GCS.s.recv(1024) to get whispers and stuff
+
     messages = messages + read_buffer.decode('utf-8')
     last_message = messages.split('\r\n')[-2]
     print(last_message.encode('utf-8'))
@@ -1052,5 +1082,9 @@ while True:
         resp = last_message.replace("PING", "PONG") + "\r\n"
         TS.s.send(resp.encode('utf-8'))
     else:
-        bot._act_on(last_message)
-
+        try:
+            bot._act_on(last_message)
+        except Exception as e:
+            logging.exception("Something went wrong")
+            TS.send_message("Something went wrong. The error has been logged.")
+        
