@@ -2,11 +2,6 @@
 import praw
 
 def shower_thought(message):
-    """
-    Fetches the top shower thought from reddit in the last 24 hours and sends it to chat.
-
-    !shower_thought
-    """
     shitty_reddit_words = ['Reddit', 'reddit', 'Karma', 'karma', 'Repost', 'repost', 'Vote', 'vote']
     r = praw.Reddit(user_agent='shower thought fetcher')
 
