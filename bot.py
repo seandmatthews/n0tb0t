@@ -93,14 +93,16 @@ class Bot(object):
             POINTS         INTEGER);''')
         self.conn.commit()
         self.conn.close()
-        
-        chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
-        chat_thread.daemon = True
-        chat_thread.start()
 
-        whisper_thread = threading.Thread(target=self._process_whisper_queue, kwargs={'whisper_queue': self.whisper_message_queue})
-        whisper_thread.daemon = True
-        whisper_thread.start()
+        self.allowed_to_chat = True
+
+        self.chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
+        self.chat_thread.daemon = True
+        self.chat_thread.start()
+
+        self.whisper_thread = threading.Thread(target=self._process_whisper_queue, kwargs={'whisper_queue': self.whisper_message_queue})
+        self.whisper_thread.daemon = True
+        self.whisper_thread.start()
 
     def _add_to_chat_queue(self, message):
         """
@@ -123,7 +125,7 @@ class Bot(object):
         to the _send_message function. Then sleep for
         two seconds to stay below the twitch rate limit.
         """
-        while True:
+        while self.allowed_to_chat:
             if len(chat_queue) > 0:
                 self._send_message(chat_queue.pop())
                 time.sleep(2)
@@ -175,6 +177,10 @@ class Bot(object):
         in the commands dictionary. Send the corresponding string
         to the chat queue.
         """
+        if 'PING' in self.ts.get_hr_message(message): # PING/PONG silliness
+        	print(self.ts.get_hr_message(message))
+        	self._add_to_chat_queue(self.ts.get_hr_message(message.replace('PING', 'PONG')))
+
         fword = self.ts.get_hr_message(message).split(' ')[0]
         user = self.ts.get_user(message)
         if len(fword) > 1 and fword[0] == '!':
@@ -218,6 +224,30 @@ class Bot(object):
         new_func.__name__ = func.__name__
         new_func._mods_only = True
         return new_func
+
+    @_mod_only
+    def stop_speaking(self, message):
+        """
+        Stops the bot from putting stuff in chat to cut down on bot spam.
+        In long run, this should be replaced with rate limits.
+
+        !stop_speaking
+        """
+        self._send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.allowed_to_chat = False
+
+    @_mod_only
+    def start_speaking(self, message):
+        """
+        Allows the bot to start speaking again.
+
+        !start_speaking
+        """
+        self.allowed_to_chat = True
+        self.chat_message_queue.clear()
+        self.chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
+        self.chat_thread.daemon = True
+        self.chat_thread.start()
 
     def _auto_quote(self, index, quote, time):
         """
@@ -524,6 +554,7 @@ class Bot(object):
                     self._add_to_chat_queue(shout_out_str)
                 except requests.exceptions.HTTPError:
                     self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
+                    break
                 except ValueError:
                     continue
                 else:
@@ -533,7 +564,6 @@ class Bot(object):
         else:
             self._add_to_chat_queue('Sorry {}, you need to specify a caster to shout out.'.format(user))
         
-            
     def shower_thought(self, message):
         """
         Fetches the top shower thought from reddit in the last 24 hours and sends it to chat.
@@ -593,7 +623,6 @@ class Bot(object):
             uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
                     hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
             self._add_to_chat_queue(uptime_str)
-
 
     def highlight(self, message):
         """
@@ -1078,8 +1107,9 @@ while True:
     last_message = messages.split('\r\n')[-2]
     print(last_message.encode('utf-8'))
     messages = ""
-    if "PING" in last_message:
+    if last_message == 'PING :tmi.twitch.tv':
         resp = last_message.replace("PING", "PONG") + "\r\n"
+        print(resp.encode('utf-8'))
         TS.s.send(resp.encode('utf-8'))
     else:
         try:

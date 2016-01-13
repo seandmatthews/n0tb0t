@@ -47,8 +47,13 @@ class TwitchSocket(object):
 
     def get_hr_message(self, line):
         if 'PRIVMSG' in line:
-            line_list = line.split(':', 2)
-            hr_message = line_list[2]
+            emotes = 'emotes=;' not in line
+            if emotes:
+                num_colons = 3
+            else:
+                num_colons = 2
+            line_list = line.split(':', num_colons)
+            hr_message = line_list[num_colons]
             return hr_message
         else:
             return ''
