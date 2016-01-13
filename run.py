@@ -20,7 +20,7 @@ while True:
     messages = ""
     if last_message == 'PING :tmi.twitch.tv':
         resp = last_message.replace("PING", "PONG") + "\r\n"
-        TS.s.send(resp.encode('utf-8'))
+        TS.sock.send(resp.encode('utf-8'))
     else:
         try:
             bot._act_on(last_message)
