@@ -176,11 +176,11 @@ class Bot(object):
         in the commands dictionary. Send the corresponding string
         to the chat queue.
         """
-        if 'PING' in self.ts.get_hr_message(message): # PING/PONG silliness
-        	print(self.ts.get_hr_message(message))
-        	self._add_to_chat_queue(self.ts.get_hr_message(message.replace('PING', 'PONG')))
+        if 'PING' in self.ts.get_human_readable_message(message): # PING/PONG silliness
+        	print(self.ts.get_human_readable_message(message))
+        	self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
-        fword = self.ts.get_hr_message(message).split(' ')[0]
+        fword = self.ts.get_human_readable_message(message).split(' ')[0]
         user = self.ts.get_user(message)
         if len(fword) > 1 and fword[0] == '!':
             if fword[1:] in self.my_methods:
@@ -313,7 +313,7 @@ class Bot(object):
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
@@ -331,7 +331,7 @@ class Bot(object):
 
         !delete_auto_quote 1
         """
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             if int(msg_list[1]) <= len(self.auto_quotes_list):
                 index = int(msg_list[1]) - 1
@@ -352,7 +352,7 @@ class Bot(object):
         !add_user_command TestUser1 TestUser2 !test_command This is a test
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         command_found = False
         for index, word in enumerate(msg_list[1:]): # exclude !add_user_command
             if word[0] == '!':
@@ -393,7 +393,7 @@ class Bot(object):
         !delete_command !test
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         command = msg_list[1][1:]
         if command in self.commands_dict:
             del self.commands_dict[command]
@@ -471,7 +471,7 @@ class Bot(object):
         !add_quote This bot is very suspicious.
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         quote = ' '.join(msg_list[1:])
         self.quotes_list.append(quote)
         with open(self.quotes_file, 'w') as qf:
@@ -486,7 +486,7 @@ class Bot(object):
 
         !delete_quote 1
         """
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         user = self.ts.get_user(message)
         if len(msg_list) > 1 and msg_list[1].isdigit():
             if int(msg_list[1]) <= len(self.quotes_list):
@@ -517,7 +517,7 @@ class Bot(object):
 
         !quote 5
         """
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             if int(msg_list[1]) <= len(self.quotes_list):
                 index = int(msg_list[1]) - 1
@@ -539,7 +539,7 @@ class Bot(object):
         # TODO: Add a command to be able to set the shout_out_str from within twitch chat, or at least somewhere
         user = self.ts.get_user(message)
         me = SOCKET_ARGS['channel']
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             channel = msg_list[1]
             url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
@@ -630,7 +630,7 @@ class Bot(object):
         Writes that data to a google spreadsheet.
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             user_note = ' '.join(msg_list[1:])
         else:
@@ -731,7 +731,7 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         if self.guessing_enabled:
-            msg_list = self.ts.get_hr_message(message).split(' ')
+            msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
             else:
@@ -795,7 +795,7 @@ class Bot(object):
         with open(self.misc_values_file) as mvf:
              misc_values_dict = json.load(mvf)
         if misc_values_dict['guess-total-enabled'] is True:
-            msg_list = self.ts.get_hr_message(message).split(' ')
+            msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) > 0:
@@ -866,7 +866,7 @@ class Bot(object):
         !set_deaths 5
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
@@ -887,7 +887,7 @@ class Bot(object):
         !set_total_deaths 5
         """
         user = self.ts.get_user(message)
-        msg_list = self.ts.get_hr_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
