@@ -1109,7 +1109,6 @@ while True:
     messages = ""
     if last_message == 'PING :tmi.twitch.tv':
         resp = last_message.replace("PING", "PONG") + "\r\n"
-        print(resp.encode('utf-8'))
         TS.s.send(resp.encode('utf-8'))
     else:
         try:
