@@ -4,5 +4,8 @@ DarkSouls.db
 auto-quotes.json
 quotes.json
 commands.json
+user-commands.json
 misc-values.json
 users-contest-list.json
+gspread test-279fb617abd8.json
+error-log.txt
