@@ -13,6 +13,7 @@ import pytz
 import showerThoughtFetcher
 import collections
 from oauth2client.client import SignedJwtAssertionCredentials
+from functools import wraps
 from config import SOCKET_ARGS
 
 class Bot(object):
@@ -221,6 +222,7 @@ class Bot(object):
         Redefines the method to work if the person trying to use the function is a moderator.
         Also set's the method's _mods_only property to True
         """
+        @wraps(func)
         def new_func(self, message):
             if self.ts.check_mod(message):
                 func(self, message)
@@ -741,13 +743,8 @@ class Bot(object):
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
-                    results = self._check_for_user(user)
-                    if results:
-                        self._update_guess(user, guess)
-                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
-                    else:
-                        self._insert_guess(user, guess)
-                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    self._set_current_guess(user, guess)
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
             else:
@@ -794,7 +791,7 @@ class Bot(object):
         or informs the user that their guess
         doesn't fit the acceptable parameters
         or that guessing is disabled for everyone.
-
+fr
         !guesstotal 50
         """
         user = self.ts.get_user(message)
@@ -805,13 +802,8 @@ class Bot(object):
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) > 0:
-                    results = self._check_for_user(user)
-                    if results:
-                        self._update_guesstotal(user, guess)
-                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
-                    else:
-                        self._insert_guesstotal(user, guess)
-                        self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    self._set_total_guess(user, guess)
+                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
             else:
@@ -832,7 +824,7 @@ class Bot(object):
         self._add_to_chat_queue("Guesses have been cleared.")
 
     @_mod_only
-    def show_guesses(self, message):
+    def show_guesses(self, session):
         """
         Clears all guesses out of the google
         spreadsheet, then repopulate it from
@@ -846,7 +838,7 @@ class Bot(object):
         gc = gspread.authorize(self.credentials)
         sh = gc.open("Dark Souls Guesses")
         ws = sh.worksheet('Dark Souls Guesses')
-        for i in range(1, len(self._get_all_users()) + 10):
+        for i in range(1, len(self._get_all_users(session)) + 10):
             ws.update_acell('A{}'.format(i), '')
             ws.update_acell('B{}'.format(i), '')        
         ws.update_acell('A1', 'User')
@@ -908,7 +900,7 @@ class Bot(object):
         !add_death
         """
         user = self.ts.get_user(message)
-        deaths = int(self._get_deaths())
+        deaths = int(self._get_current_deaths())
         total_deaths = int(self._get_total_deaths())
         deaths += 1
         total_deaths += 1
@@ -936,7 +928,7 @@ class Bot(object):
 
         !show_deaths
         """
-        deaths = self._get_deaths()
+        deaths = self._get_current_deaths()
         total_deaths = self._get_total_deaths()
         self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
 
@@ -949,7 +941,7 @@ class Bot(object):
         !show_winner
         """
         winners_list = []
-        deaths = self._get_deaths()
+        deaths = self._get_current_deaths()
         last_winning_guess = -1
         guess_rows = [row for row in self._get_all_users() if bool(row[2]) is not False]
         for row in guess_rows:
@@ -970,89 +962,35 @@ class Bot(object):
             winners_str = 'You all gussed too high. You should have had more faith in Rizorty. Rizorty wins!'
         self._add_to_chat_queue(winners_str)
 
-    def _check_for_user(self, user):
-        """
-        Attempts to retrieve a user from the database.
-        """
-        self.conn = sqlite3.connect(self.db_path)
-        c = self.conn.cursor()
-        stmt = c.execute('''
-            SELECT * FROM USERS WHERE USER=?
-            ''', (user,))
-        results = stmt.fetchall()
-        self.conn.commit()
-        self.conn.close()
-        return results
-
-    def _get_all_users(self):
+    def _get_all_users(self, session):
         """
         Return all users from the database.
         """
-        self.conn = sqlite3.connect(self.db_path)
-        c = self.conn.cursor()
-        stmt = c.execute('''
-            SELECT * FROM USERS
-            ''')
-        results = stmt.fetchall()
-        self.conn.commit()
-        self.conn.close()
+        results = session.query(db.User).all()
         return results
 
-    def _insert_guess(self, user, guess):
+    def _set_current_guess(self, user, guess, session):
         """
         Takes a user and a guess.
         Adds the user and their guess
         to the users table.
         """
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''
-        INSERT INTO USERS (USER, GUESS)
-        VALUES (?, ?)
-        ''', (user, guess))
-        self.conn.commit()
-        self.conn.close()
+        db_user = db.User(name=user)
+        session.add(db_user)
+        db_user.current_guess = guess
 
-    def _insert_guesstotal(self, user, guess):
+    def _set_total_guess(self, user, guess, session):
         """
         Takes a user and a guess
         for the total number of deaths.
         Adds the user and their guess
         to the users table.
         """
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''
-        INSERT INTO USERS (USER, GUESSTOTAL)
-        VALUES (?, ?)
-        ''', (user, guess))
-        self.conn.commit()
-        self.conn.close()
+        db_user = db.User(name=user)
+        session.add(db_user)
+        db_user.total_guess = guess
 
-    def _update_guess(self, user, guess):
-        """
-        Takes a user and a guess.
-        Updates the users table.
-        """
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''
-        UPDATE USERS SET GUESS=? WHERE USER=?
-        ''', (guess, user))
-        self.conn.commit()
-        self.conn.close()
-
-    def _update_guesstotal(self, user, guess):
-        """
-        Takes a user and a guess
-        for the total number of deaths.
-        Updates the users table.
-        """
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''
-        UPDATE USERS SET GUESSTOTAL=? WHERE USER=?
-        ''', (guess, user))
-        self.conn.commit()
-        self.conn.close()
-
-    def _get_deaths(self):
+    def _get_current_deaths(self):
         """
         Returns the current number of deaths
         for the current leg of the run.
