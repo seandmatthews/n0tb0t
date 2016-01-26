@@ -1,9 +1,10 @@
 import requests
-import sqlite3
+import sqlalchemy
+from sqlalchemy.orm import sessionmaker
+import db
 import os
 import json
 import gspread
-from oauth2client.client import SignedJwtAssertionCredentials
 import time
 import random
 import threading
@@ -11,7 +12,7 @@ import datetime
 import pytz
 import showerThoughtFetcher
 import collections
-import logging
+from oauth2client.client import SignedJwtAssertionCredentials
 from config import SOCKET_ARGS
 
 class Bot(object):
@@ -20,33 +21,13 @@ class Bot(object):
         self.ts = ts
         self.gcs = gcs
 
-        # Collect all methods and properties of the object.
-        # Add them to self.my_dir if they don't start with an _
-        self.my_dir = [item for item in self.__dir__() if item[0] != '_']
-        self.my_methods = []
-        self.for_mods = []
-        self.for_all = []
-
-        # Look at all the items in self.my_dir
-        # Check to see if they're callable.
-        # If they are add them to self.my_methods
-        for item in self.my_dir:
-            if callable(eval('self.' + item)):
-                self.my_methods.append(item)
-
-        # Sort all methods in self.my_methods into either the for_mods list
-        # or the for_all list based on the function's _mods_only property
-        for method in self.my_methods:
-            try:
-                if eval('self.' + method + '._mods_only'):
-                    self.for_mods.append(method)
-            except AttributeError:
-                self.for_all.append(method)
+        self.for_all, self.for_mods = self._sort_methods()
                 
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
+        self._initialize_db()
 
         self.key_path = os.path.join(self.cur_dir, 'gspread test-279fb617abd8.json')
         with open(self.key_path) as kp:
@@ -82,17 +63,6 @@ class Bot(object):
             time = quote_sub_list[1]
             self._auto_quote(index=index, quote=quote, time=time)
 
-        self.db_path = os.path.join(self.cur_dir, 'DarkSouls.db')
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''CREATE TABLE IF NOT EXISTS USERS
-            (ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            USER           CHAR(50) NOT NULL,
-            GUESS          INTEGER,
-            GUESSTOTAL     INTEGER,
-            POINTS         INTEGER);''')
-        self.conn.commit()
-        self.conn.close()
-
         self.allowed_to_chat = True
 
         self.chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
@@ -102,6 +72,42 @@ class Bot(object):
         self.whisper_thread = threading.Thread(target=self._process_whisper_queue, kwargs={'whisper_queue': self.whisper_message_queue})
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
+
+    def _sort_methods(self):
+        # Collect all methods and properties of the object.
+        # Add them to self.my_dir if they don't start with an _
+        my_dir = [item for item in self.__dir__() if item[0] != '_']
+
+        my_methods = []
+        for_mods = []
+        for_all = []
+
+        # Look at all the items in self.my_dir
+        # Check to see if they're callable.
+        # If they are add them to self.my_methods
+        for item in my_dir:
+            if callable(eval('self.' + item)):
+                my_methods.append(item)
+
+        # Sort all methods in self.my_methods into either the for_mods list
+        # or the for_all list based on the function's _mods_only property
+        for method in my_methods:
+            try:
+                if eval('self.' + method + '._mods_only'):
+                    for_mods.append(method)
+            except AttributeError:
+                for_all.append(method)
+
+        return (for_all, for_mods)
+
+    def _initialize_db(self):
+        """
+        Creates the database and domain model and Session Class
+        """
+        self.db_path = os.path.join(self.cur_dir, 'info.db')
+        self.engine = sqlalchemy.create_engine('sqlite:///' + self.db_path)
+        db.Base.metadata.create_all(self.engine)
+
 
     def _add_to_chat_queue(self, message):
         """
@@ -177,13 +183,13 @@ class Bot(object):
         to the chat queue.
         """
         if 'PING' in self.ts.get_human_readable_message(message): # PING/PONG silliness
-        	print(self.ts.get_human_readable_message(message))
-        	self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
+            print(self.ts.get_human_readable_message(message))
+            self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
         fword = self.ts.get_human_readable_message(message).split(' ')[0]
         user = self.ts.get_user(message)
         if len(fword) > 1 and fword[0] == '!':
-            if fword[1:] in self.my_methods:
+            if fword[1:] in self.for_all or fword[1:] in self.for_all:
                 eval('self.' + fword[1:] + '(message)')
             elif fword[1:] in self.commands_dict:
                 self._add_to_chat_queue(self.commands_dict[fword[1:]])
@@ -734,8 +740,6 @@ class Bot(object):
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
-            else:
-                self._add_to_whisper_queue(user, "Sorry {}, !guess must be followed by a non-negative integer.".format(user))
                 if guess.isdigit() and int(guess) >= 0:
                     results = self._check_for_user(user)
                     if results:
@@ -746,6 +750,8 @@ class Bot(object):
                         self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+            else:
+                self._add_to_whisper_queue(user, "Sorry {}, !guess must be followed by a non-negative integer.".format(user))
         else:
             self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
 
@@ -814,7 +820,7 @@ class Bot(object):
             self._add_to_whisper_queue(user, "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
             
     @_mod_only
-    def clear_guesses(self, message):
+    def clear_guesses(self, session):
         """
         Clear all guesses so that users
         can guess again for the next segment
@@ -822,12 +828,7 @@ class Bot(object):
 
         !clear_guesses
         """
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute('''
-        UPDATE USERS SET GUESS=''
-        ''')
-        self.conn.commit()
-        self.conn.close()
+        session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.current_guess: None}))
         self._add_to_chat_queue("Guesses have been cleared.")
 
     @_mod_only
