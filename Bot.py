@@ -17,18 +17,18 @@ from functools import wraps
 from config import SOCKET_ARGS
 
 class Bot(object):
-    def __init__(self, ts, gcs):
-        self.guessing_enabled = False
-        self.ts = ts
-        self.gcs = gcs
+    def __init__(self, twitch_socket, group_chat_socket):
 
-        self.for_all, self.for_mods = self._sort_methods()
+        self.ts = twitch_socket
+        self.gcs = group_chat_socket
+
+        self.sorted_methods = self._sort_methods()
                 
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
-        self._initialize_db()
+        self.Session = self._initialize_db(self.cur_dir)
 
         self.key_path = os.path.join(self.cur_dir, 'gspread test-279fb617abd8.json')
         with open(self.key_path) as kp:
@@ -37,40 +37,22 @@ class Bot(object):
         self.credentials = SignedJwtAssertionCredentials(self.json_key['client_email'],
                                                          bytes(self.json_key['private_key'], 'utf-8'), self.scope)
         
-        self.misc_values_file = os.path.join(self.cur_dir, 'misc-values.json')
-        
-        self.commands_file = os.path.join(self.cur_dir, 'commands.json')
-        with open(self.commands_file) as cf:
-            self.commands_dict = json.load(cf)
+        session = self.Session()
+        self.guessing_enabled = bool(session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled'))
 
-        self.user_commands_file = os.path.join(self.cur_dir, 'user-commands.json')
-        with open(self.user_commands_file) as ucf:
-            self.user_commands_dict = json.load(ucf)
-
-        self.quotes_file = os.path.join(self.cur_dir, 'quotes.json')
-        with open(self.quotes_file) as qf:
-            self.quotes_list = json.load(qf)
-            
-        self.users_contest_list_file = os.path.join(self.cur_dir, 'users-contest-list.json')
-        with open(self.users_contest_list_file) as uclf:
-            self.users_contest_list = json.load(uclf)
-
-        self.auto_quotes_file = os.path.join(self.cur_dir, 'auto-quotes.json')
-        with open(self.auto_quotes_file) as aqf:
-            self.auto_quotes_list = json.load(aqf)
         self.auto_quotes_timers = {}
-        for index, quote_sub_list in enumerate(self.auto_quotes_list):
-            quote = quote_sub_list[0]
-            time = quote_sub_list[1]
-            self._auto_quote(index=index, quote=quote, time=time)
+        for auto_quote in session.query(db.AutoQuote).all():
+            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, time=auto_quote.period)
 
         self.allowed_to_chat = True
 
-        self.chat_thread = threading.Thread(target=self._process_chat_queue, kwargs={'chat_queue': self.chat_message_queue})
+        self.chat_thread = threading.Thread(target=self._process_chat_queue,
+                                            kwargs={'chat_queue': self.chat_message_queue})
         self.chat_thread.daemon = True
         self.chat_thread.start()
 
-        self.whisper_thread = threading.Thread(target=self._process_whisper_queue, kwargs={'whisper_queue': self.whisper_message_queue})
+        self.whisper_thread = threading.Thread(target=self._process_whisper_queue,
+                                               kwargs={'whisper_queue': self.whisper_message_queue})
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
 
@@ -80,8 +62,8 @@ class Bot(object):
         my_dir = [item for item in self.__dir__() if item[0] != '_']
 
         my_methods = []
-        for_mods = []
-        for_all = []
+        methods_dict = {'for_mods': [],
+                        'for_all': []}
 
         # Look at all the items in self.my_dir
         # Check to see if they're callable.
@@ -95,19 +77,21 @@ class Bot(object):
         for method in my_methods:
             try:
                 if eval('self.' + method + '._mods_only'):
-                    for_mods.append(method)
+                    methods_dict['for_mods'].append(method)
             except AttributeError:
-                for_all.append(method)
+                methods_dict['for_all'].append(method)
 
-        return (for_all, for_mods)
+        return methods_dict
 
-    def _initialize_db(self):
+    def _initialize_db(self, db_location):
         """
         Creates the database and domain model and Session Class
         """
         self.db_path = os.path.join(self.cur_dir, 'info.db')
-        self.engine = sqlalchemy.create_engine('sqlite:///' + self.db_path)
+        engine = sqlalchemy.create_engine('sqlite:///' + self.db_path)
+        Session = sessionmaker(bind=engine)
         db.Base.metadata.create_all(self.engine)
+        return Session
 
 
     def _add_to_chat_queue(self, message):
@@ -176,27 +160,64 @@ class Bot(object):
 
     def _act_on(self, message):
         """
-        Looks at the first word in the message.
-        If that word starts with an exclamation point
-        and the rest of the word is one of the methods in this
-        class, it calls that function. If that word is a key
-        in the commands dictionary. Send the corresponding string
-        to the chat queue.
+        Takes a message from a user.
+        Looks at the message.
+        Tries to extract a command from the message.
+        Checks permissions for that command.
+        Runs the command if the permissions check out.
         """
         if 'PING' in self.ts.get_human_readable_message(message): # PING/PONG silliness
             print(self.ts.get_human_readable_message(message))
             self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
-        fword = self.ts.get_human_readable_message(message).split(' ')[0]
-        user = self.ts.get_user(message)
-        if len(fword) > 1 and fword[0] == '!':
-            if fword[1:] in self.for_all or fword[1:] in self.for_all:
-                eval('self.' + fword[1:] + '(message)')
-            elif fword[1:] in self.commands_dict:
-                self._add_to_chat_queue(self.commands_dict[fword[1:]])
-            elif fword[1:] in self.user_commands_dict:
-                if user in self.user_commands_dict[fword[1:]][0]:
-                    self._add_to_chat_queue(self.user_commands_dict[fword[1:]][1])
+        command = self._get_command(message)
+        if command is not None:
+            user = self.ts.get_user(message)
+            if self._has_permission(user, command):
+                self._run_command(command, message)
+            else:
+                self._add_to_whisper_queue(user,
+                                           'Sorry {}, you\'re not authorized to use the command !{}'
+                                           .format(user, command))
+
+    def _get_command(self, message, db_session):
+        """
+        Takes a message from the user and a database session.
+        Returns a list which contains the command and the place where it can be found.
+        If it's a method, that place will be the key in the sorted_methods dictionary which
+        has the corresponding list containing the command. Otherwise it will be the word 'Database'.
+        """
+        first_word = self.ts.get_human_readable_message(message).split(' ')[0]
+        if len(first_word) > 1 and first_word[0] == '!':
+            potential_command = first_word[0]
+        else:
+            return None
+        if potential_command in self.sorted_methods['for_all']:
+            return [potential_command, 'for_all']
+        if potential_command in  self.sorted_methods['for_mods']:
+            return [potential_command, 'for_mods']
+
+        db_results = db_session.query.filter(db.Command.call == potential_command).all()
+        if db_results != []:
+            return [potential_command, 'Database']
+        return None
+
+    def _has_permission(self, message, command, db_session):
+        """
+        Takes a message from the user, and a list which contains the
+        command and where it's found, and a database session.
+        Returns True or False depending on whether the user that
+        sent the command has the authority to use that command
+        """
+        if command[1] == 'for_all':
+            return True
+        if command[1] == 'for_mods' and self.ts.check_mod(message):
+            return True
+        if command[1] == 'Database':
+            commands = db_session.query(db.Command).all()
+
+    def _run_command(self):
+        pass
 
     def _get_mods(self):
         """
@@ -208,7 +229,7 @@ class Bot(object):
             try:
                 r = requests.get(url)
                 mods = r.json()['chatters']['moderators']
-            except ValueError as e:
+            except ValueError:
                 continue
             else:
                 return mods
@@ -228,7 +249,6 @@ class Bot(object):
                 func(self, message)
             else:
                 self._add_to_chat_queue("Sorry {}, that's a mod only command".format(self.ts.get_user(message)))
-        new_func.__name__ = func.__name__
         new_func._mods_only = True
         return new_func
 
@@ -445,7 +465,7 @@ class Bot(object):
         commands_str = "Regular Command List: "
         regular_commands_str = "Dynamic/User Command List: "
         mod_commands_str = "Mod Command List: "
-        for func in self.for_all:
+        for func in self.sorted_methods['for_all']:
             commands_str += "!{} ".format(func)
         self._add_to_whisper_queue(user, commands_str)
         for command in self.commands_dict:
@@ -728,7 +748,7 @@ class Bot(object):
         self.guessing_enabled = False
         self._add_to_chat_queue("Guessing is now disabled.")
 
-    def guess(self, message):
+    def guess(self, message, session):
         """
         Updates the database with a user's guess
         or informs the user that their guess
@@ -743,7 +763,7 @@ class Bot(object):
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
-                    self._set_current_guess(user, guess)
+                    self._set_current_guess(user, guess, session)
                     self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
@@ -753,7 +773,7 @@ class Bot(object):
             self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
 
     @_mod_only
-    def enable_guesstotal(self, message):
+    def enable_guesstotal(self):
         """
         Enables guessing for the total number of deaths for the run.
         Modifies the value associated with the guess-total-enabled key
@@ -762,14 +782,14 @@ class Bot(object):
         !enable_guesstotal
         """
         with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
+            misc_values_dict = json.load(mvf)
         misc_values_dict['guess-total-enabled'] = True
         with open(self.misc_values_file, 'w') as mvf:
             mvf.write(json.dumps(misc_values_dict))
         self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
     @_mod_only
-    def disable_guesstotal(self, message):
+    def disable_guesstotal(self):
         """
         Disables guessing for the total number of deaths for the run.
         Modifies the value associated with the guess-total-enabled key
@@ -784,25 +804,26 @@ class Bot(object):
             mvf.write(json.dumps(misc_values_dict))
         self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
 
-    def guesstotal(self, message):
+    def guesstotal(self, message, db_session):
         """
         Updates the database with a user's guess
         for the total number of deaths in the run
         or informs the user that their guess
         doesn't fit the acceptable parameters
         or that guessing is disabled for everyone.
-fr
+
         !guesstotal 50
         """
+        # TODO: user the orm
         user = self.ts.get_user(message)
         with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
+            misc_values_dict = json.load(mvf)
         if misc_values_dict['guess-total-enabled'] is True:
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) > 0:
-                    self._set_total_guess(user, guess)
+                    self._set_total_guess(user, guess, db_session)
                     self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
                     self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
@@ -812,7 +833,7 @@ fr
             self._add_to_whisper_queue(user, "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
             
     @_mod_only
-    def clear_guesses(self, session):
+    def clear_guesses(self, db_session):
         """
         Clear all guesses so that users
         can guess again for the next segment
@@ -820,11 +841,23 @@ fr
 
         !clear_guesses
         """
-        session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.current_guess: None}))
+        db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.current_guess: None}))
         self._add_to_chat_queue("Guesses have been cleared.")
 
     @_mod_only
-    def show_guesses(self, session):
+    def clear_total_guesses(self, db_session):
+        """
+        Clear all total guesses so that users
+        can guess again for the next game
+        where they guess about the total number of deaths
+
+        !clear_total_guesses
+        """
+        db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.total_guess: None}))
+        self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
+
+    @_mod_only
+    def show_guesses(self, db_session):
         """
         Clears all guesses out of the google
         spreadsheet, then repopulate it from
@@ -832,13 +865,13 @@ fr
 
         !show_guesses
         """
-        # TODO: Use a separate thread to handle the spreadsheet so the bot can continue to respond to requests
-        # Also perhaps try to rework how the spreadsheet is cleared to do it all at once instead of 1 cell at a time.
+        # TODO: use the orm properly
+        # TODO: add total guesses
         self._add_to_chat_queue("Hello friends, formatting the google sheet with the latest information about all the guesses might take a little bit. I'll let you know when it's done.")
         gc = gspread.authorize(self.credentials)
         sh = gc.open("Dark Souls Guesses")
         ws = sh.worksheet('Dark Souls Guesses')
-        for i in range(1, len(self._get_all_users(session)) + 10):
+        for i in range(1, len(self._get_all_users(db_session)) + 10):
             ws.update_acell('A{}'.format(i), '')
             ws.update_acell('B{}'.format(i), '')        
         ws.update_acell('A1', 'User')
@@ -869,7 +902,6 @@ fr
                 self._add_to_whisper_queue(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
         else:
             self._add_to_whisper_queue(user, 'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(user))
-
 
     @_mod_only
     def set_total_deaths(self, message):
@@ -910,7 +942,7 @@ fr
         self._add_to_whisper_queue(user, whisper_msg)
 
     @_mod_only
-    def clear_deaths(self, message):
+    def clear_deaths(self):
         """
         Sets the number of deaths for the current
         stage of the run to 0. Used after progressing
@@ -919,9 +951,9 @@ fr
         !clear_deaths
         """
         self._set_deaths(0)
-        self.show_deaths(message)
+        self.show_deaths()
 
-    def show_deaths(self, message):
+    def show_deaths(self):
         """
         Sends the current and total death
         counters to the chat.
@@ -932,7 +964,7 @@ fr
         total_deaths = self._get_total_deaths()
         self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
 
-    def show_winner(self, message):
+    def show_winner(self, db_session):
         """
         Sends the name of the currently winning
         player to the chat. Should be used after
@@ -940,10 +972,11 @@ fr
 
         !show_winner
         """
+        # TODO: use the orm properly
         winners_list = []
         deaths = self._get_current_deaths()
         last_winning_guess = -1
-        guess_rows = [row for row in self._get_all_users() if bool(row[2]) is not False]
+        guess_rows = [row for row in self._get_all_users(db_session) if bool(row[2]) is not False]
         for row in guess_rows:
             if int(row[2]) <= int(deaths): # If your guess was over the number of deaths you lose due to the price is right rules.
                 if row[2] > last_winning_guess:
@@ -962,24 +995,24 @@ fr
             winners_str = 'You all gussed too high. You should have had more faith in Rizorty. Rizorty wins!'
         self._add_to_chat_queue(winners_str)
 
-    def _get_all_users(self, session):
+    def _get_all_users(self, db_session):
         """
         Return all users from the database.
         """
-        results = session.query(db.User).all()
+        results = db_session.query(db.User).all()
         return results
 
-    def _set_current_guess(self, user, guess, session):
+    def _set_current_guess(self, user, guess, db_session):
         """
         Takes a user and a guess.
         Adds the user and their guess
         to the users table.
         """
         db_user = db.User(name=user)
-        session.add(db_user)
+        db_session.add(db_user)
         db_user.current_guess = guess
 
-    def _set_total_guess(self, user, guess, session):
+    def _set_total_guess(self, user, guess, db_session):
         """
         Takes a user and a guess
         for the total number of deaths.
@@ -987,45 +1020,37 @@ fr
         to the users table.
         """
         db_user = db.User(name=user)
-        session.add(db_user)
+        db_session.add(db_user)
         db_user.total_guess = guess
 
-    def _get_current_deaths(self):
+    def _get_current_deaths(self, db_session):
         """
         Returns the current number of deaths
         for the current leg of the run.
         """
-        with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
-        return misc_values_dict['deaths']
+        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'current-deaths')
+        return deaths_obj.value
 
-    def _get_total_deaths(self):
+    def _get_total_deaths(self, db_session):
         """
         Returns the total deaths that
-         have occurred in the run so far.
+        have occurred in the run so far.
         """
-        with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
-        return misc_values_dict['total-deaths']
+        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'total-deaths')
+        return total_deaths_obj.value
 
-    def _set_deaths(self, deaths_num):
+    def _set_deaths(self, deaths_num, db_session):
         """
         Takes a string for the number of deaths.
-        Updates the miscellaneous values file.
+        Updates the miscellaneous values table.
         """
-        with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
-        misc_values_dict['deaths'] = deaths_num
-        with open(self.misc_values_file, 'w') as mvf:
-            mvf.write(json.dumps(misc_values_dict))
+        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'current-deaths')
+        deaths_obj.value = deaths_num
 
-    def _set_total_deaths(self, total_deaths_num):
+    def _set_total_deaths(self, total_deaths_num, db_session):
         """
         Takes a string for the total number of deaths.
-        Updates the miscellaneous values file.
+        Updates the miscellaneous values table.
         """
-        with open(self.misc_values_file) as mvf:
-             misc_values_dict = json.load(mvf)
-        misc_values_dict['total-deaths'] = total_deaths_num
-        with open(self.misc_values_file, 'w') as mvf:
-            mvf.write(json.dumps(misc_values_dict))
+        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'total-deaths')
+        total_deaths_obj.value = total_deaths_num
