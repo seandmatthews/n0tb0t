@@ -89,7 +89,8 @@ class Bot(object):
         """
         Creates the database and domain model and Session Class
         """
-        self.db_path = os.path.join(db_location, 'info.db')
+        channel = SOCKET_ARGS['channel']
+        self.db_path = os.path.join(db_location, '{}.db'.format(channel))
         engine = sqlalchemy.create_engine('sqlite:///' + self.db_path)
         # noinspection PyPep8Naming
         Session = sessionmaker(bind=engine)
@@ -458,7 +459,7 @@ class Bot(object):
             commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, commands_str)
 
-    def show_commands(self, message):
+    def show_commands(self, message, db_session):
         """
         Sends a whisper containing all commands
         that are available to all users
@@ -466,6 +467,7 @@ class Bot(object):
         !show_commands
         """
         user = self.ts.get_user(message)
+        db_commands = db_session.query(db.Command).all()
         commands_str = "Regular Command List: "
         regular_commands_str = "Dynamic/User Command List: "
         mod_commands_str = "Mod Command List: "
@@ -479,7 +481,7 @@ class Bot(object):
                 regular_commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, regular_commands_str)
         if self.ts.check_mod(message):
-            for func in self.for_mods:
+            for func in self.sorted_methods['for_mods']:
                 mod_commands_str += "!{} ".format(func)
             self._add_to_whisper_queue(user, mod_commands_str)
 
