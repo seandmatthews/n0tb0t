@@ -1,7 +1,8 @@
 .idea/
 .__pycache__/
+__pycache__/
 config.py
-DarkSouls.db
+*.db
 auto-quotes.json
 quotes.json
 commands.json
@@ -10,3 +11,4 @@ misc-values.json
 users-contest-list.json
 gspread test-279fb617abd8.json
 error-log.txt
+LICENSE
