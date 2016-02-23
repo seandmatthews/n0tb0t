@@ -339,7 +339,7 @@ class Bot(object):
             self._add_to_whisper_queue(user, '#{hr_index} {msg}'.format(hr_index=hr_index, msg=msg))
 
     @_mod_only
-    def add_auto_quote(self, message):
+    def add_auto_quote(self, message, db_session):
         """
         Makes a new sentence that the bot periodically says.
         The first "word" after !add_auto_quote is the number of seconds
@@ -358,7 +358,7 @@ class Bot(object):
                 aqf.write(json.dumps(self.auto_quotes_list))
 
     @_mod_only
-    def delete_auto_quote(self, message):
+    def delete_auto_quote(self, message, db_session):
         """
         Deletes a sentence that the bot periodically says.
         Takes a 1 indexed auto quote index.
@@ -368,14 +368,13 @@ class Bot(object):
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
-            if int(msg_list[1]) <= len(self.auto_quotes_list):
+            quotes = db_session.query(db.AutoQuote).all()
+            if int(msg_list[1]) <= len(quotes):
                 index = int(msg_list[1]) - 1
-                del self.auto_quotes_list[index]
-                with open(self.auto_quotes_file, 'w') as aqf:
-                    aqf.write(json.dumps(self.auto_quotes_list))
+                db_session.delete(quotes[index])
 
     @_mod_only
-    def add_command(self, message):
+    def add_command(self, message, db_session):
         """
         Adds a new command.
         The first word after !add_command with an exclamation mark is the command.
@@ -383,8 +382,8 @@ class Bot(object):
         Optionally takes the names of twitch users before the command.
         This would make the command only available to those users.
 
-        !add_command !test This is a test.
-        !add_user_command TestUser1 TestUser2 !test_command This is a test
+        !add_command !test_command This is a test.
+        !add_command TestUser1 TestUser2 !test_command This is a test
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
@@ -394,32 +393,25 @@ class Bot(object):
                 command = word
                 users = msg_list[1:index + 1]
                 response = ' '.join(msg_list[index + 2:])
-                command_found = True
-        if command_found and (command[1:] in self.user_commands_dict or command in self.commands_dict):
+                break
+        else:
+            self._add_to_whisper_queue(user, 'Sorry, the command needs to have an ! in it.')
+            return
+        db_commands = db_session.query(db.Command).all()
+        if command[1:] in [db_command.call for db_command in db_commands]:
             self._add_to_whisper_queue(user, 'Sorry, that command already exists. Please delete it first.')
         else:
-            if command_found and len(users) != 0:
+            db_command = db.Command(call=command[1:], response=response)
+            if len(users) != 0:
                 users = [user.lower() for user in users]
-                key = command[1:]  # exclude the exclamation mark
-                value = [users, response]
-                self.user_commands_dict[key] = value
-                with open(self.user_commands_file, 'w') as cf:
-                    cf.write(json.dumps(self.user_commands_dict))
+                permissions = []
+                for user in users:
+                    permissions.append(db.Permission(user_entity=user))
+                db_command.permissions = permissions
                 self._add_to_whisper_queue(user, 'Command added.')
-            elif command_found and len(users) == 0:
-                command = msg_list[1]
-                response = ' '.join(msg_list[2:])
-                key = command[1:]  # exclude the exclamation mark
-                value = response
-                self.commands_dict[key] = value
-                with open(self.commands_file, 'w') as cf:
-                    cf.write(json.dumps(self.commands_dict))
-                self._add_to_whisper_queue(user, 'Command added.')
-            else:
-                self._add_to_whisper_queue(user, 'Sorry, the command needs to have an ! in it.')
 
     @_mod_only
-    def delete_command(self, message):
+    def delete_command(self, message, db_session):
         """
         Removes a user created command.
         Takes the name of the command.
@@ -428,22 +420,18 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        command = msg_list[1][1:]
-        if command in self.commands_dict:
-            del self.commands_dict[command]
-            with open(self.commands_file, 'w') as cf:
-                cf.write(json.dumps(self.commands_dict))
-            self._add_to_whisper_queue(user, 'Command deleted.')
-        elif command in self.user_commands_dict:
-            del self.user_commands_dict[command]
-            with open(self.user_commands_file, 'w') as cf:
-                cf.write(json.dumps(self.user_commands_dict))
-            self._add_to_whisper_queue(user, 'Command deleted.')
+        command_str = msg_list[1][1:]
+        db_commands = db_session.query(db.Command).all()
+        for db_command in db_commands:
+            if command_str == db_command.call:
+                db_session.delete(db_command)
+                self._add_to_whisper_queue(user, 'Command deleted.')
+                break
         else:
             self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t seem to exist.')
 
     @_mod_only
-    def show_deletable_commands(self, message):
+    def show_deletable_commands(self, message, db_session):
         """
         Sends a whisper containing all user
         created commands, including specific
@@ -452,11 +440,10 @@ class Bot(object):
         !show_deletable_commands
         """
         user = self.ts.get_user(message)
+        db_commands = db_session.query(db.Command).all()
         commands_str = "Command List: "
-        for command in self.commands_dict:
-            commands_str += "!{} ".format(command)
-        for command in self.user_commands_dict:
-            commands_str += "!{} ".format(command)
+        for command in db_commands:
+            commands_str += "!{} ".format(command.call)
         self._add_to_whisper_queue(user, commands_str)
 
     def show_commands(self, message, db_session):
@@ -468,17 +455,25 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         db_commands = db_session.query(db.Command).all()
+        general_commands = []
+        user_specific_commands = []
+        for command in db_commands:
+            if bool(command.permissions) is False:
+                general_commands.append(command)
+            else:
+                user_specific_commands.append(command)
         commands_str = "Regular Command List: "
         regular_commands_str = "Dynamic/User Command List: "
         mod_commands_str = "Mod Command List: "
         for func in self.sorted_methods['for_all']:
             commands_str += "!{} ".format(func)
         self._add_to_whisper_queue(user, commands_str)
-        for command in self.commands_dict:
+        for command in general_commands:
             regular_commands_str += "!{} ".format(command)
-        for command in self.user_commands_dict:
-            if user in self.user_commands_dict[command][0]:
-                regular_commands_str += "!{} ".format(command)
+        for command in user_specific_commands:
+            for permission in command.permissions:
+                if user == permission.user_entity:
+                    regular_commands_str += "!{} ".format(command)
         self._add_to_whisper_queue(user, regular_commands_str)
         if self.ts.check_mod(message):
             for func in self.sorted_methods['for_mods']:
@@ -603,7 +598,7 @@ class Bot(object):
         else:
             self._add_to_chat_queue('Sorry {}, you need to specify a caster to shout out.'.format(user))
 
-    def shower_thought(self, message):
+    def shower_thought(self):
         """
         Fetches the top shower thought from reddit in the last 24 hours and sends it to chat.
 
@@ -653,7 +648,7 @@ class Bot(object):
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
 
-    def uptime(self, message):
+    def uptime(self):
         """
         Sends a message to stream saying how long the caster has been streaming for.
         """
@@ -999,8 +994,8 @@ class Bot(object):
         last_winning_guess = -1
         users = db_session.query(db.User).filter(db.User.current_guess.isnot(None)).all()
         for user in users:
-            if int(user.current_guess) <= int(
-                    deaths):  # If your guess was over the number of deaths you lose due to the price is right rules.
+            # If your guess was over the number of deaths you lose due to the price is right rules.
+            if int(user.current_guess) <= int(deaths):
                 if user.current_guess > last_winning_guess:
                     winners_list = [user.name]
                     last_winning_guess = user.current_guess
