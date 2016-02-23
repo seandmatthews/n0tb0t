@@ -44,7 +44,7 @@ class Bot(object):
 
         self.auto_quotes_timers = {}
         for auto_quote in session.query(db.AutoQuote).all():
-            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, time=auto_quote.period)
+            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
 
         self.allowed_to_chat = True
 
@@ -282,7 +282,7 @@ class Bot(object):
         self.chat_thread.daemon = True
         self.chat_thread.start()
 
-    def _auto_quote(self, index, quote, time):
+    def _auto_quote(self, index, quote, period):
         """
         Takes an index, quote and time in seconds.
         Starts a thread that waits the specified time, says the quote
@@ -290,29 +290,28 @@ class Bot(object):
         that the quotes continue to be said forever or until they're stopped by the user.
         """
         key = 'AQ{}'.format(index)
-        self.auto_quotes_timers[key] = threading.Timer(time, self._auto_quote,
-                                                       kwargs={'index': index, 'quote': quote, 'time': time})
+        self.auto_quotes_timers[key] = threading.Timer(period, self._auto_quote,
+                                                       kwargs={'index': index, 'quote': quote, 'time': period})
         self.auto_quotes_timers[key].start()
         self._add_to_chat_queue(quote)
 
     @_mod_only
-    def start_auto_quotes(self, message):
+    def start_auto_quotes(self, db_session):
         """
         Starts the bot spitting out auto quotes by calling the
-        _auto_quote function on all quotes in the auto_quotes_file
+        _auto_quote function on all quotes in the AUTOQUOTES table
 
         !start_auto_quotes
         """
-        with open(self.auto_quotes_file) as aqf:
-            self.auto_quotes_list = json.load(aqf)
+        auto_quotes = db_session.query(db.AutoQuote).all()
         self.auto_quotes_timers = {}
-        for index, quote_sub_list in enumerate(self.auto_quotes_list):
-            quote = quote_sub_list[0]
-            time = quote_sub_list[1]
-            self._auto_quote(index=index, quote=quote, time=time)
+        for index, auto_quote in enumerate(auto_quotes):
+            quote = auto_quote.quote
+            period = auto_quote.period
+            self._auto_quote(index=index, quote=quote, period=period)
 
     @_mod_only
-    def stop_auto_quotes(self, message):
+    def stop_auto_quotes(self):
         """
         Stops the bot from spitting out quotes by cancelling all auto quote threads.
 
@@ -323,20 +322,19 @@ class Bot(object):
             time.sleep(1)
             self.auto_quotes_timers[AQ].cancel()
 
-    def show_auto_quotes(self, message):
+    def show_auto_quotes(self, message, db_session):
         """
         Sends a series of whispers of all current auto quotes,
         each prefixed with their index.
 
         !show_auto_quotes
         """
-        with open(self.auto_quotes_file) as aqf:
-            self.auto_quotes_list = json.load(aqf)
-        for index, aq in enumerate(self.auto_quotes_list):
-            hr_index = index + 1
-            msg = aq[0]
+        auto_quotes = db_session.query(db.AutoQuote).all()
+        for index, aq in enumerate(auto_quotes):
+            human_readable_index = index + 1
             user = self.ts.get_user(message)
-            self._add_to_whisper_queue(user, '#{hr_index} {msg}'.format(hr_index=hr_index, msg=msg))
+            self._add_to_whisper_queue(user, '#{hr_index} repeats every {period}seconds: {quote}'.format(
+                    hr_index=human_readable_index, period=aq.period, quote=aq.quote))
 
     @_mod_only
     def add_auto_quote(self, message, db_session):
@@ -352,10 +350,7 @@ class Bot(object):
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
-            sub_list = [quote, delay]
-            self.auto_quotes_list.append(sub_list)
-            with open(self.auto_quotes_file, 'w') as aqf:
-                aqf.write(json.dumps(self.auto_quotes_list))
+            db_session.add(db.AutoQuote(quote=quote, period=delay))
 
     @_mod_only
     def delete_auto_quote(self, message, db_session):
@@ -368,10 +363,10 @@ class Bot(object):
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
-            quotes = db_session.query(db.AutoQuote).all()
-            if int(msg_list[1]) <= len(quotes):
+            auto_quotes = db_session.query(db.AutoQuote).all()
+            if int(msg_list[1]) <= len(auto_quotes):
                 index = int(msg_list[1]) - 1
-                db_session.delete(quotes[index])
+                db_session.delete(auto_quotes[index])
 
     @_mod_only
     def add_command(self, message, db_session):
@@ -387,7 +382,6 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        command_found = False
         for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
             if word[0] == '!':
                 command = word
