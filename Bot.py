@@ -96,6 +96,16 @@ class Bot(object):
         # noinspection PyPep8Naming
         Session = sessionmaker(bind=engine)
         db.Base.metadata.create_all(engine)
+        db_session = Session()
+        misc_values = db_session.query(db.MiscValue).all()
+        if len(misc_values) == 0:
+            db_session.add_all([
+                db.MiscValue(name='guess-total-enabled', value='False'),
+                db.MiscValue(name='current-deaths', value='0'),
+                db.MiscValue(name='total-deaths', value='0'),
+                db.MiscValue(name='guessing-enabled', value='False')])
+            db_session.commit()
+            db_session.close()
         return Session
 
     def _add_to_chat_queue(self, message):
@@ -483,7 +493,7 @@ class Bot(object):
                     if user == permission.user_entity:
                         regular_commands_str += "!{} ".format(command)
             self._add_to_whisper_queue(user, regular_commands_str)
-            
+
         if self.ts.check_mod(message):
             for func in self.sorted_methods['for_mods']:
                 mod_commands_str += "!{} ".format(func)
@@ -706,7 +716,7 @@ class Bot(object):
         !enter_contest
         """
         username = self.ts.get_user(message)
-        user = db_session.query(db.User).filter(db.User.name == username)
+        user = db_session.query(db.User).filter(db.User.name == username).one()
         if user:
             if user.entered_in_contest:
                 self._add_to_whisper_queue(user, 'You\'re already entered into the contest, you can\'t enter again.')
