@@ -185,6 +185,7 @@ class Bot(object):
                 self._add_to_whisper_queue(user,
                                            'Sorry {}, you\'re not authorized to use the command !{}'
                                            .format(user, command))
+        db_session.commit()
         db_session.close()
 
     def _get_command(self, message, db_session):
@@ -457,27 +458,32 @@ class Bot(object):
         !show_commands
         """
         user = self.ts.get_user(message)
-        db_commands = db_session.query(db.Command).all()
-        general_commands = []
-        user_specific_commands = []
-        for command in db_commands:
-            if bool(command.permissions) is False:
-                general_commands.append(command)
-            else:
-                user_specific_commands.append(command)
+
         commands_str = "Regular Command List: "
         regular_commands_str = "Dynamic/User Created Command List: "
         mod_commands_str = "Mod Command List: "
+
         for func in self.sorted_methods['for_all']:
             commands_str += "!{} ".format(func)
         self._add_to_whisper_queue(user, commands_str)
-        for command in general_commands:
-            regular_commands_str += "!{} ".format(command)
-        for command in user_specific_commands:
-            for permission in command.permissions:
-                if user == permission.user_entity:
-                    regular_commands_str += "!{} ".format(command)
-        self._add_to_whisper_queue(user, regular_commands_str)
+
+        db_commands = db_session.query(db.Command).all()
+        if len(db_commands) > 0:
+            general_commands = []
+            user_specific_commands = []
+            for command in db_commands:
+                if bool(command.permissions) is False:
+                    general_commands.append(command)
+                else:
+                    user_specific_commands.append(command)
+            for command in general_commands:
+                regular_commands_str += "!{} ".format(command)
+            for command in user_specific_commands:
+                for permission in command.permissions:
+                    if user == permission.user_entity:
+                        regular_commands_str += "!{} ".format(command)
+            self._add_to_whisper_queue(user, regular_commands_str)
+            
         if self.ts.check_mod(message):
             for func in self.sorted_methods['for_mods']:
                 mod_commands_str += "!{} ".format(func)
@@ -507,7 +513,7 @@ class Bot(object):
         quote = ' '.join(msg_list[1:])
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
-        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.User).count()))
+        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.User).count()+1))
 
     @_mod_only
     def delete_quote(self, message, db_session):
@@ -538,8 +544,8 @@ class Bot(object):
         # TODO: Stick the quotes in a google spreadsheet or something
         user = self.ts.get_user(message)
         quotes = db_session.query(db.Quote).all()
-        for index, quote in enumerate(quotes):
-            self._add_to_whisper_queue(user, '#{}, {}'.format(index + 1, quote))
+        for index, quote_obj in enumerate(quotes):
+            self._add_to_whisper_queue(user, '#{}: {}'.format(index + 1, quote_obj.quote))
 
     def quote(self, message, db_session):
         """
@@ -553,7 +559,7 @@ class Bot(object):
             if int(msg_list[1]) > 0:
                 index = int(msg_list[1]) - 1
                 quotes = db_session.query(db.Quote).all()
-                if index < len(quotes)-1:
+                if index <= len(quotes)-1:
                     self._add_to_chat_queue('#{} {}'.format(str(index + 1), quotes[index].quote))
                 else:
                     self._add_to_chat_queue('Sorry, there are only {} quotes.'.format(len(quotes)))

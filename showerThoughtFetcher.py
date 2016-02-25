@@ -2,7 +2,7 @@
 import praw
 
 
-def get_shower_thought(message):
+def get_shower_thought():
     """
     Fetches the top shower thought from reddit in the last 24 hours and sends it to chat.
 
