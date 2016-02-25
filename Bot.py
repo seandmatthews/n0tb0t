@@ -79,10 +79,9 @@ class Bot(object):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            try:
-                if hasattr(getattr(self, method), '._mods_only'): #eval('self.' + method + '._mods_only'):
-                    methods_dict['for_mods'].append(method)
-            except AttributeError:
+            if hasattr(getattr(self, method), '_mods_only'): 
+                methods_dict['for_mods'].append(method)
+            else:
                 methods_dict['for_all'].append(method)
 
         return methods_dict
@@ -197,16 +196,16 @@ class Bot(object):
         """
         first_word = self.ts.get_human_readable_message(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
-            potential_command = first_word[0]
+            potential_command = first_word[1:]
         else:
             return None
         if potential_command in self.sorted_methods['for_all']:
             return [potential_command, 'for_all']
         if potential_command in self.sorted_methods['for_mods']:
             return [potential_command, 'for_mods']
-        db_result = db_session.query.filter(db.Command.call == potential_command).one()
+        db_result = db_session.query(db.Command).filter(db.Command.call == potential_command).all()
         if db_result:
-            return [potential_command, db_result]
+            return [potential_command, db_result[0]]
         return None
 
     def _has_permission(self, user, is_mod, command, db_session):
@@ -262,20 +261,10 @@ class Bot(object):
 
     def _mod_only(func):
         """
-        Redefines the method to work if the person trying to use the function is a moderator.
-        Also set's the method's _mods_only property to True
+        Set's the method's _mods_only property to True
         """
-
-        @wraps(func)
-        def new_func(self, message):
-            if self.ts.check_mod(message):
-                # noinspection PyCallingNonCallable
-                func(self, message)
-            else:
-                self._add_to_chat_queue("Sorry {}, that's a mod only command".format(self.ts.get_user(message)))
-
-        new_func._mods_only = True
-        return new_func
+        func._mods_only = True
+        return func
 
     @_mod_only
     def stop_speaking(self):
@@ -477,7 +466,7 @@ class Bot(object):
             else:
                 user_specific_commands.append(command)
         commands_str = "Regular Command List: "
-        regular_commands_str = "Dynamic/User Command List: "
+        regular_commands_str = "Dynamic/User Created Command List: "
         mod_commands_str = "Mod Command List: "
         for func in self.sorted_methods['for_all']:
             commands_str += "!{} ".format(func)
