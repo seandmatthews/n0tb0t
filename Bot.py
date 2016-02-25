@@ -12,6 +12,7 @@ import datetime
 import pytz
 import showerThoughtFetcher
 import collections
+import inspect
 from oauth2client.client import SignedJwtAssertionCredentials
 from functools import wraps
 from config import SOCKET_ARGS
@@ -41,6 +42,7 @@ class Bot(object):
 
         session = self.Session()
         self.guessing_enabled = bool(session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled'))
+        session.close()
 
         self.auto_quotes_timers = {}
         for auto_quote in session.query(db.AutoQuote).all():
@@ -71,14 +73,14 @@ class Bot(object):
         # Check to see if they're callable.
         # If they are add them to self.my_methods
         for item in my_dir:
-            if callable(eval('self.' + item)):
+            if callable(getattr(self, item)):
                 my_methods.append(item)
 
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
             try:
-                if eval('self.' + method + '._mods_only'):
+                if hasattr(getattr(self, method), '._mods_only'): #eval('self.' + method + '._mods_only'):
                     methods_dict['for_mods'].append(method)
             except AttributeError:
                 methods_dict['for_all'].append(method)
@@ -173,15 +175,18 @@ class Bot(object):
             print(self.ts.get_human_readable_message(message))
             self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
-        command = self._get_command(message)
+        db_session = self.Session()
+        command = self._get_command(message, db_session)
         if command is not None:
             user = self.ts.get_user(message)
-            if self._has_permission(user, command):
-                self._run_command(command, message)
+            is_mod = self.ts.check_mod(message)
+            if self._has_permission(user, is_mod, command, db_session):
+                self._run_command(command, message, db_session)
             else:
                 self._add_to_whisper_queue(user,
                                            'Sorry {}, you\'re not authorized to use the command !{}'
                                            .format(user, command))
+        db_session.close()
 
     def _get_command(self, message, db_session):
         """
@@ -199,28 +204,43 @@ class Bot(object):
             return [potential_command, 'for_all']
         if potential_command in self.sorted_methods['for_mods']:
             return [potential_command, 'for_mods']
-
-        db_results = db_session.query.filter(db.Command.call == potential_command).all()
-        if db_results:
-            return [potential_command, 'Database']
+        db_result = db_session.query.filter(db.Command.call == potential_command).one()
+        if db_result:
+            return [potential_command, db_result]
         return None
 
-    def _has_permission(self, message, command, db_session):
+    def _has_permission(self, user, is_mod, command, db_session):
         """
         Takes a message from the user, and a list which contains the
         command and where it's found, and a database session.
         Returns True or False depending on whether the user that
         sent the command has the authority to use that command
         """
+
         if command[1] == 'for_all':
             return True
-        if command[1] == 'for_mods' and self.ts.check_mod(message):
+        if command[1] == 'for_mods' and user in self._get_mods():
             return True
-        if command[1] == 'Database':
-            commands = db_session.query(db.Command).all()
+        if type(command[1]) == db.Command:
+            db_command = command[1]
+            if bool(db_command.permissions) is False:
+                return True
+            elif user in [permission.user_entity for permission in db_command.permissions]:
+                return True
+        return False
 
-    def _run_command(self):
-        pass
+    def _run_command(self, command, message, db_session):
+        if type(command[1]) == db.Command:
+            db_command = command[1]
+            self._add_to_chat_queue(db_command.response)
+        else:
+            method_command = command[0]
+            kwargs = {}
+            if 'message' in inspect.signature(getattr(self, method_command)).parameters:
+                kwargs['message'] = message
+            if 'db_session' in inspect.signature(getattr(self, method_command)).parameters:
+                kwargs['db_session'] = db_session
+            getattr(self, method_command)(**kwargs)
 
     def _get_mods(self):
         """
