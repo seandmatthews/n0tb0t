@@ -41,7 +41,7 @@ class Bot(object):
                                                          bytes(self.json_key['private_key'], 'utf-8'), self.scope)
 
         session = self.Session()
-        self.guessing_enabled = bool(session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled'))
+        self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled') == 'True'
         session.close()
 
         self.auto_quotes_timers = {}
@@ -764,7 +764,7 @@ class Bot(object):
         !enable_guessing
         """
         mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = True
+        mv_obj.value = "True"
         self._add_to_chat_queue("Guessing is now enabled.")
 
     @_mod_only
@@ -777,7 +777,7 @@ class Bot(object):
         !disable_guessing
         """
         mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = True
+        mv_obj.value = "False"
         self._add_to_chat_queue("Guessing is now disabled.")
 
     def guess(self, message, db_session):
@@ -790,7 +790,7 @@ class Bot(object):
         !guess 50
         """
         user = self.ts.get_user(message)
-        if bool(db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled').one().value):
+        if db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled').one().value == 'True':
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
@@ -815,7 +815,7 @@ class Bot(object):
         !enable_guesstotal
         """
         mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = True
+        mv_obj.value = "True"
         self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
     @_mod_only
@@ -826,7 +826,7 @@ class Bot(object):
         !disable_guesstotal
         """
         mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = False
+        mv_obj.value = "False"
         self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
 
     def guesstotal(self, message, db_session):
@@ -840,7 +840,7 @@ class Bot(object):
         !guesstotal 50
         """
         user = self.ts.get_user(message)
-        if bool(db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled').one().value):
+        if db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled').one().value == "True":
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
