@@ -188,8 +188,8 @@ class Bot(object):
         command = self._get_command(message, db_session)
         if command is not None:
             user = self.ts.get_user(message)
-            is_mod = self.ts.check_mod(message)
-            if self._has_permission(user, is_mod, command, db_session):
+            user_is_mod = self.ts.check_mod(message)
+            if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
             else:
                 self._add_to_whisper_queue(user,
@@ -219,7 +219,7 @@ class Bot(object):
             return [potential_command, db_result[0]]
         return None
 
-    def _has_permission(self, user, is_mod, command, db_session):
+    def _has_permission(self, user, user_is_mod, command, db_session):
         """
         Takes a message from the user, and a list which contains the
         command and where it's found, and a database session.
@@ -229,7 +229,7 @@ class Bot(object):
 
         if command[1] == 'for_all':
             return True
-        if command[1] == 'for_mods' and user in self._get_mods():
+        if command[1] == 'for_mods' and user_is_mod:
             return True
         if type(command[1]) == db.Command:
             db_command = command[1]
@@ -263,6 +263,8 @@ class Bot(object):
                 r = requests.get(url)
                 mods = r.json()['chatters']['moderators']
             except ValueError:
+                continue
+            except TypeError:
                 continue
             else:
                 return mods
@@ -535,7 +537,7 @@ class Bot(object):
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         user = self.ts.get_user(message)
-        if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1] > 0):
+        if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             quotes = db_session.query(db.Quote).all()
             if int(msg_list[1]) <= len(quotes):
                 index = int(msg_list[1]) - 1
