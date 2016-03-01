@@ -30,8 +30,8 @@ class AutoQuote(Base):
 class MiscValue(Base):
     __tablename__ = 'MISC-VALUES'
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
-    name = sqlalchemy.Column(sqlalchemy.String)
-    value = sqlalchemy.Column(sqlalchemy.String)
+    mv_key = sqlalchemy.Column(sqlalchemy.String)
+    mv_value = sqlalchemy.Column(sqlalchemy.String)
 
 
 class Command(Base):

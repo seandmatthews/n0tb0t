@@ -41,7 +41,7 @@ class Bot(object):
                                                          bytes(self.json_key['private_key'], 'utf-8'), self.scope)
 
         session = self.Session()
-        self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled') == 'True'
+        self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
         session.close()
 
         self.auto_quotes_timers = {}
@@ -100,10 +100,10 @@ class Bot(object):
         misc_values = db_session.query(db.MiscValue).all()
         if len(misc_values) == 0:
             db_session.add_all([
-                db.MiscValue(name='guess-total-enabled', value='False'),
-                db.MiscValue(name='current-deaths', value='0'),
-                db.MiscValue(name='total-deaths', value='0'),
-                db.MiscValue(name='guessing-enabled', value='False')])
+                db.MiscValue(mv_key='guess-total-enabled', mv_value='False'),
+                db.MiscValue(mv_key='current-deaths', mv_value='0'),
+                db.MiscValue(mv_key='total-deaths', mv_value='0'),
+                db.MiscValue(mv_key='guessing-enabled', mv_value='False')])
             db_session.commit()
             db_session.close()
         return Session
@@ -193,8 +193,8 @@ class Bot(object):
                 self._run_command(command, message, db_session)
             else:
                 self._add_to_whisper_queue(user,
-                                           'Sorry {}, you\'re not authorized to use the command !{}'
-                                           .format(user, command))
+                                           'Sorry {} you\'re not authorized to use the command: !{}'
+                                           .format(user, command[0]))
         db_session.commit()
         db_session.close()
 
@@ -424,7 +424,8 @@ class Bot(object):
                 for user in users:
                     permissions.append(db.Permission(user_entity=user))
                 db_command.permissions = permissions
-                self._add_to_whisper_queue(user, 'Command added.')
+            db_session.add(db_command)
+            self._add_to_whisper_queue(user, 'Command added.')
 
     @_mod_only
     def delete_command(self, message, db_session):
@@ -472,7 +473,7 @@ class Bot(object):
         user = self.ts.get_user(message)
 
         commands_str = "Regular Command List: "
-        regular_commands_str = "Dynamic/User Created Command List: "
+        user_created_commands_str = "Dynamic/User Created Command List: "
         mod_commands_str = "Mod Command List: "
 
         for func in self.sorted_methods['for_all']:
@@ -489,12 +490,12 @@ class Bot(object):
                 else:
                     user_specific_commands.append(command)
             for command in general_commands:
-                regular_commands_str += "!{} ".format(command)
+                user_created_commands_str += "!{} ".format(command.call)
             for command in user_specific_commands:
                 for permission in command.permissions:
                     if user == permission.user_entity:
-                        regular_commands_str += "!{} ".format(command)
-            self._add_to_whisper_queue(user, regular_commands_str)
+                        user_created_commands_str += "!{} ".format(command.call)
+            self._add_to_whisper_queue(user, user_created_commands_str)
 
         if self.ts.check_mod(message):
             for func in self.sorted_methods['for_mods']:
@@ -765,8 +766,8 @@ class Bot(object):
 
         !enable_guessing
         """
-        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = "True"
+        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one()
+        mv_obj.mv_value = "True"
         self._add_to_chat_queue("Guessing is now enabled.")
 
     @_mod_only
@@ -778,8 +779,8 @@ class Bot(object):
 
         !disable_guessing
         """
-        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = "False"
+        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one()
+        mv_obj.mv_value = "False"
         self._add_to_chat_queue("Guessing is now disabled.")
 
     def guess(self, message, db_session):
@@ -792,7 +793,7 @@ class Bot(object):
         !guess 50
         """
         user = self.ts.get_user(message)
-        if db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guessing-enabled').one().value == 'True':
+        if db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one().mv_value == 'True':
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
@@ -816,8 +817,8 @@ class Bot(object):
 
         !enable_guesstotal
         """
-        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = "True"
+        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one()
+        mv_obj.mv_value = "True"
         self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
     @_mod_only
@@ -827,8 +828,8 @@ class Bot(object):
 
         !disable_guesstotal
         """
-        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled')
-        mv_obj.value = "False"
+        mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one()
+        mv_obj.mv_value = "False"
         self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
 
     def guesstotal(self, message, db_session):
@@ -842,7 +843,7 @@ class Bot(object):
         !guesstotal 50
         """
         user = self.ts.get_user(message)
-        if db_session.query(db.MiscValue).filter(db.MiscValue.name == 'guess-total-enabled').one().value == "True":
+        if db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
@@ -904,7 +905,7 @@ class Bot(object):
             ws.update_acell('C{}'.format(i), '')
         ws.update_acell('A1', 'User')
         ws.update_acell('B1', 'Current Guess')
-        ws.update_acell('B1', 'Total Guess')
+        ws.update_acell('C1', 'Total Guess')
         for index, user in enumerate(users):
             row_num = index + 3
             ws.update_acell('A{}'.format(row_num), user.name)
@@ -914,7 +915,7 @@ class Bot(object):
             "Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
 
     @_mod_only
-    def set_deaths(self, message):
+    def set_deaths(self, message, db_session):
         """
         Sets the number of deaths for the current
         leg of the run. Needs a non-negative integer.
@@ -926,7 +927,7 @@ class Bot(object):
         if len(msg_list) > 1:
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
-                self._set_deaths(deaths_num)
+                self._set_deaths(deaths_num, db_session)
                 self._add_to_whisper_queue(user, 'Current deaths: {}'.format(deaths_num))
             else:
                 self._add_to_whisper_queue(user,
@@ -938,7 +939,7 @@ class Bot(object):
                                            user))
 
     @_mod_only
-    def set_total_deaths(self, message):
+    def set_total_deaths(self, message, db_session):
         """
         Sets the total number of deaths for the run.
         Needs a non-negative integer.
@@ -950,7 +951,7 @@ class Bot(object):
         if len(msg_list) > 1:
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
-                self._set_total_deaths(total_deaths_num)
+                self._set_total_deaths(total_deaths_num, db_session)
                 self._add_to_whisper_queue(user, 'Total deaths: {}'.format(total_deaths_num))
             else:
                 self._add_to_whisper_queue(user,
@@ -962,7 +963,7 @@ class Bot(object):
                                            user))
 
     @_mod_only
-    def add_death(self, message):
+    def add_death(self, message, db_session):
         """
         Adds one to both the current sequence
         and total death counters.
@@ -970,17 +971,17 @@ class Bot(object):
         !add_death
         """
         user = self.ts.get_user(message)
-        deaths = int(self._get_current_deaths())
-        total_deaths = int(self._get_total_deaths())
+        deaths = int(self._get_current_deaths(db_session))
+        total_deaths = int(self._get_total_deaths(db_session))
         deaths += 1
         total_deaths += 1
-        self._set_deaths(str(deaths))
-        self._set_total_deaths(str(total_deaths))
+        self._set_deaths(str(deaths), db_session)
+        self._set_total_deaths(str(total_deaths), db_session)
         whisper_msg = 'Current Deaths: {}, Total Deaths: {}'.format(deaths, total_deaths)
         self._add_to_whisper_queue(user, whisper_msg)
 
     @_mod_only
-    def clear_deaths(self):
+    def clear_deaths(self, db_session):
         """
         Sets the number of deaths for the current
         stage of the run to 0. Used after progressing
@@ -988,18 +989,18 @@ class Bot(object):
 
         !clear_deaths
         """
-        self._set_deaths(0)
+        self._set_deaths('0', db_session)
         self.show_deaths()
 
-    def show_deaths(self):
+    def show_deaths(self, db_session):
         """
         Sends the current and total death
         counters to the chat.
 
         !show_deaths
         """
-        deaths = self._get_current_deaths()
-        total_deaths = self._get_total_deaths()
+        deaths = self._get_current_deaths(db_session)
+        total_deaths = self._get_total_deaths(db_session)
         self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
 
     def show_winner(self, db_session):
@@ -1011,7 +1012,7 @@ class Bot(object):
         !show_winner
         """
         winners_list = []
-        deaths = self._get_current_deaths()
+        deaths = self._get_current_deaths(db_session)
         last_winning_guess = -1
         users = db_session.query(db.User).filter(db.User.current_guess.isnot(None)).all()
         for user in users:
@@ -1034,7 +1035,7 @@ class Bot(object):
             winners_str = 'You all guessed too high. You should have had more faith in {}. {} wins!'.format(me, me)
         self._add_to_chat_queue(winners_str)
 
-    def _set_current_guess(user, guess, db_session):
+    def _set_current_guess(self, user, guess, db_session):
         """
         Takes a user and a guess.
         Adds the user and their guess
@@ -1060,29 +1061,29 @@ class Bot(object):
         Returns the current number of deaths
         for the current leg of the run.
         """
-        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'current-deaths')
-        return deaths_obj.value
+        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'current-deaths').one()
+        return deaths_obj.mv_value
 
     def _get_total_deaths(self, db_session):
         """
         Returns the total deaths that
         have occurred in the run so far.
         """
-        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'total-deaths')
-        return total_deaths_obj.value
+        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'total-deaths').one()
+        return total_deaths_obj.mv_value
 
     def _set_deaths(self, deaths_num, db_session):
         """
         Takes a string for the number of deaths.
         Updates the miscellaneous values table.
         """
-        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'current-deaths')
-        deaths_obj.value = deaths_num
+        deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'current-deaths').one()
+        deaths_obj.mv_value = deaths_num
 
     def _set_total_deaths(self, total_deaths_num, db_session):
         """
         Takes a string for the total number of deaths.
         Updates the miscellaneous values table.
         """
-        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.name == 'total-deaths')
-        total_deaths_obj.value = total_deaths_num
+        total_deaths_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'total-deaths').one()
+        total_deaths_obj.mv_value = total_deaths_num
