@@ -14,7 +14,6 @@ import showerThoughtFetcher
 import collections
 import inspect
 from oauth2client.client import SignedJwtAssertionCredentials
-from functools import wraps
 from config import SOCKET_ARGS
 
 
@@ -42,11 +41,12 @@ class Bot(object):
 
         session = self.Session()
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
-        session.close()
 
         self.auto_quotes_timers = {}
         for auto_quote in session.query(db.AutoQuote).all():
             self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
+
+        session.close()
 
         self.allowed_to_chat = True
 
@@ -313,7 +313,7 @@ class Bot(object):
         """
         key = 'AQ{}'.format(index)
         self.auto_quotes_timers[key] = threading.Timer(period, self._auto_quote,
-                                                       kwargs={'index': index, 'quote': quote, 'time': period})
+                                                       kwargs={'index': index, 'quote': quote, 'period': period})
         self.auto_quotes_timers[key].start()
         self._add_to_chat_queue(quote)
 
