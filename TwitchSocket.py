@@ -9,6 +9,7 @@ class TwitchSocket(object):
         self.pw = pw
         self.user = user
         self.channel = channel
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.join_room()
 
@@ -16,9 +17,7 @@ class TwitchSocket(object):
         message_temp = "PRIVMSG #" + self.channel + " :" + message
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
-
     def join_room(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         self.sock.send("PASS {PASS}\r\n".format(PASS=self.pw).encode('utf-8'))
         self.sock.send("NICK {USER}\r\n".format(USER=self.user).encode('utf-8'))
@@ -38,7 +37,6 @@ class TwitchSocket(object):
         self.send_message("{USER} is now online".format(USER=self.user))
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
-
 
     def get_user(self, line):
         line_list = line.split(':', 2)

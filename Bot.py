@@ -1,6 +1,4 @@
 import requests
-import sqlalchemy
-from sqlalchemy.orm import sessionmaker
 import db
 import os
 import json
@@ -13,8 +11,11 @@ import pytz
 import showerThoughtFetcher
 import collections
 import inspect
+import sqlalchemy
+from sqlalchemy.orm import sessionmaker
 from oauth2client.client import SignedJwtAssertionCredentials
 from config import SOCKET_ARGS
+
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring

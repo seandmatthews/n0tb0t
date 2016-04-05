@@ -9,12 +9,11 @@ class GroupChatSocket(object):
         self.pw = pw
         self.user = user
         self.channel = channel
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.join_room()
-        
 
     def join_room(self):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         self.sock.send("PASS {PASS}\r\n".format(PASS=self.pw).encode('utf-8'))
         self.sock.send("NICK {USER}\r\n".format(USER=self.user).encode('utf-8'))
