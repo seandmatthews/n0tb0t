@@ -133,7 +133,7 @@ class Bot(object):
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
                 self._send_message(chat_queue.pop())
-                time.sleep(2)
+            time.sleep(2)
 
     def _process_whisper_queue(self, whisper_queue):
         """
@@ -146,7 +146,7 @@ class Bot(object):
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self._send_whisper(whisper_tuple[0], whisper_tuple[1])
-                time.sleep(1)
+            time.sleep(1)
 
     def _send_whisper(self, user, message):
         """
