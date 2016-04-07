@@ -527,7 +527,7 @@ class Bot(object):
         quote = ' '.join(msg_list[1:])
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
-        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.User).count()+1))
+        self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.Quote).count()+1))
 
     @_mod_only
     def delete_quote(self, message, db_session):
