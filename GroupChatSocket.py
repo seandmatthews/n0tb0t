@@ -4,8 +4,8 @@ import socket
 class GroupChatSocket(object):
 
     def __init__(self, pw, user, channel):
-        self.host = '199.9.253.119'
-        self.port = 6667
+        self.host = '52.223.240.152'
+        self.port = 443
         self.pw = pw
         self.user = user
         self.channel = channel
