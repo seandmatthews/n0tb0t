@@ -26,14 +26,17 @@ class TwitchSocket(object):
         messages = ""
         loading = True
         while loading:
-            read_buffer = self.sock.recv(1024)
-            messages = messages + read_buffer.decode('utf-8')
-            last_message = messages.split('\r\n')[-2]
-            messages = ""
-            if "End of /NAMES list" in last_message:
-                loading = False
-            else:
-                loading = True
+            try:
+                read_buffer = self.sock.recv(1024)
+                messages = messages + read_buffer.decode('utf-8')
+                last_message = messages.split('\r\n')[-2]
+                messages = ""
+                if "End of /NAMES list" in last_message:
+                    loading = False
+                else:
+                    loading = True
+            except:
+                continue
         self.send_message("{USER} is now online".format(USER=self.user))
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))

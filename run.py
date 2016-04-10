@@ -7,8 +7,8 @@ from config import SOCKET_ARGS
 
 logging.basicConfig(filename='error-log.txt',level=logging.DEBUG)
 TS = TwitchSocket(**SOCKET_ARGS)
-GCS = GroupChatSocket(**SOCKET_ARGS)
-bot = Bot(TS, GCS)
+# GCS = GroupChatSocket(**SOCKET_ARGS)
+bot = Bot(TS, None)
 
 messages = ""
 

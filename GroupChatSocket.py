@@ -4,7 +4,7 @@ import socket
 class GroupChatSocket(object):
 
     def __init__(self, pw, user, channel):
-        self.host = '52.223.240.152'
+        self.host = '192.16.64.212'
         self.port = 443
         self.pw = pw
         self.user = user
@@ -30,7 +30,7 @@ class GroupChatSocket(object):
                 loading = False
             else:
                 loading = True
-        self.send_message("{USER} is now online".format(USER=self.user))
+        # self.send_message("{USER} is now online".format(USER=self.user))
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 

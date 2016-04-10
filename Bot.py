@@ -11,9 +11,9 @@ import pytz
 import showerThoughtFetcher
 import collections
 import inspect
+import google_auth
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-from oauth2client.client import SignedJwtAssertionCredentials
 from config import SOCKET_ARGS
 
 
@@ -33,12 +33,12 @@ class Bot(object):
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
         self.Session = self._initialize_db(self.cur_dir)
 
-        self.key_path = os.path.join(self.cur_dir, 'gspread test-279fb617abd8.json')
-        with open(self.key_path) as kp:
-            self.json_key = json.load(kp)
-        self.scope = ['https://spreadsheets.google.com/feeds']
-        self.credentials = SignedJwtAssertionCredentials(self.json_key['client_email'],
-                                                         bytes(self.json_key['private_key'], 'utf-8'), self.scope)
+        self.credentials = google_auth.get_credentials()
+        self.spreadsheet_name = '{}-{}'.format(SOCKET_ARGS['channel'], SOCKET_ARGS['user'])
+        already_existed = google_auth.ensure_file_exists(self.credentials, self.spreadsheet_name)
+
+        if not already_existed:
+            self._initialize_google_sheet()
 
         session = self.Session()
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
@@ -108,6 +108,40 @@ class Bot(object):
             db_session.commit()
             db_session.close()
         return Session
+
+    def _initialize_google_sheet(self):
+
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(self.spreadsheet_name)
+        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        qs = sheet.add_worksheet('Quotes', 1000, 2)
+        qs.update_acell('A1', 'Quote Index')
+        qs.update_acell('B1', 'Quote')
+
+        cs = sheet.add_worksheet('Commands', 1000, 20)
+        cs.update_acell('A1', 'Commands\nfor\nEveryone')
+        cs.update_acell('B1', 'Command\nDescription')
+        cs.update_acell('D1', 'Commands\nfor\nMods')
+        cs.update_acell('E1', 'Command\nDescription')
+        cs.update_acell('G1', 'User\nCreated\nCommands')
+        cs.update_acell('H1', 'Bot Response')
+        cs.update_acell('J1', 'User\nSpecific\nCommands')
+        cs.update_acell('K1', 'Bot Response')
+        cs.update_acell('L1', 'User List')
+
+        hls = sheet.add_worksheet('Highlight List', 1000, 4)
+        hls.update_acell('A1', 'User')
+        hls.update_acell('B1', 'Stream Start Time EST')
+        hls.update_acell('C1', 'Highlight Time')
+        hls.update_acell('D1', 'User Note')
+
+        pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
+        pgs.update_acell('A1', 'User')
+        pgs.update_acell('B1', 'Current Guess')
+        pgs.update_acell('C1', 'Total Guess')
+
+        sheet1 = sheet.worksheet('Sheet1')
+        sheet.del_worksheet(sheet1)
 
     def _add_to_chat_queue(self, message):
         """
@@ -701,8 +735,8 @@ class Bot(object):
             time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
                     hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
             gc = gspread.authorize(self.credentials)
-            sh = gc.open("Highlight list")
-            ws = sh.worksheet('Sheet1')
+            sheet = gc.open(self.spreadsheet_name)
+            ws = sheet.worksheet('Highlight List')
             records = ws.get_all_records()  # Doesn't include the first row
             next_row = len(records) + 2
             ws.update_cell(next_row, 1, user)
@@ -896,24 +930,25 @@ class Bot(object):
         self._add_to_chat_queue(
             "Hello friends, formatting the google sheet with the latest information about all the guesses might take a little bit. I'll let you know when it's done.")
         gc = gspread.authorize(self.credentials)
-        sh = gc.open("Dark Souls Guesses")
-        ws = sh.worksheet('Dark Souls Guesses')
+        sheet = gc.open(self.spreadsheet_name)
+        ws = sheet.worksheet('Player Guesses')
         all_users = db_session.query(db.User).all()
         users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
-        for i in range(1, len(users) + 10):
-            ws.update_acell('A{}'.format(i), '')
-            ws.update_acell('B{}'.format(i), '')
-            ws.update_acell('C{}'.format(i), '')
         ws.update_acell('A1', 'User')
         ws.update_acell('B1', 'Current Guess')
         ws.update_acell('C1', 'Total Guess')
+        for i in range(1, len(users) + 10):
+            ws.update_cell(i, 1, '')
+            ws.update_cell(i, 2, '')
+            ws.update_cell(i, 3, '')
         for index, user in enumerate(users):
             row_num = index + 3
-            ws.update_acell('A{}'.format(row_num), user.name)
-            ws.update_acell('B{}'.format(row_num), user.current_guess)
-            ws.update_acell('C{}'.format(row_num), user.total_guess)
+            ws.update_cell(row_num, 1, user.name)
+            ws.update_cell(row_num, 2, user.current_guess)
+            ws.update_cell(row_num, 3, user.total_guess)
         self._add_to_chat_queue(
-            "Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
+            "Hello again friends. I've updated a google spread sheet with the latest guess information." +
+            "Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
 
     @_mod_only
     def set_deaths(self, message, db_session):
