@@ -32,15 +32,21 @@ class Bot(object):
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
         self.Session = self._initialize_db(self.cur_dir)
+        session = self.Session()
 
         self.credentials = google_auth.get_credentials()
-        self.spreadsheet_name = '{}-{}'.format(SOCKET_ARGS['channel'], SOCKET_ARGS['user'])
-        already_existed = google_auth.ensure_file_exists(self.credentials, self.spreadsheet_name)
+        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses']
+        self.spreadsheets = {}
+        for sheet in starting_spreadsheets_list:
+            sheet_name = '{}-{}-{}'.format(SOCKET_ARGS['channel'], SOCKET_ARGS['user'], sheet)
+            already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
+            web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
+            sheet_tuple = (sheet_name, web_view_link)
+            self.spreadsheets[sheet] = sheet_tuple
+            if not already_existed:
+                init_command = '_initialize_{}_sheet'.format(sheet)
+                getattr(self, init_command)(sheet_name, session)
 
-        if not already_existed:
-            self._initialize_google_sheet()
-
-        session = self.Session()
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
         self.auto_quotes_timers = {}
@@ -62,6 +68,11 @@ class Bot(object):
         self.whisper_thread.start()
 
     def _sort_methods(self):
+        """
+        Looks through the object's methods,
+        sorts them into lists by evaluating who can use them
+        puts those lists into a dictionary and returns it.
+        """
         # Collect all methods and properties of the object.
         # Add them to self.my_dir if they don't start with an _
         my_dir = [item for item in self.__dir__() if item[0] != '_']
@@ -109,14 +120,37 @@ class Bot(object):
             db_session.close()
         return Session
 
-    def _initialize_google_sheet(self):
-
+    def _initialize_quotes_sheet(self, spreadsheet_name, db_session):
         gc = gspread.authorize(self.credentials)
-        sheet = gc.open(self.spreadsheet_name)
+        sheet = gc.open(spreadsheet_name)
         sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
         qs = sheet.add_worksheet('Quotes', 1000, 2)
         qs.update_acell('A1', 'Quote Index')
         qs.update_acell('B1', 'Quote')
+
+        sheet1 = sheet.worksheet('Sheet1')
+        sheet.del_worksheet(sheet1)
+
+    def _initialize_auto_quotes_sheet(self, spreadsheet_name, db_session):
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        aqs = sheet.add_worksheet('Auto Quotes', 1000, 3)
+        aqs.update_acell('A1', 'Auto Quote Index')
+        aqs.update_acell('B1', 'Quote')
+        aqs.update_acell('C1', 'Period\n(In seconds)')
+
+        sheet1 = sheet.worksheet('Sheet1')
+        sheet.del_worksheet(sheet1)
+
+        self._update_auto_quote_spreadsheet(db_session)
+
+    def _initialize_commands_sheet(self, spreadsheet_name, db_session):
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         cs = sheet.add_worksheet('Commands', 1000, 20)
         cs.update_acell('A1', 'Commands\nfor\nEveryone')
@@ -129,11 +163,27 @@ class Bot(object):
         cs.update_acell('K1', 'Bot Response')
         cs.update_acell('L1', 'User List')
 
+        sheet1 = sheet.worksheet('Sheet1')
+        sheet.del_worksheet(sheet1)
+
+    def _initialize_highlights_sheet(self, spreadsheet_name, db_session):
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
         hls = sheet.add_worksheet('Highlight List', 1000, 4)
         hls.update_acell('A1', 'User')
         hls.update_acell('B1', 'Stream Start Time EST')
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
+
+        sheet1 = sheet.worksheet('Sheet1')
+        sheet.del_worksheet(sheet1)
+
+    def _initialize_player_guesses_sheet(self, spreadsheet_name, db_session):
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
         pgs.update_acell('A1', 'User')
@@ -216,7 +266,6 @@ class Bot(object):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.ts.get_human_readable_message(message):  # PING/PONG silliness
-            print(self.ts.get_human_readable_message(message))
             self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
         db_session = self.Session()
@@ -351,6 +400,21 @@ class Bot(object):
                                                        kwargs={'index': index, 'quote': quote, 'period': period})
         self.auto_quotes_timers[key].start()
         self._add_to_chat_queue(quote)
+
+    def _update_auto_quote_spreadsheet(self, db_session):
+        """
+        Updates the auto_quote spreadsheet with all current auto quotes
+        """
+        spreadsheet_name, _ = self.spreadsheets['auto_quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        aqs = sheet.worksheet('Auto Quotes')
+
+        auto_quotes = db_session.query(db.AutoQuote).all()
+        for index, aq in enumerate(auto_quotes):
+            aqs.update_cell(index+2, 1, index+1)
+            aqs.update_cell(index+2, 2, aq.quote)
+            aqs.update_cell(index+2, 3, aq.period)
 
     @_mod_only
     def start_auto_quotes(self, db_session):
@@ -734,8 +798,10 @@ class Bot(object):
             start_time_est = est_tz.normalize(start_time_utc.replace(tzinfo=pytz.utc).astimezone(est_tz))
             time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
                     hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+
+            spreadsheet_name, _ = self.spreadsheets['highlights']
             gc = gspread.authorize(self.credentials)
-            sheet = gc.open(self.spreadsheet_name)
+            sheet = gc.open(spreadsheet_name)
             ws = sheet.worksheet('Highlight List')
             records = ws.get_all_records()  # Doesn't include the first row
             next_row = len(records) + 2
@@ -882,7 +948,7 @@ class Bot(object):
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
-                if guess.isdigit() and int(guess) > 0:
+                if guess.isdigit() and int(guess) >= 0:
                     self._set_total_guess(user, guess, db_session)
                     self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
                 else:
@@ -928,16 +994,18 @@ class Bot(object):
         !show_guesses
         """
         self._add_to_chat_queue(
-            "Hello friends, formatting the google sheet with the latest information about all the guesses might take a little bit. I'll let you know when it's done.")
+            "Formatting the google sheet with the latest information about all the guesses may take a bit." +
+            " I'll let you know when it's done.")
+        spreadsheet_name, spreadsheet_url = self.spreadsheets['player_guesses']
         gc = gspread.authorize(self.credentials)
-        sheet = gc.open(self.spreadsheet_name)
+        sheet = gc.open(spreadsheet_name)
         ws = sheet.worksheet('Player Guesses')
         all_users = db_session.query(db.User).all()
         users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
         ws.update_acell('A1', 'User')
         ws.update_acell('B1', 'Current Guess')
         ws.update_acell('C1', 'Total Guess')
-        for i in range(1, len(users) + 10):
+        for i in range(2, len(users) + 10):
             ws.update_cell(i, 1, '')
             ws.update_cell(i, 2, '')
             ws.update_cell(i, 3, '')
@@ -947,8 +1015,8 @@ class Bot(object):
             ws.update_cell(row_num, 2, user.current_guess)
             ws.update_cell(row_num, 3, user.total_guess)
         self._add_to_chat_queue(
-            "Hello again friends. I've updated a google spread sheet with the latest guess information." +
-            "Here's a link. https://docs.google.com/spreadsheets/d/1T6mKxdnyHAFU6QdcUYYE0hVrzJw8MTCgFYZu8K4MBzk/")
+            "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
+            "Here's a link. {}".format(spreadsheet_url))
 
     @_mod_only
     def set_deaths(self, message, db_session):
@@ -1074,11 +1142,13 @@ class Bot(object):
     def _set_current_guess(self, user, guess, db_session):
         """
         Takes a user and a guess.
-        Adds the user and their guess
-        to the users table.
+        Adds the user (if they don't already exist)
+        and their guess to the users table.
         """
-        db_user = db.User(name=user)
-        db_session.add(db_user)
+        db_user = db_session.query(db.User).filter(db.User.name == user).first()
+        if not db_user:
+            db_user = db.User(name=user)
+            db_session.add(db_user)
         db_user.current_guess = guess
 
     def _set_total_guess(self, user, guess, db_session):
@@ -1088,8 +1158,10 @@ class Bot(object):
         Adds the user and their guess
         to the users table.
         """
-        db_user = db.User(name=user)
-        db_session.add(db_user)
+        db_user = db_session.query(db.User).filter(db.User.name == user).first()
+        if not db_user:
+            db_user = db.User(name=user)
+            db_session.add(db_user)
         db_user.total_guess = guess
 
     def _get_current_deaths(self, db_session):

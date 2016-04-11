@@ -48,33 +48,48 @@ def ensure_file_exists(credentials, filename):
     because I don't want to mess with next page tokens.
     """
 
+
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('drive', 'v3', http=http)
 
     results = service.files().list(
         pageSize=1000, fields="nextPageToken, files(id, name)").execute()
     items = results.get('files', [])
+    found = False
     if not items:
         print('No files found.')
-        found = False
     else:
-        found = False
         for item in items:
-            if item['name'] == filename:
+            if item["name"] == filename:
+                file_id = item["id"]
                 found = True
                 print("Found: {}".format(filename))
                 break
 
     if not found:
         print("Creating: {}".format(filename))
-        body = {
+        files_body = {
           'mimeType': 'application/vnd.google-apps.spreadsheet',
           'name': filename,
         }
-        service.files().create(body=body).execute(http=http)
+        service.files().create(body=files_body).execute(http=http)
 
-    return bool(found)
+        results = service.files().list(
+                pageSize=1000, fields="nextPageToken, files(id, name)").execute()
+        items = results.get('files', [])
+        for item in items:
+            if item["name"] == filename:
+                file_id = item["id"]
+                print("Found: {}".format(filename))
+                break
+        permissions_body = {
+            'role': 'reader',
+            'type': 'anyone'
+        }
+        service.permissions().create(fileId=file_id, body=permissions_body).execute(http=http)
+
+    return (found, file_id)
 
 if __name__ == '__main__':
-    credentials = get_credentials()
-    print(ensure_file_exists(credentials, 'google test'))
+    my_credentials = get_credentials()
+    print(ensure_file_exists(my_credentials, 'google test'))
