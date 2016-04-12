@@ -1,7 +1,6 @@
 import requests
 import db
 import os
-import json
 import gspread
 import time
 import random
@@ -14,16 +13,15 @@ import inspect
 import google_auth
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
+from multiprocessing import Process
 from config import SOCKET_ARGS
-
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(object):
-    def __init__(self, twitch_socket, group_chat_socket):
+    def __init__(self, twitch_socket):
 
         self.ts = twitch_socket
-        self.gcs = group_chat_socket
 
         self.sorted_methods = self._sort_methods()
 
@@ -91,6 +89,7 @@ class Bot(object):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
+            my_methods.sort()
             if hasattr(getattr(self, method), '_mods_only'): 
                 methods_dict['for_mods'].append(method)
             else:
@@ -120,10 +119,13 @@ class Bot(object):
             db_session.close()
         return Session
 
-    def _initialize_quotes_sheet(self, spreadsheet_name, db_session):
+    def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
+        """
+        Populate the quotes google sheet with its initial data.
+        """
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         qs = sheet.add_worksheet('Quotes', 1000, 2)
         qs.update_acell('A1', 'Quote Index')
@@ -132,10 +134,15 @@ class Bot(object):
         sheet1 = sheet.worksheet('Sheet1')
         sheet.del_worksheet(sheet1)
 
-    def _initialize_auto_quotes_sheet(self, spreadsheet_name, db_session):
+        self._update_quote_spreadsheet(db_session)
+
+    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
+        """
+        Populate the auto_quotes google sheet with its initial data.
+        """
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         aqs = sheet.add_worksheet('Auto Quotes', 1000, 3)
         aqs.update_acell('A1', 'Auto Quote Index')
@@ -147,10 +154,13 @@ class Bot(object):
 
         self._update_auto_quote_spreadsheet(db_session)
 
-    def _initialize_commands_sheet(self, spreadsheet_name, db_session):
+    def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
+        """
+        Populate the commands google sheet with its initial data.
+        """
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         cs = sheet.add_worksheet('Commands', 1000, 20)
         cs.update_acell('A1', 'Commands\nfor\nEveryone')
@@ -166,10 +176,16 @@ class Bot(object):
         sheet1 = sheet.worksheet('Sheet1')
         sheet.del_worksheet(sheet1)
 
-    def _initialize_highlights_sheet(self, spreadsheet_name, db_session):
+        self._update_command_spreadsheet(db_session)
+
+    def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
+        """
+        Populate the highlights google sheet with its initial data.
+        """
+        del db_session  # Highlights are not stored in the database
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         hls = sheet.add_worksheet('Highlight List', 1000, 4)
         hls.update_acell('A1', 'User')
@@ -180,10 +196,13 @@ class Bot(object):
         sheet1 = sheet.worksheet('Sheet1')
         sheet.del_worksheet(sheet1)
 
-    def _initialize_player_guesses_sheet(self, spreadsheet_name, db_session):
+    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
+        """
+        Populate the player_guesses google sheet with its initial data.
+        """
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        sheet.worksheets() # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
 
         pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
         pgs.update_acell('A1', 'User')
@@ -211,51 +230,26 @@ class Bot(object):
         """
         If there are messages in the chat queue that need
         to be sent, pop off the oldest one and pass it
-        to the _send_message function. Then sleep for
+        to the ts.send_message function. Then sleep for
         two seconds to stay below the twitch rate limit.
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
-                self._send_message(chat_queue.pop())
+                self.ts.send_message(chat_queue.pop())
             time.sleep(2)
 
     def _process_whisper_queue(self, whisper_queue):
         """
         If there are whispers in the queue that need
         to be sent, pop off the oldest one and pass it
-        to the _send_whisper function. Then sleep for
+        to the ts.send_whisper function. Then sleep for
         one second to stay below the twitch rate limit.
         """
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
-                self._send_whisper(whisper_tuple[0], whisper_tuple[1])
+                self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
             time.sleep(1)
-
-    def _send_whisper(self, user, message):
-        """
-        Tries sending the message to the inteded user.
-        Then the bot tries sending the message to itself
-        to reveal a broken pipe error that stems from channel
-        disconnection. In the event of a disconnection,
-        reconnect and resend.
-        """
-        # TODO: Actually maintain a connection with the group chat server
-        try:
-            self.gcs.send_whisper(user, message)
-            time.sleep(1)
-            self.gcs.send_whisper(self.gcs.user, message)
-        except BrokenPipeError:
-            self.gcs.join_room()
-            self.gcs.send_whisper(user, message)
-
-    # useless abstractions are useless, but pretty        
-    def _send_message(self, message):
-        """
-        Calls the socket function which
-        sends the message to the irc chat.
-        """
-        self.ts.send_message(message)
 
     def _act_on(self, message):
         """
@@ -405,7 +399,7 @@ class Bot(object):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
         """
-        spreadsheet_name, _ = self.spreadsheets['auto_quotes']
+        spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
         aqs = sheet.worksheet('Auto Quotes')
@@ -443,19 +437,15 @@ class Bot(object):
             time.sleep(1)
             self.auto_quotes_timers[AQ].cancel()
 
-    def show_auto_quotes(self, message, db_session):
+    def show_auto_quotes(self, db_session):
         """
         Sends a series of whispers of all current auto quotes,
         each prefixed with their index.
 
         !show_auto_quotes
         """
-        auto_quotes = db_session.query(db.AutoQuote).all()
-        for index, aq in enumerate(auto_quotes):
-            human_readable_index = index + 1
-            user = self.ts.get_user(message)
-            self._add_to_whisper_queue(user, '#{hr_index} repeats every {period}seconds: {quote}'.format(
-                    hr_index=human_readable_index, period=aq.period, quote=aq.quote))
+        web_view_link = self.spreadsheets['auto_quotes'][1]
+        self._add_to_chat_queue('View the auto quotes at: {}'.format(web_view_link))
 
     @_mod_only
     def add_auto_quote(self, message, db_session):
@@ -467,11 +457,18 @@ class Bot(object):
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
+        user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
             db_session.add(db.AutoQuote(quote=quote, period=delay))
+            my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet, args=(db_session,))
+            my_thread.daemon = True
+            my_thread.start()
+            self._add_to_whisper_queue(user, 'Auto quote added.')
+        else:
+            self._add_to_whisper_queue(user, 'Sorry, the command isn\'t formatted properly.')
 
     @_mod_only
     def delete_auto_quote(self, message, db_session):
@@ -482,12 +479,58 @@ class Bot(object):
 
         !delete_auto_quote 1
         """
+        user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quotes = db_session.query(db.AutoQuote).all()
             if int(msg_list[1]) <= len(auto_quotes):
                 index = int(msg_list[1]) - 1
                 db_session.delete(auto_quotes[index])
+                my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet, args=(db_session,))
+                my_thread.daemon = True
+                my_thread.start()
+                self._add_to_whisper_queue(user, 'Auto quote deleted.')
+            else:
+                self._add_to_whisper_queue(user, 'Sorry, there aren\'t that many auto quotes.')
+        else:
+            self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
+
+    def _update_command_spreadsheet(self, db_session):
+        """
+        Updates the commands google sheet with all available user commands.
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['commands']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        cs = sheet.worksheet('Commands')
+
+        for index, method in enumerate(self.sorted_methods['for_all']):
+            cs.update_cell(index+2, 1, '!{}'.format(method))
+            cs.update_cell(index+2, 2, getattr(self, method).__doc__)
+
+        for index, method in enumerate(self.sorted_methods['for_mods']):
+            cs.update_cell(index+2, 4, '!{}'.format(method))
+            cs.update_cell(index+2, 5, getattr(self, method).__doc__)
+
+        db_commands = db_session.query(db.Command).all()
+        everyone_commands = []
+        user_specific_commands = []
+        for command in db_commands:
+            if bool(command.permissions) is False:
+                everyone_commands.append(command)
+            else:
+                user_specific_commands.append(command)
+
+        for index, command in enumerate(everyone_commands):
+            cs.update_cell(index+2, 7, '!{}'.format(command.call))
+            cs.update_cell(index+2, 8,command.response)
+        for index, command in enumerate(user_specific_commands):
+            users = [permission.user_entity for permission in command.permissions]
+            users_str = ', '.join(users)
+            cs.update_cell(index+2, 10, '!{}'.format(command.call))
+            cs.update_cell(index+2, 11, command.response)
+            cs.update_cell(index+2, 12, users_str)
+
 
     @_mod_only
     def add_command(self, message, db_session):
@@ -525,6 +568,9 @@ class Bot(object):
                 db_command.permissions = permissions
             db_session.add(db_command)
             self._add_to_whisper_queue(user, 'Command added.')
+            my_thread = threading.Thread(target=self._update_command_spreadsheet, args=(db_session,))
+            my_thread.daemon = True
+            my_thread.start()
 
     @_mod_only
     def delete_command(self, message, db_session):
@@ -542,83 +588,40 @@ class Bot(object):
             if command_str == db_command.call:
                 db_session.delete(db_command)
                 self._add_to_whisper_queue(user, 'Command deleted.')
+                my_thread = threading.Thread(target=self._update_command_spreadsheet, args=(db_session,))
+                my_thread.daemon = True
+                my_thread.start()
                 break
         else:
             self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t seem to exist.')
 
-    @_mod_only
-    def show_deletable_commands(self, message, db_session):
-        """
-        Sends a whisper containing all user
-        created commands, including specific
-        user commands.
 
-        !show_deletable_commands
+    def show_commands(self):
         """
-        user = self.ts.get_user(message)
-        db_commands = db_session.query(db.Command).all()
-        commands_str = "Command List: "
-        for command in db_commands:
-            commands_str += "!{} ".format(command.call)
-        self._add_to_whisper_queue(user, commands_str)
-
-    def show_commands(self, message, db_session):
-        """
-        Sends a whisper containing all commands
-        that are available to all users
+        Links the google spreadsheet containing all commands in chat
 
         !show_commands
         """
-        user = self.ts.get_user(message)
+        web_view_link = self.spreadsheets['commands'][1]
+        self._add_to_chat_queue('View the commands at: {}'.format(web_view_link))
 
-        commands_str = "Regular Command List: "
-        user_created_commands_str = "Dynamic/User Created Command List: "
-        mod_commands_str = "Mod Command List: "
+    def _update_quote_spreadsheet(self, db_session):
+        spreadsheet_name, web_view_link = self.spreadsheets['quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        qs = sheet.worksheet('Quotes')
 
-        for func in self.sorted_methods['for_all']:
-            commands_str += "!{} ".format(func)
-        self._add_to_whisper_queue(user, commands_str)
+        quotes = db_session.query(db.Quote).all()
+        for index, quote_obj in enumerate(quotes):
+            qs.update_cell(index+2, 1, index+1)
+            qs.update_cell(index+2, 2, quote_obj.quote)
 
-        db_commands = db_session.query(db.Command).all()
-        if len(db_commands) > 0:
-            general_commands = []
-            user_specific_commands = []
-            for command in db_commands:
-                if bool(command.permissions) is False:
-                    general_commands.append(command)
-                else:
-                    user_specific_commands.append(command)
-            for command in general_commands:
-                user_created_commands_str += "!{} ".format(command.call)
-            for command in user_specific_commands:
-                for permission in command.permissions:
-                    if user == permission.user_entity:
-                        user_created_commands_str += "!{} ".format(command.call)
-            self._add_to_whisper_queue(user, user_created_commands_str)
-
-        if self.ts.check_mod(message):
-            for func in self.sorted_methods['for_mods']:
-                mod_commands_str += "!{} ".format(func)
-            self._add_to_whisper_queue(user, mod_commands_str)
-
-    # def show_mod_commands(self, message):
-    #     """
-    #     Sends a whisper containing all commands
-    #     that are available to mods
-    #
-    #     !show_mod_commands
-    #     """
-    #     user = self.ts.get_user(message)
-    #     commands_str = "Command List: "
-    #     for func in self.for_mods:
-    #         commands_str += "!{} ".format(func)
-    #     self._add_to_whisper_queue(user, commands_str)
 
     def add_quote(self, message, db_session):
         """
-        Adds a quote to the quotes file.
+        Adds a quote to the database.
 
-        !add_quote This bot is very suspicious.
+        !add_quote Oh look, the caster has uttered an innuendo!
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
@@ -626,6 +629,9 @@ class Bot(object):
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
         self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.Quote).count()))
+        my_thread = threading.Thread(target=self._update_quote_spreadsheet(), args=(db_session,))
+        my_thread.daemon = True
+        my_thread.start()
 
     @_mod_only
     def delete_quote(self, message, db_session):
@@ -643,21 +649,21 @@ class Bot(object):
                 index = int(msg_list[1]) - 1
                 db_session.delete(quotes[index])
                 self._add_to_whisper_queue(user, 'Quote deleted.')
+                my_thread = threading.Thread(target=self._update_quote_spreadsheet, args=(db_session,))
+                my_thread.daemon = True
+                my_thread.start()
             else:
-                self._add_to_chat_queue('Sorry, that\'s not a quote that can be deleted.')
+                self._add_to_whisper_queue(user, 'Sorry, that\'s not a quote that can be deleted.')
+
 
     def show_quotes(self, message, db_session):
         """
-        Sends a series of whispers to the user invoking a command.
-        Each one contains a quote from the quote file, prefixed by the index of the quote.
+        Links to the google spreadsheet containing all the quotes.
 
         !show_quotes
         """
-        # TODO: Stick the quotes in a google spreadsheet or something
-        user = self.ts.get_user(message)
-        quotes = db_session.query(db.Quote).all()
-        for index, quote_obj in enumerate(quotes):
-            self._add_to_whisper_queue(user, '#{}: {}'.format(index + 1, quote_obj.quote))
+        web_view_link = self.spreadsheets['quotes'][1]
+        self._add_to_chat_queue('View the quotes at: {}'.format(web_view_link))
 
     def quote(self, message, db_session):
         """
@@ -772,6 +778,8 @@ class Bot(object):
     def uptime(self):
         """
         Sends a message to stream saying how long the caster has been streaming for.
+
+        !uptime
         """
         time_dict = self._get_live_time()
         if time_dict is not None:
@@ -784,6 +792,9 @@ class Bot(object):
         Logs the time in the video when something amusing happened.
         Takes an optional short sentence describing the event.
         Writes that data to a google spreadsheet.
+
+        !highlight
+        !highlight The caster screamed like a little girl!
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
@@ -984,6 +995,24 @@ class Bot(object):
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.total_guess: None}))
         self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
 
+    def _update_player_guesses_spreadsheet(self, db_session):
+        spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Guesses')
+        all_users = db_session.query(db.User).all()
+        users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
+        for i in range(2, len(users) + 10):
+            ws.update_cell(i, 1, '')
+            ws.update_cell(i, 2, '')
+            ws.update_cell(i, 3, '')
+        for index, user in enumerate(users):
+            row_num = index + 2
+            ws.update_cell(row_num, 1, user.name)
+            ws.update_cell(row_num, 2, user.current_guess)
+            ws.update_cell(row_num, 3, user.total_guess)
+        return web_view_link
+
     @_mod_only
     def show_guesses(self, db_session):
         """
@@ -996,24 +1025,8 @@ class Bot(object):
         self._add_to_chat_queue(
             "Formatting the google sheet with the latest information about all the guesses may take a bit." +
             " I'll let you know when it's done.")
-        spreadsheet_name, spreadsheet_url = self.spreadsheets['player_guesses']
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        ws = sheet.worksheet('Player Guesses')
-        all_users = db_session.query(db.User).all()
-        users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
-        ws.update_acell('A1', 'User')
-        ws.update_acell('B1', 'Current Guess')
-        ws.update_acell('C1', 'Total Guess')
-        for i in range(2, len(users) + 10):
-            ws.update_cell(i, 1, '')
-            ws.update_cell(i, 2, '')
-            ws.update_cell(i, 3, '')
-        for index, user in enumerate(users):
-            row_num = index + 3
-            ws.update_cell(row_num, 1, user.name)
-            ws.update_cell(row_num, 2, user.current_guess)
-            ws.update_cell(row_num, 3, user.total_guess)
+        _, spreadsheet_url = self.spreadsheets['player_guesses']
+        self._update_player_guesses_spreadsheet(db_session)
         self._add_to_chat_queue(
             "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
             "Here's a link. {}".format(spreadsheet_url))

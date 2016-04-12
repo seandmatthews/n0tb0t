@@ -17,6 +17,10 @@ class TwitchSocket(object):
         message_temp = "PRIVMSG #" + self.channel + " :" + message
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
+    def send_whisper(self, user, message):
+        message_temp = "PRIVMSG #jtv :/w " + user + " " + message
+        self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
+
     def join_room(self):
         self.sock.connect((self.host, self.port))
         self.sock.send("PASS {PASS}\r\n".format(PASS=self.pw).encode('utf-8'))
@@ -42,19 +46,14 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def get_user(self, line):
-        line_list = line.split(':', 2)
-        user = line_list[1].split('!')[0]
+        line_list = line.split(':')
+        user = line_list[-2].split('!')[0]
         return user
 
     def get_human_readable_message(self, line):
         if 'PRIVMSG' in line:
-            emotes = 'emotes=;' not in line
-            if emotes:
-                num_colons = 3
-            else:
-                num_colons = 2
-            line_list = line.split(':', num_colons)
-            hr_message = line_list[num_colons]
+            line_list = line.split(':')
+            hr_message = line_list[-1]
             return hr_message
         else:
             return ''

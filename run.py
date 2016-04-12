@@ -1,19 +1,17 @@
 import logging
 import time
 from TwitchSocket import TwitchSocket
-from GroupChatSocket import GroupChatSocket
 from Bot import Bot
 from config import SOCKET_ARGS
 
 logging.basicConfig(filename='error-log.txt',level=logging.DEBUG)
 TS = TwitchSocket(**SOCKET_ARGS)
-# GCS = GroupChatSocket(**SOCKET_ARGS)
-bot = Bot(TS, None)
+bot = Bot(TS)
 
 messages = ""
 
 while True:
-    read_buffer = TS.sock.recv(1024) # GCS.s.recv(1024) to get whispers and stuff
+    read_buffer = TS.sock.recv(1024)
 
     messages = messages + read_buffer.decode('utf-8')
     last_message = messages.split('\r\n')[-2]
