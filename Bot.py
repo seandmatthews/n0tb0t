@@ -399,10 +399,11 @@ class Bot(object):
         self.auto_quotes_timers[key].start()
         self._add_to_chat_queue(quote)
 
-    def _update_auto_quote_spreadsheet(self, db_session):
+    def _update_auto_quote_spreadsheet(self):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
         """
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -467,7 +468,7 @@ class Bot(object):
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
             db_session.add(db.AutoQuote(quote=quote, period=delay))
-            my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet, args=(db_session,))
+            my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet)
             my_thread.daemon = True
             my_thread.start()
             self._add_to_whisper_queue(user, 'Auto quote added.')
@@ -490,7 +491,7 @@ class Bot(object):
             if int(msg_list[1]) <= len(auto_quotes):
                 index = int(msg_list[1]) - 1
                 db_session.delete(auto_quotes[index])
-                my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet, args=(db_session,))
+                my_thread = threading.Thread(target=self._update_auto_quote_spreadsheet)
                 my_thread.daemon = True
                 my_thread.start()
                 self._add_to_whisper_queue(user, 'Auto quote deleted.')
@@ -499,10 +500,11 @@ class Bot(object):
         else:
             self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
 
-    def _update_command_spreadsheet(self, db_session):
+    def _update_command_spreadsheet(self):
         """
         Updates the commands google sheet with all available user commands.
         """
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['commands']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -572,7 +574,7 @@ class Bot(object):
                 db_command.permissions = permissions
             db_session.add(db_command)
             self._add_to_whisper_queue(user, 'Command added.')
-            my_thread = threading.Thread(target=self._update_command_spreadsheet, args=(db_session,))
+            my_thread = threading.Thread(target=self._update_command_spreadsheet)
             my_thread.daemon = True
             my_thread.start()
 
@@ -592,7 +594,7 @@ class Bot(object):
             if command_str == db_command.call:
                 db_session.delete(db_command)
                 self._add_to_whisper_queue(user, 'Command deleted.')
-                my_thread = threading.Thread(target=self._update_command_spreadsheet, args=(db_session,))
+                my_thread = threading.Thread(target=self._update_command_spreadsheet)
                 my_thread.daemon = True
                 my_thread.start()
                 break
@@ -609,7 +611,8 @@ class Bot(object):
         web_view_link = self.spreadsheets['commands'][1]
         self._add_to_chat_queue('View the commands at: {}'.format(web_view_link))
 
-    def _update_quote_spreadsheet(self, db_session):
+    def _update_quote_spreadsheet(self):
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -633,7 +636,7 @@ class Bot(object):
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
         self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.Quote).count()))
-        my_thread = threading.Thread(target=self._update_quote_spreadsheet, args=(db_session,))
+        my_thread = threading.Thread(target=self._update_quote_spreadsheet)
         my_thread.daemon = True
         my_thread.start()
 
@@ -653,7 +656,7 @@ class Bot(object):
                 index = int(msg_list[1]) - 1
                 db_session.delete(quotes[index])
                 self._add_to_whisper_queue(user, 'Quote deleted.')
-                my_thread = threading.Thread(target=self._update_quote_spreadsheet, args=(db_session,))
+                my_thread = threading.Thread(target=self._update_quote_spreadsheet)
                 my_thread.daemon = True
                 my_thread.start()
             else:
@@ -1000,7 +1003,7 @@ class Bot(object):
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.total_guess: None}))
         self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
 
-    def _update_player_guesses_spreadsheet(self, db_session):
+    def _update_player_guesses_spreadsheet(self):
         spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -1031,7 +1034,7 @@ class Bot(object):
             "Formatting the google sheet with the latest information about all the guesses may take a bit." +
             " I'll let you know when it's done.")
         _, spreadsheet_url = self.spreadsheets['player_guesses']
-        self._update_player_guesses_spreadsheet(db_session)
+        self._update_player_guesses_spreadsheet()
         self._add_to_chat_queue(
             "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
             "Here's a link. {}".format(spreadsheet_url))
