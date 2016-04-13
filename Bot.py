@@ -42,7 +42,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             if not already_existed:
-                init_command = '_initialize_{}_sheet'.format(sheet)
+                init_command = '_initialize_{}_spreadsheet'.format(sheet)
                 getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
@@ -89,12 +89,16 @@ class Bot(object):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            my_methods.sort()
             if hasattr(getattr(self, method), '_mods_only'): 
                 methods_dict['for_mods'].append(method)
             else:
                 methods_dict['for_all'].append(method)
 
+        methods_dict['for_all'].sort(key=lambda item: item.lower())
+        methods_dict['for_mods'].sort(key=lambda item: item.lower())
+
+        print(methods_dict['for_mods'])
+        # print(my_methods)
         return methods_dict
 
     def _initialize_db(self, db_location):
@@ -629,7 +633,7 @@ class Bot(object):
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
         self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.Quote).count()))
-        my_thread = threading.Thread(target=self._update_quote_spreadsheet(), args=(db_session,))
+        my_thread = threading.Thread(target=self._update_quote_spreadsheet, args=(db_session,))
         my_thread.daemon = True
         my_thread.start()
 
@@ -697,6 +701,7 @@ class Bot(object):
         !SO $caster
         """
         # TODO: Add a command to be able to set the shout_out_str from within twitch chat, or at least somewhere
+        print("Shout out running")
         user = self.ts.get_user(message)
         me = SOCKET_ARGS['channel']
         msg_list = self.ts.get_human_readable_message(message).split(' ')
