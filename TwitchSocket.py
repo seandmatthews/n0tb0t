@@ -41,7 +41,6 @@ class TwitchSocket(object):
                     loading = True
             except:
                 continue
-        self.send_message("{USER} is now online".format(USER=self.user))
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
