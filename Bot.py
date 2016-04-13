@@ -11,6 +11,7 @@ import showerThoughtFetcher
 import collections
 import inspect
 import google_auth
+import functools
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from config import SOCKET_ARGS
@@ -45,12 +46,6 @@ class Bot(object):
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
-        self.auto_quotes_timers = {}
-        for auto_quote in session.query(db.AutoQuote).all():
-            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
-
-        session.close()
-
         self.allowed_to_chat = True
 
         self.chat_thread = threading.Thread(target=self._process_chat_queue,
@@ -64,6 +59,12 @@ class Bot(object):
         self.whisper_thread.start()
 
         self._add_to_chat_queue('{} is online'.format(SOCKET_ARGS['user']))
+
+        self.auto_quotes_timers = {}
+        for auto_quote in session.query(db.AutoQuote).all():
+            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
+
+        session.close()
 
     def _sort_methods(self):
         """
@@ -117,8 +118,8 @@ class Bot(object):
                 db.MiscValue(mv_key='current-deaths', mv_value='0'),
                 db.MiscValue(mv_key='total-deaths', mv_value='0'),
                 db.MiscValue(mv_key='guessing-enabled', mv_value='False')])
-            db_session.commit()
-            db_session.close()
+        db_session.commit()
+        db_session.close()
         return Session
 
     def _initialize_quotes_spreadsheet(self, spreadsheet_name):
@@ -139,7 +140,7 @@ class Bot(object):
         qs.update_acell('A1', 'Quote Index')
         qs.update_acell('B1', 'Quote')
 
-        self.update_quote_spreadsheet()
+        # self.update_quote_spreadsheet()
 
     def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
         """
@@ -160,7 +161,7 @@ class Bot(object):
         aqs.update_acell('B1', 'Quote')
         aqs.update_acell('C1', 'Period\n(In seconds)')
 
-        self.update_auto_quote_spreadsheet()
+        # self.update_auto_quote_spreadsheet()
 
     def _initialize_commands_spreadsheet(self, spreadsheet_name):
         """
@@ -187,15 +188,23 @@ class Bot(object):
         cs.update_acell('K1', 'Bot Response')
         cs.update_acell('L1', 'User List')
 
+        for index in range(len(self.sorted_methods['for_all'])+10):
+            cs.update_cell(index+2, 1, '')
+            cs.update_cell(index+2, 2, '')
+
         for index, method in enumerate(self.sorted_methods['for_all']):
             cs.update_cell(index+2, 1, '!{}'.format(method))
             cs.update_cell(index+2, 2, getattr(self, method).__doc__)
+
+        for index in range(len(self.sorted_methods['for_mods'])+10):
+            cs.update_cell(index+2, 4, '')
+            cs.update_cell(index+2, 5, '')
 
         for index, method in enumerate(self.sorted_methods['for_mods']):
             cs.update_cell(index+2, 4, '!{}'.format(method))
             cs.update_cell(index+2, 5, getattr(self, method).__doc__)
 
-        self.update_command_spreadsheet()
+        # self.update_command_spreadsheet()
 
     def _initialize_highlights_spreadsheet(self, spreadsheet_name):
         """
@@ -374,6 +383,17 @@ class Bot(object):
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
 
+    def _retry_gspread_func(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    f(*args, **kwargs)
+                except gspread.exceptions.HTTPError:
+                    continue
+                break
+        return wrapper
+
     def _mod_only(func):
         """
         Set's the method's _mods_only property to True
@@ -420,9 +440,12 @@ class Bot(object):
         self._add_to_chat_queue(quote)
 
     @_mod_only
+    @_retry_gspread_func
     def update_auto_quote_spreadsheet(self):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
         """
         db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
@@ -527,9 +550,12 @@ class Bot(object):
             self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
 
     @_mod_only
+    @_retry_gspread_func
     def update_command_spreadsheet(self):
         """
         Updates the commands google sheet with all available user commands.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
         """
         db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['commands']
@@ -640,9 +666,12 @@ class Bot(object):
         self._add_to_chat_queue('View the commands at: {}'.format(web_view_link))
 
     @_mod_only
+    @_retry_gspread_func
     def update_quote_spreadsheet(self):
         """
         Updates the quote spreadsheet from the database.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
         """
         db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
@@ -660,6 +689,31 @@ class Bot(object):
             qs.update_cell(index+2, 1, index+1)
             qs.update_cell(index+2, 2, quote_obj.quote)
 
+    @_mod_only
+    def update_quote_db_from_spreadsheet(self, db_session):
+        """
+        Updates the database from the quote spreadsheet.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
+        This function will stop looking for quotes when it
+        finds an empty row in the spreadsheet.
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        qs = sheet.worksheet('Quotes')
+        cell_location = [2, 2]
+        quotes_list = []
+        while True:
+            if bool(qs.cell(*cell_location).value) is not False:
+                quotes_list.append(db.Quote(quote=qs.cell(*cell_location).value))
+            else:
+                break
+
+        db_session.execute(
+            "DELETE FROM QUOTES;"
+        )
+        db_session.add_all(quotes_list)
 
     def add_quote(self, message, db_session):
         """
@@ -1040,6 +1094,7 @@ class Bot(object):
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.total_guess: None}))
         self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
 
+    @_retry_gspread_func
     def _update_player_guesses_spreadsheet(self):
         """
         Updates the player guesses spreadsheet from the database.
