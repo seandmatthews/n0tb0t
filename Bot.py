@@ -66,6 +66,26 @@ class Bot(object):
 
         session.close()
 
+    # decorator
+    def _retry_gspread_func(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    f(*args, **kwargs)
+                except gspread.exceptions.HTTPError:
+                    continue
+                break
+        return wrapper
+
+    # decorator
+    def _mod_only(func):
+        """
+        Set's the method's _mods_only property to True
+        """
+        func._mods_only = True
+        return func
+
     def _sort_methods(self):
         """
         Looks through the object's methods,
@@ -122,6 +142,7 @@ class Bot(object):
         db_session.close()
         return Session
 
+    @_retry_gspread_func
     def _initialize_quotes_spreadsheet(self, spreadsheet_name):
         """
         Populate the quotes google sheet with its initial data.
@@ -142,6 +163,7 @@ class Bot(object):
 
         # self.update_quote_spreadsheet()
 
+    @_retry_gspread_func
     def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
         """
         Populate the auto_quotes google sheet with its initial data.
@@ -163,6 +185,7 @@ class Bot(object):
 
         # self.update_auto_quote_spreadsheet()
 
+    @_retry_gspread_func
     def _initialize_commands_spreadsheet(self, spreadsheet_name):
         """
         Populate the commands google sheet with its initial data.
@@ -206,6 +229,7 @@ class Bot(object):
 
         # self.update_command_spreadsheet()
 
+    @_retry_gspread_func
     def _initialize_highlights_spreadsheet(self, spreadsheet_name):
         """
         Populate the highlights google sheet with its initial data.
@@ -226,6 +250,7 @@ class Bot(object):
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
 
+    @_retry_gspread_func
     def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
         """
         Populate the player_guesses google sheet with its initial data.
@@ -382,24 +407,6 @@ class Bot(object):
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
-
-    def _retry_gspread_func(f):
-        @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            while True:
-                try:
-                    f(*args, **kwargs)
-                except gspread.exceptions.HTTPError:
-                    continue
-                break
-        return wrapper
-
-    def _mod_only(func):
-        """
-        Set's the method's _mods_only property to True
-        """
-        func._mods_only = True
-        return func
 
     @_mod_only
     def stop_speaking(self):
@@ -698,6 +705,9 @@ class Bot(object):
         This function will stop looking for quotes when it
         finds an empty row in the spreadsheet.
         """
+        db_session.execute(
+            "DELETE FROM QUOTES;"
+        )
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -707,12 +717,13 @@ class Bot(object):
         while True:
             if bool(qs.cell(*cell_location).value) is not False:
                 quotes_list.append(db.Quote(quote=qs.cell(*cell_location).value))
+                cell_location[0] += 1
             else:
                 break
 
-        db_session.execute(
-            "DELETE FROM QUOTES;"
-        )
+        for quote in quotes_list:
+            print(quote.quote)
+
         db_session.add_all(quotes_list)
 
     def add_quote(self, message, db_session):

@@ -4,7 +4,7 @@ from TwitchSocket import TwitchSocket
 from Bot import Bot
 from config import SOCKET_ARGS
 
-logging.basicConfig(filename='error-log.txt',level=logging.DEBUG)
+logging.basicConfig(filename='error-log.txt',level=logging.WARNING)
 TS = TwitchSocket(**SOCKET_ARGS)
 bot = Bot(TS)
 
