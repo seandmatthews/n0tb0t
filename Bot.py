@@ -66,7 +66,7 @@ class Bot(object):
 
         session.close()
 
-    # decorator
+# DECORATORS #
     def _retry_gspread_func(f):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
@@ -78,13 +78,14 @@ class Bot(object):
                 break
         return wrapper
 
-    # decorator
     def _mod_only(func):
         """
         Set's the method's _mods_only property to True
         """
         func._mods_only = True
         return func
+# END DECORATORS #
+
 
     def _sort_methods(self):
         """
@@ -416,7 +417,7 @@ class Bot(object):
 
         !stop_speaking
         """
-        self._send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.ts.send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
     @_mod_only
@@ -448,13 +449,12 @@ class Bot(object):
 
     @_mod_only
     @_retry_gspread_func
-    def update_auto_quote_spreadsheet(self):
+    def update_auto_quote_spreadsheet(self, db_session):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
         """
-        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -499,14 +499,15 @@ class Bot(object):
             time.sleep(1)
             self.auto_quotes_timers[AQ].cancel()
 
-    def show_auto_quotes(self, db_session):
+    def show_auto_quotes(self, message):
         """
         Links to a google spreadsheet containing all auto quotes
 
         !show_auto_quotes
         """
+        user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
-        self._add_to_chat_queue('View the auto quotes at: {}'.format(web_view_link))
+        self._add_to_whisper_queue(user, 'View the auto quotes at: {}'.format(web_view_link))
 
     @_mod_only
     def add_auto_quote(self, message, db_session):
@@ -524,7 +525,8 @@ class Bot(object):
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
             db_session.add(db.AutoQuote(quote=quote, period=delay))
-            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet)
+            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
             my_thread.daemon = True
             my_thread.start()
             self._add_to_whisper_queue(user, 'Auto quote added.')
@@ -547,7 +549,8 @@ class Bot(object):
             if int(msg_list[1]) <= len(auto_quotes):
                 index = int(msg_list[1]) - 1
                 db_session.delete(auto_quotes[index])
-                my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet)
+                my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                             kwargs={'db_session': db_session})
                 my_thread.daemon = True
                 my_thread.start()
                 self._add_to_whisper_queue(user, 'Auto quote deleted.')
@@ -558,13 +561,12 @@ class Bot(object):
 
     @_mod_only
     @_retry_gspread_func
-    def update_command_spreadsheet(self):
+    def update_command_spreadsheet(self, db_session):
         """
         Updates the commands google sheet with all available user commands.
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
         """
-        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['commands']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -635,7 +637,8 @@ class Bot(object):
                 db_command.permissions = permissions
             db_session.add(db_command)
             self._add_to_whisper_queue(user, 'Command added.')
-            my_thread = threading.Thread(target=self.update_command_spreadsheet)
+            my_thread = threading.Thread(target=self.update_command_spreadsheet,
+                                         kwargs={'db_session': db_session})
             my_thread.daemon = True
             my_thread.start()
 
@@ -655,32 +658,32 @@ class Bot(object):
             if command_str == db_command.call:
                 db_session.delete(db_command)
                 self._add_to_whisper_queue(user, 'Command deleted.')
-                my_thread = threading.Thread(target=self.update_command_spreadsheet)
+                my_thread = threading.Thread(target=self.update_command_spreadsheet,
+                                             kwargs={'db_session': db_session})
                 my_thread.daemon = True
                 my_thread.start()
                 break
         else:
             self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t seem to exist.')
 
-
-    def show_commands(self):
+    def show_commands(self, message):
         """
         Links the google spreadsheet containing all commands in chat
 
         !show_commands
         """
+        user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['commands'][1]
-        self._add_to_chat_queue('View the commands at: {}'.format(web_view_link))
+        self._add_to_whisper_queue(user, 'View the commands at: {}'.format(web_view_link))
 
     @_mod_only
     @_retry_gspread_func
-    def update_quote_spreadsheet(self):
+    def update_quote_spreadsheet(self, db_session):
         """
         Updates the quote spreadsheet from the database.
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
         """
-        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -705,9 +708,6 @@ class Bot(object):
         This function will stop looking for quotes when it
         finds an empty row in the spreadsheet.
         """
-        db_session.execute(
-            "DELETE FROM QUOTES;"
-        )
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -721,9 +721,9 @@ class Bot(object):
             else:
                 break
 
-        for quote in quotes_list:
-            print(quote.quote)
-
+        db_session.execute(
+            "DELETE FROM QUOTES;"
+        )
         db_session.add_all(quotes_list)
 
     def add_quote(self, message, db_session):
@@ -738,7 +738,8 @@ class Bot(object):
         quote_obj = db.Quote(quote=quote)
         db_session.add(quote_obj)
         self._add_to_whisper_queue(user, 'Quote added as quote #{}.'.format(db_session.query(db.Quote).count()))
-        my_thread = threading.Thread(target=self.update_quote_spreadsheet)
+        my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                     kwargs={'db_session': db_session})
         my_thread.daemon = True
         my_thread.start()
 
@@ -758,7 +759,8 @@ class Bot(object):
                 index = int(msg_list[1]) - 1
                 db_session.delete(quotes[index])
                 self._add_to_whisper_queue(user, 'Quote deleted.')
-                my_thread = threading.Thread(target=self.update_quote_spreadsheet)
+                my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                             kwargs={'db_session': db_session})
                 my_thread.daemon = True
                 my_thread.start()
             else:
@@ -770,8 +772,9 @@ class Bot(object):
 
         !show_quotes
         """
+        user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['quotes'][1]
-        self._add_to_chat_queue('View the quotes at: {}'.format(web_view_link))
+        self._add_to_whisper_queue(user, 'View the quotes at: {}'.format(web_view_link))
 
     def quote(self, message, db_session):
         """
