@@ -50,7 +50,7 @@ class TwitchSocket(object):
         return user
 
     def get_human_readable_message(self, line):
-        if 'PRIVMSG' in line:
+        if 'PRIVMSG' or 'WHISPER' in line:
             line_list = line.split(':')
             hr_message = line_list[-1]
             return hr_message
