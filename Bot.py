@@ -958,6 +958,7 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
         user.times_played += 1
 
+    @_mod_only
     def cycle(self, message):
         """
         Sends out a message to the next set of players.
@@ -977,12 +978,13 @@ class Bot(object):
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
 
+    @_mod_only
     def cycle_one(self, message):
         """
         Sends out a message to the next player.
 
-        !cycle
-        !cycle Password!1
+        !cycle_one
+        !cycle_one Password!1
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         channel = SOCKET_ARGS['channel']
