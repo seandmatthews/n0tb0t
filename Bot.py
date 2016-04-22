@@ -1016,7 +1016,7 @@ class Bot(object):
     @_mod_only
     def set_room_size(self, message):
         """
-        Sets the room size so n0tb0t
+        Sets the room size so the bot
         knows how many people to whisper
         when you cycle in new players.
         By default this value is 7.
