@@ -30,24 +30,3 @@ class PlayerQueue:
         return return_list
 
 
-pq = PlayerQueue()
-
-pq.push('fuck you', 2)
-pq.push('bunz', 1)
-pq.push('double fuck you', 1)
-try:
-    pq.push('bunz', 0)
-except RuntimeError as e:
-    print(e)
-
-pq.push('Sky', 4)
-pq.push('Erin', 2)
-pq.push('n0t1337', 0)
-pq.push('hyphen', 2)
-pq.push('LS', 1)
-
-blah = pq.pop_all()
-print(blah)
-
-blah = pq.pop_all()
-print(blah)

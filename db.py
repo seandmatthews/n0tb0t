@@ -11,9 +11,14 @@ class User(Base):
     name = sqlalchemy.Column(sqlalchemy.String)
     current_guess = sqlalchemy.Column(sqlalchemy.Integer)
     total_guess = sqlalchemy.Column(sqlalchemy.Integer)
-    entered_in_contest = sqlalchemy.Column(sqlalchemy.Boolean, default=False)
-    times_played = sqlalchemy.Column(sqlalchemy.Integer, default=0)
-    points = sqlalchemy.Column(sqlalchemy.Integer, default=0)
+    entered_in_contest = sqlalchemy.Column(sqlalchemy.Boolean)
+    times_played = sqlalchemy.Column(sqlalchemy.Integer)
+    points = sqlalchemy.Column(sqlalchemy.Integer)
+
+    def __init__(self, *args, **kwargs):
+        self.entered_in_contest = False
+        self.times_played = 0
+        self.points = 0
 
 
 class Quote(Base):
