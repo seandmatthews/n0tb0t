@@ -1026,7 +1026,7 @@ class Bot(object):
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         user = self.ts.get_user(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
-            room_size = msg_list[1]
+            room_size = int(msg_list[1])
             self.player_queue.lobby_size = room_size
             self._add_to_whisper_queue(user, "The new room size is {}.".format(room_size))
         else:
