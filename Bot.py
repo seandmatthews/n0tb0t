@@ -1003,14 +1003,34 @@ class Bot(object):
     @_mod_only
     def reset_queue(self, db_session):
         """
-        Empties the queue and resets all players stats
-        for how many times they've played with the caster.
+        Creates a new queue with the default room size
+        and resets all players stats for how many
+        times they've played with the caster.
 
         !reset_queue
         """
         self.player_queue = PlayerQueue.PlayerQueue()
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.times_played: 0}))
         self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
+
+    @_mod_only
+    def set_room_size(self, message):
+        """
+        Sets the room size so n0tb0t
+        knows how many people to whisper
+        when you cycle in new players.
+        By default this value is 7.
+
+        !set_room_size 5
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.ts.get_user(message)
+        if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
+            room_size = msg_list[1]
+            self.player_queue.lobby_size = room_size
+            self._add_to_whisper_queue(user, "The new room size is {}.".format(room_size))
+        else:
+            self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
 
     def enter_contest(self, message, db_session):
         """
