@@ -297,7 +297,7 @@ class Bot(object):
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
                 self.ts.send_message(chat_queue.pop())
-            time.sleep(2)
+            time.sleep(.5)
 
     def _process_whisper_queue(self, whisper_queue):
         """
@@ -310,7 +310,7 @@ class Bot(object):
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
-            time.sleep(1)
+            time.sleep(.5)
 
     def _act_on(self, message):
         """
@@ -1000,6 +1000,7 @@ class Bot(object):
             whisper_str = 'You may now join {} to play.'.format(channel)
         self._add_to_whisper_queue(player, whisper_str)
 
+    @_mod_only
     def reset_queue(self, db_session):
         """
         Empties the queue and resets all players stats
