@@ -55,7 +55,7 @@ class TwitchSocket(object):
             num_colons = 2
         else:
             num_colons = 3
-        if "PRIVMSG" in line or ("WHISPER" in line and self.get_user(line) in self.get_all_chatters()):
+        if "PRIVMSG" in line or ("WHISPER" in line and self.get_user(line) in self.get_mods()):
             line_list = line.split(':', num_colons)
             hr_message = line_list[-1]
             return hr_message

@@ -10,12 +10,13 @@ import pytz
 import requests
 import gspread
 import showerThoughtFetcher
-import db
 import google_auth
 import PlayerQueue
+import db
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-from config import SOCKET_ARGS
+from pyshorteners import Shortener
+from config import SOCKET_ARGS, bitly_access_token
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -29,6 +30,7 @@ class Bot(object):
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
         self.player_queue = PlayerQueue.PlayerQueue()
+        self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
         self.Session = self._initialize_db(self.cur_dir)
@@ -489,7 +491,8 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
-        self._add_to_whisper_queue(user, 'View the auto quotes at: {}'.format(web_view_link))
+        short_url = self.shortener.short(web_view_link)
+        self._add_to_whisper_queue(user, 'View the auto quotes at: {}'.format(short_url))
 
     @_mod_only
     def add_auto_quote(self, message, db_session):
@@ -656,7 +659,8 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['commands'][1]
-        self._add_to_whisper_queue(user, 'View the commands at: {}'.format(web_view_link))
+        short_url = self.shortener.short(web_view_link)
+        self._add_to_whisper_queue(user, 'View the commands at: {}'.format(short_url))
 
     @_mod_only
     @_retry_gspread_func
@@ -756,7 +760,8 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['quotes'][1]
-        self._add_to_whisper_queue(user, 'View the quotes at: {}'.format(web_view_link))
+        short_url = self.shortener.short(web_view_link)
+        self._add_to_whisper_queue(user, 'View the quotes at: {}'.format(short_url))
 
     def quote(self, message, db_session):
         """
@@ -1218,11 +1223,12 @@ class Bot(object):
         self._add_to_chat_queue(
             "Formatting the google sheet with the latest information about all the guesses may take a bit." +
             " I'll let you know when it's done.")
-        _, spreadsheet_url = self.spreadsheets['player_guesses']
+        web_view_link = self.spreadsheets['player_guesses'][1]
+        short_url = self.shortener.short(web_view_link)
         self._update_player_guesses_spreadsheet()
         self._add_to_chat_queue(
             "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
-            "Here's a link. {}".format(spreadsheet_url))
+            "Here's a link. {}".format(short_url))
 
     @_mod_only
     def set_deaths(self, message, db_session):
