@@ -391,26 +391,6 @@ class Bot(object):
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
 
-    def _get_mods(self):
-        """
-        Talks to twitch's API to look at all chatters currently in the channel.
-        Returns a list of all moderators currently in the channel.
-        """
-        url = 'http://tmi.twitch.tv/group/user/{channel}/chatters'.format(channel=self.ts.channel)
-        for attempt in range(5):
-            try:
-                r = requests.get(url)
-                mods = r.json()['chatters']['moderators']
-            except ValueError:
-                continue
-            except TypeError:
-                continue
-            else:
-                return mods
-        else:
-            self._add_to_chat_queue(
-                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
-
     @_mod_only
     def stop_speaking(self):
         """
@@ -811,7 +791,6 @@ class Bot(object):
         !SO $caster
         """
         # TODO: Add a command to be able to set the shout_out_str from within twitch chat, or at least somewhere
-        print("Shout out running")
         user = self.ts.get_user(message)
         me = SOCKET_ARGS['channel']
         msg_list = self.ts.get_human_readable_message(message).split(' ')
@@ -1014,21 +993,20 @@ class Bot(object):
         self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
 
     @_mod_only
-    def set_room_size(self, message):
+    def set_cycle_number(self, message):
         """
-        Sets the room size so the bot
-        knows how many people to whisper
-        when you cycle in new players.
+        Sets the number of players to cycle
+        in when it's time to play with new people.
         By default this value is 7.
 
-        !set_room_size 5
+        !set_cycle_number 5
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         user = self.ts.get_user(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
-            room_size = int(msg_list[1])
-            self.player_queue.lobby_size = room_size
-            self._add_to_whisper_queue(user, "The new room size is {}.".format(room_size))
+            cycle_num = int(msg_list[1])
+            self.player_queue.cycle_num = cycle_num
+            self._add_to_whisper_queue(user, "The new room size is {}.".format(cycle_num))
         else:
             self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
 

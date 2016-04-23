@@ -2,9 +2,9 @@ import collections
 
 
 class PlayerQueue:
-    def __init__(self, lobby_size=7):
+    def __init__(self, cycle_num=7):
         self._queue = collections.deque()
-        self.lobby_size = lobby_size
+        self.cycle_num = cycle_num
 
     def push(self, player, priority):
         index = None
@@ -24,7 +24,7 @@ class PlayerQueue:
 
     def pop_all(self):
         return_list = []
-        players = min(self.lobby_size, len(self._queue))
+        players = min(self.cycle_num, len(self._queue))
         for player in range(players):
             return_list.append(self.pop())
         return return_list

@@ -5,13 +5,13 @@ from Bot import Bot
 from config import SOCKET_ARGS
 
 logging.basicConfig(filename='error-log.txt',level=logging.WARNING)
-TS = TwitchSocket(**SOCKET_ARGS)
-bot = Bot(TS)
+ts = TwitchSocket(**SOCKET_ARGS)
+bot = Bot(ts)
 
 messages = ""
 
 while True:
-    read_buffer = TS.sock.recv(1024)
+    read_buffer = ts.sock.recv(1024)
 
     messages = messages + read_buffer.decode('utf-8')
     messages_list = messages.split('\r\n')
@@ -21,12 +21,12 @@ while True:
         messages = ""
         if last_message == 'PING :tmi.twitch.tv':
             resp = last_message.replace("PING", "PONG") + "\r\n"
-            TS.sock.send(resp.encode('utf-8'))
+            ts.sock.send(resp.encode('utf-8'))
         else:
             try:
                 bot._act_on(last_message)
             except Exception as e:
                 logging.exception("Something went wrong")
-                TS.send_message("Something went wrong. The error has been logged.")
+                ts.send_message("Something went wrong. The error has been logged.")
 
     time.sleep(.02)

@@ -1,4 +1,5 @@
 import socket
+import requests
 
 
 class TwitchSocket(object):
@@ -45,13 +46,17 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def get_user(self, line):
-        line_list = line.split(':')
+        line_list = line.split(':', 2)
         user = line_list[-2].split('!')[0]
         return user
 
     def get_human_readable_message(self, line):
-        if 'PRIVMSG' or 'WHISPER' in line:
-            line_list = line.split(':')
+        if 'emotes=;' in line:
+            num_colons = 2
+        else:
+            num_colons = 3
+        if "PRIVMSG" in line or ("WHISPER" in line and self.get_user(line) in self.get_all_chatters()):
+            line_list = line.split(':', num_colons)
             hr_message = line_list[-1]
             return hr_message
         else:
@@ -59,7 +64,43 @@ class TwitchSocket(object):
 
     def check_mod(self, line):
         line_list = line.split(':', 2)
-        if ('user-type=mod' in line_list[0]) or (self.get_user(line) == self.channel):
-            return True
+        if "PRIVMSG" in line:
+            if ('user-type=mod' in line_list[0]) or (self.get_user(line) == self.channel):
+                return True
+            else:
+                return False
+        elif "WHISPER" in line:
+            if (self.get_user(line) in self.get_mods()) or (self.get_user(line) == self.channel):
+                return True
+            else:
+                return False
+
+    def fetch_chatters_from_API(self):
+        """
+        Talks to twitch's API to look at all chatters currently in the channel.
+        Returns that json dictionary. It has 'moderators', 'global_mods',
+        'viewers', 'admins', and 'staff' as keys.
+        """
+        url = 'http://tmi.twitch.tv/group/user/{channel}/chatters'.format(channel=self.channel)
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                mods = r.json()['chatters']
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return mods
         else:
-            return False
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def get_mods(self):
+        return self.fetch_chatters_from_API()['moderators']
+
+    def get_all_chatters(self):
+        chatters = []
+        for k, v in self.fetch_chatters_from_API().items():
+            [chatters.append(user) for user in v]
+        return chatters
