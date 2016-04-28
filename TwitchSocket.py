@@ -46,7 +46,11 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def get_user(self, line):
-        line_list = line.split(':', 2)
+        if 'emotes=;' in line:
+            num_colons = 2
+        else:
+            num_colons = 3
+        line_list = line.split(':', num_colons)
         user = line_list[-2].split('!')[0]
         return user
 
