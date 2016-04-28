@@ -17,7 +17,10 @@ while True:
     messages_list = messages.split('\r\n')
     if len(messages_list) >= 2:
         last_message = messages_list[-2]
-        print(last_message.encode('utf-8'))
+        print("{} {}: {}".format(
+                time.strftime("%Y-%m-%d %H:%M:%S"),
+                ts.get_user(last_message),
+                ts.get_human_readable_message(last_message)))
         messages = ""
         if last_message == 'PING :tmi.twitch.tv':
             resp = last_message.replace("PING", "PONG") + "\r\n"
