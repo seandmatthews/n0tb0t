@@ -29,7 +29,7 @@ while True:
             try:
                 bot._act_on(last_message)
             except Exception as e:
-                logging.exception("Something went wrong")
+                logging.exception("Error occurred at {}".format(time.strftime("%Y-%m-%d %H:%M:%S")))
                 ts.send_message("Something went wrong. The error has been logged.")
 
     time.sleep(.02)

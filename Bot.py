@@ -131,11 +131,11 @@ class Bot(object):
         """
         channel = SOCKET_ARGS['channel']
         self.db_path = os.path.join(db_location, '{}.db'.format(channel))
-        engine = sqlalchemy.create_engine('sqlite:///' + self.db_path)
+        engine = sqlalchemy.create_engine('sqlite:///{}'.format(self.db_path), connect_args={'check_same_thread':False})
         # noinspection PyPep8Naming
-        Session = sessionmaker(bind=engine)
+        session_factory = sessionmaker(bind=engine)
         db.Base.metadata.create_all(engine)
-        db_session = Session()
+        db_session = session_factory()
         misc_values = db_session.query(db.MiscValue).all()
         if len(misc_values) == 0:
             db_session.add_all([
@@ -145,7 +145,7 @@ class Bot(object):
                 db.MiscValue(mv_key='guessing-enabled', mv_value='False')])
         db_session.commit()
         db_session.close()
-        return Session
+        return session_factory
 
     @_retry_gspread_func
     def _initialize_quotes_spreadsheet(self, spreadsheet_name):
@@ -932,7 +932,6 @@ class Bot(object):
         username = self.ts.get_user(message)
         user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
         if not user:
-            # user = db.User(name=username, entered_in_contest=False, times_played=0, points=0)
             user = db.User(name=username)
             db_session.add(user)
         try:
@@ -952,6 +951,7 @@ class Bot(object):
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         players = self.player_queue.pop_all()
+        players_str = ' '.join(players)
         channel = SOCKET_ARGS['channel']
         if len(msg_list) > 1:
             credential_str = ' '.join(msg_list[1:])
@@ -961,6 +961,9 @@ class Bot(object):
             whisper_str = 'You may now join {} to play.'.format(channel)
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
+        self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
+            players_str, len(self.player_queue.queue)
+        ))
 
     @_mod_only
     def cycle_one(self, message):
@@ -983,6 +986,10 @@ class Bot(object):
         else:
             whisper_str = 'You may now join {} to play.'.format(channel)
         self._add_to_whisper_queue(player, whisper_str)
+        self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(
+            player, len(self.player_queue.queue)
+        ))
+
 
     @_mod_only
     def reset_queue(self, db_session):
