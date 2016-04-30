@@ -927,7 +927,7 @@ class Bot(object):
         The players who've played the fewest
         times with the caster get priority.
 
-        !join_queue
+        !join
         """
         username = self.ts.get_user(message)
         user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
@@ -1124,8 +1124,6 @@ class Bot(object):
     def enable_guesstotal(self, db_session):
         """
         Enables guessing for the total number of deaths for the run.
-        Modifies the value associated with the guess-total-enabled key
-        in the miscellaneous values dictionary and writes it to the json file.
 
         !enable_guesstotal
         """
