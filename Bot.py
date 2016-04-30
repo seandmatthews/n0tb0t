@@ -348,7 +348,7 @@ class Bot(object):
         """
         first_word = self.ts.get_human_readable_message(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
-            potential_command = first_word[1:]
+            potential_command = first_word[1:].lower()
         else:
             return None
         if potential_command in self.sorted_methods['for_all']:
@@ -788,7 +788,7 @@ class Bot(object):
             self._add_to_chat_queue('#{} {}'.format(str(random_quote_index + 1), quotes[random_quote_index].quote))
 
     @_mod_only
-    def SO(self, message):
+    def so(self, message):
         """
         Shouts out a twitch caster in chat. Uses the twitch API to confirm
         that the caster is real and to fetch their last played game.
@@ -921,7 +921,7 @@ class Bot(object):
             ws.update_cell(next_row, 4, user_note)
             self._add_to_whisper_queue(user, 'The highlight has been added to the spreadsheet for review.')
 
-    def join_queue(self, message, db_session):
+    def join(self, message, db_session):
         """
         Adds the user to the game queue.
         The players who've played the fewest
