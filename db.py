@@ -20,7 +20,6 @@ class User(Base):
         self.times_played = 0
         self.points = 0
         for kwarg in kwargs:
-            print(kwargs[kwarg])
             setattr(self, kwarg, kwargs[kwarg])
 
 
