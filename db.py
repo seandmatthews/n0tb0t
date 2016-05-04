@@ -15,10 +15,13 @@ class User(Base):
     times_played = sqlalchemy.Column(sqlalchemy.Integer)
     points = sqlalchemy.Column(sqlalchemy.Integer)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         self.entered_in_contest = False
         self.times_played = 0
         self.points = 0
+        for kwarg in kwargs:
+            print(kwargs[kwarg])
+            setattr(self, kwarg, kwargs[kwarg])
 
 
 class Quote(Base):

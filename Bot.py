@@ -46,7 +46,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            #getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -927,7 +927,7 @@ class Bot(object):
         The players who've played the fewest
         times with the caster get priority.
 
-        !join
+        !join_queue
         """
         username = self.ts.get_user(message)
         user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
@@ -1033,15 +1033,19 @@ class Bot(object):
         username = self.ts.get_user(message)
         user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
         if user:
+            print('user found')
             if user.entered_in_contest:
-                self._add_to_whisper_queue(user, 'You\'re already entered into the contest, you can\'t enter again.')
+                self._add_to_whisper_queue(user.name, 'You\'re already entered into the contest, you can\'t enter again.')
             else:
                 user.entered_in_contest = True
-                self._add_to_whisper_queue(user, 'You\'re entered into the contest!')
+                self._add_to_whisper_queue(user.name, 'You\'re entered into the contest!')
         else:
-            user = db.User(name=username, entered_in_contest=True)
+            print('user created')
+            user = db.User(entered_in_contest=True, name=username)
+            # user.name = username
             db_session.add(user)
-            self._add_to_whisper_queue(user, 'You\'re entered into the contest!')
+            print(user.name)
+            self._add_to_whisper_queue(username, 'You\'re entered into the contest!')
 
     @_mod_only
     def show_contest_winner(self, db_session):
@@ -1054,7 +1058,7 @@ class Bot(object):
         users_contest_list = db_session.query(db.User).filter(db.User.entered_in_contest.isnot(False)).all()
         if len(users_contest_list) > 0:
             winner = random.choice(users_contest_list)
-            self._add_to_chat_queue('The winner is {}!'.format(winner))
+            self._add_to_chat_queue('The winner is {}!'.format(winner.name))
         else:
             self._add_to_chat_queue('There are currently no entrants for the contest.')
 
@@ -1124,6 +1128,8 @@ class Bot(object):
     def enable_guesstotal(self, db_session):
         """
         Enables guessing for the total number of deaths for the run.
+        Modifies the value associated with the guess-total-enabled key
+        in the miscellaneous values dictionary and writes it to the json file.
 
         !enable_guesstotal
         """

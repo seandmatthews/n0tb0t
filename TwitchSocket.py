@@ -6,7 +6,7 @@ class TwitchSocket(object):
 
     def __init__(self, pw, user, channel):
         self.host = 'irc.chat.twitch.tv'
-        self.port = 6667
+        self.port = 80
         self.pw = pw
         self.user = user
         self.channel = channel
@@ -108,3 +108,5 @@ class TwitchSocket(object):
         for k, v in self.fetch_chatters_from_API().items():
             [chatters.append(user) for user in v]
         return chatters
+
+
