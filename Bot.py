@@ -246,7 +246,7 @@ class Bot(object):
         """
         first_word = self.ts.get_human_readable_message(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
-            potential_command = first_word[1:]
+            potential_command = first_word[1:].lower()
         else:
             return None
         if potential_command in self.sorted_methods['for_all']:

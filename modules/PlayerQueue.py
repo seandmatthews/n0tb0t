@@ -30,25 +30,25 @@ class PlayerQueue:
         return return_list
 
 
-def join_queue(self, message, db_session):
-        """
-        Adds the user to the game queue.
-        The players who've played the fewest
-        times with the caster get priority.
+def join(self, message, db_session):
+    """
+    Adds the user to the game queue.
+    The players who've played the fewest
+    times with the caster get priority.
 
-        !join_queue
-        """
-        username = self.ts.get_user(message)
-        user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
-        if not user:
-            user = db.User(name=username)
-            db_session.add(user)
-        try:
-            self.player_queue.push(username, user.times_played)
-            self._add_to_whisper_queue(username, "You've joined the queue.")
-        except RuntimeError:
-            self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
-        user.times_played += 1
+    !join_queue
+    """
+    username = self.ts.get_user(message)
+    user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
+    if not user:
+        user = db.User(name=username)
+        db_session.add(user)
+    try:
+        self.player_queue.push(username, user.times_played)
+        self._add_to_whisper_queue(username, "You've joined the queue.")
+    except RuntimeError:
+        self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
+    user.times_played += 1
 
     @_mod_only
     def cycle(self, message):
