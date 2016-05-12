@@ -71,26 +71,6 @@ class Bot(object):
 
         session.close()
 
-# DECORATORS #
-    def _retry_gspread_func(f):
-        @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            while True:
-                try:
-                    f(*args, **kwargs)
-                except gspread.exceptions.HTTPError:
-                    continue
-                break
-        return wrapper
-
-    def _mod_only(func):
-        """
-        Set's the method's _mods_only property to True
-        """
-        func._mods_only = True
-        return func
-# END DECORATORS #
-
 
     def _sort_methods(self):
         """
