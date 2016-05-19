@@ -941,6 +941,23 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
         user.times_played += 1
 
+    def spot(self, message):
+        """
+        Shows user current location in queue and current priority.
+
+        !spot
+        """
+        try:
+            username = self.ts.get_user(message)
+            caster = SOCKET_ARGS['channel']
+            for index, tup in enumerate(self.player_queue.queue):
+                if tup[0] == username:
+                    position = len(self.player_queue.queue) - index
+                    priority = tup[1]
+            self._add_to_whisper_queue(username, "You're number {} in the queue with a priority of {}. A priority of 0 means you've never played with {} and you cannot be jumped in the queue!".format(position, priority, caster))
+        except UnboundLocalError:
+            self._add_to_whisper_queue(username, "You aren't in the queue.")
+
     @_mod_only
     def cycle(self, message):
         """
