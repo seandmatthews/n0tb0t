@@ -954,9 +954,9 @@ class Bot(object):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
                     priority = tup[1]
-            self._add_to_whisper_queue(username, "You're number {} in the queue with a priority of {}. A priority of 0 means you've never played with {} and you cannot be jumped in the queue!".format(position, priority, caster))
+            self._add_to_whisper_queue(username, "You're number {} in the queue with a priority of {}.".format(position, priority))
         except UnboundLocalError:
-            self._add_to_whisper_queue(username, "You aren't in the queue.")
+            self._add_to_whisper_queue(username, "You're not in the queue use !join to join.")
 
     @_mod_only
     def cycle(self, message):
