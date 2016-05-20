@@ -1020,9 +1020,9 @@ class Bot(object):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
                     priority = tup[1]
-            self._add_to_whisper_queue(username, "You're number {} in the queue with a priority of {}.".format(position, priority))
+            self._add_to_whisper_queue(username, "You're number {} in the queue. This may change as other players join.".format(position))
         except UnboundLocalError:
-            self._add_to_whisper_queue(username, "You're not in the queue use !join to join.")
+            self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
     
     def show_spot(self, message):
         """
