@@ -37,7 +37,7 @@ class Bot(object):
         session = self.Session()
 
         self.credentials = google_auth.get_credentials()
-        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses']
+        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses', 'player_queue']
         self.spreadsheets = {}
         for sheet in starting_spreadsheets_list:
             sheet_name = '{}-{}-{}'.format(SOCKET_ARGS['channel'], SOCKET_ARGS['user'], sheet)
@@ -274,6 +274,33 @@ class Bot(object):
         pgs.update_acell('A1', 'User')
         pgs.update_acell('B1', 'Current Guess')
         pgs.update_acell('C1', 'Total Guess')
+        
+    @_retry_gspread_func
+    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the player_queue google sheet with its initial data.
+        """
+        caster = SOCKET_ARGS['channel']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            pqs = sheet.worksheet('Player Queue')
+        except gspread.exceptions.WorksheetNotFound:
+            pqs = sheet.add_worksheet('Player Queue', 500, 3)
+            sheet1 = sheet.worksheet('Sheet1')
+            sheet.del_worksheet(sheet1)
+            
+        info = """Priority is given to players with fewest times played.
+        The top of this spreadsheet is the back of the queue
+        and the bottom is the front. The closer you are to the bottom,
+        the closer you are to playing with {}.""".format(caster)
+        
+        pqs.update_acell('A1', 'User')
+        pqs.update_acell('B1', 'Times played')
+        pqs.update_acell('C1', 'Info:')
+        pqs.update_acell('C2', info)
 
     def _add_to_chat_queue(self, message):
         """
@@ -921,13 +948,46 @@ class Bot(object):
             ws.update_cell(next_row, 4, user_note)
             self._add_to_whisper_queue(user, 'The highlight has been added to the spreadsheet for review.')
 
+    def _delete_last_row(self):
+        """
+        Deletes the last row of the player_queue spreadsheet
+        """
+        spreadsheet_name, _ = self.spreadsheets['player_queue']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Queue')
+        records = ws.get_all_records()
+        last_row_index = len(records) + 1
+        
+        ws.update_cell(last_row_index, 1, '')
+        ws.update_cell(last_row_index, 2, '')
+            
+    def _insert_into_player_queue_spreadsheet(self, username, times_played):
+        """
+        Used by the join command.
+        """
+        spreadsheet_name, _ = self.spreadsheets['player_queue']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Queue')
+        
+        records = ws.get_all_records()
+        records = records[1:] # We don't want the blank space
+        for i, tup in enumerate(self.player_queue.queue):
+            try:
+                if records[i]['User'] != tup[0]:
+                    ws.insert_row([username, times_played], index=i+3)
+                    break
+            except IndexError:
+                ws.insert_row([username, times_played], index=i+3)
+
     def join(self, message, db_session):
         """
         Adds the user to the game queue.
         The players who've played the fewest
         times with the caster get priority.
 
-        !join_queue
+        !join
         """
         username = self.ts.get_user(message)
         user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
@@ -939,12 +999,18 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You've joined the queue.")
         except RuntimeError:
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
+        
+        # self._insert_into_player_queue_spreadsheet(username, user.times_played)
+        my_thread = threading.Thread(target=self._insert_into_player_queue_spreadsheet,
+                                    kwargs={'username': username, 'times_played': user.times_played})
+        my_thread.daemon = True
+        my_thread.start()
         user.times_played += 1
-
+            
     def spot(self, message):
         """
         Shows user current location in queue and current priority.
-
+        
         !spot
         """
         try:
@@ -954,10 +1020,21 @@ class Bot(object):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
                     priority = tup[1]
-            self._add_to_whisper_queue(username, "You're number {} in the queue with a priority of {}.".format(position, priority))
+            self._add_to_whisper_queue(username, "You're number {} in the queue. This may change as other players join.".format(position))
         except UnboundLocalError:
-            self._add_to_whisper_queue(username, "You're not in the queue use !join to join.")
+            self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
+    
+    def show_spot(self, message):
+        """
+        Links the google spreadsheet containing the queue list
 
+        !show_spot
+        """
+        user = self.ts.get_user(message)
+        web_view_link = self.spreadsheets['player_queue'][1]
+        short_url = self.shortener.short(web_view_link)
+        self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
+                
     @_mod_only
     def cycle(self, message):
         """
@@ -978,9 +1055,13 @@ class Bot(object):
             whisper_str = 'You may now join {} to play.'.format(channel)
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
+            # self._delete_last_row()
+            my_thread = threading.Thread(target=self._delete_last_row)
+            my_thread.daemon = True
+            my_thread.start()        
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
-            players_str, len(self.player_queue.queue)
-        ))
+            players_str, len(self.player_queue.queue)))
+
 
     @_mod_only
     def cycle_one(self, message):
@@ -994,18 +1075,22 @@ class Bot(object):
         channel = SOCKET_ARGS['channel']
         try:
             player = self.player_queue.pop()
+            if len(msg_list) > 1:
+                credential_str = ' '.join(msg_list[1:])
+                whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
+                        channel, credential_str)
+            else:
+                whisper_str = 'You may now join {} to play.'.format(channel)
+            self._add_to_whisper_queue(player, whisper_str)
+            self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(
+                player, len(self.player_queue.queue)))
+            #self._delete_last_row()
+            my_thread = threading.Thread(target=self._delete_last_row)
+            my_thread.daemon = True
+            my_thread.start()     
         except IndexError:
             self._add_to_chat_queue('Sorry, there are no more players in the queue')
-        if len(msg_list) > 1:
-            credential_str = ' '.join(msg_list[1:])
-            whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
-                    channel, credential_str)
-        else:
-            whisper_str = 'You may now join {} to play.'.format(channel)
-        self._add_to_whisper_queue(player, whisper_str)
-        self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(
-            player, len(self.player_queue.queue)
-        ))
+   
 
 
     @_mod_only
