@@ -27,9 +27,13 @@ class Bot(object):
 
         self.sorted_methods = self._sort_methods()
 
+        # Most functions run in the main thread, but we can put slow ones here
+        self.command_queue = collections.deque()
+
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
         self.player_queue = PlayerQueue.PlayerQueue()
+
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
@@ -46,7 +50,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name)
+            getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -61,6 +65,11 @@ class Bot(object):
                                                kwargs={'whisper_queue': self.whisper_message_queue})
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
+
+        self.command_thread = threading.Thread(target=self._process_command_queue,
+                                               kwargs={'command_queue': self.command_queue})
+        self.command_thread.daemon = True
+        self.command_thread.start()
 
         self._add_to_chat_queue('{} is online'.format(SOCKET_ARGS['user']))
 
@@ -321,7 +330,7 @@ class Bot(object):
         If there are messages in the chat queue that need
         to be sent, pop off the oldest one and pass it
         to the ts.send_message function. Then sleep for
-        two seconds to stay below the twitch rate limit.
+        half a second to stay below the twitch rate limit.
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
@@ -333,13 +342,28 @@ class Bot(object):
         If there are whispers in the queue that need
         to be sent, pop off the oldest one and pass it
         to the ts.send_whisper function. Then sleep for
-        one second to stay below the twitch rate limit.
+        half a second to stay below the twitch rate limit.
         """
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
             time.sleep(.5)
+
+    def _process_command_queue(self, command_queue):
+        """
+        If there are commands in the queue, pop off the
+        oldest one and run it. Then sleep for half a second
+        to avoid busy waiting the CPU into a space heater.
+        """
+        while True:
+            if len(command_queue) > 0:
+                command_tuple = command_queue.pop()
+                func, kwargs = command_tuple[0], command_tuple[1]
+                getattr(self, func)(**kwargs)
+            time.sleep(.5)
+
+
 
     def _act_on(self, message):
         """
@@ -629,7 +653,7 @@ class Bot(object):
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
             if word[0] == '!':
-                command = word
+                command = word.lower()
                 users = msg_list[1:index + 1]
                 response = ' '.join(msg_list[index + 2:])
                 break
@@ -999,12 +1023,9 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You've joined the queue.")
         except RuntimeError:
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
-        
-        # self._insert_into_player_queue_spreadsheet(username, user.times_played)
-        my_thread = threading.Thread(target=self._insert_into_player_queue_spreadsheet,
-                                    kwargs={'username': username, 'times_played': user.times_played})
-        my_thread.daemon = True
-        my_thread.start()
+
+        self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
+                                       {'username': username, 'times_played':user.times_played}))
         user.times_played += 1
             
     def spot(self, message):
@@ -1024,7 +1045,7 @@ class Bot(object):
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
     
-    def show_spot(self, message):
+    def show_player_queue(self, message):
         """
         Links the google spreadsheet containing the queue list
 
@@ -1055,10 +1076,7 @@ class Bot(object):
             whisper_str = 'You may now join {} to play.'.format(channel)
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
-            # self._delete_last_row()
-            my_thread = threading.Thread(target=self._delete_last_row)
-            my_thread.daemon = True
-            my_thread.start()        
+            self.command_queue.appendleft(('_delete_last_row', {}))
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
             players_str, len(self.player_queue.queue)))
 
@@ -1082,16 +1100,10 @@ class Bot(object):
             else:
                 whisper_str = 'You may now join {} to play.'.format(channel)
             self._add_to_whisper_queue(player, whisper_str)
-            self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(
-                player, len(self.player_queue.queue)))
-            #self._delete_last_row()
-            my_thread = threading.Thread(target=self._delete_last_row)
-            my_thread.daemon = True
-            my_thread.start()     
+            self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(player, len(self.player_queue.queue)))
+            self.command_queue.appendleft(('_delete_last_row', {}))
         except IndexError:
             self._add_to_chat_queue('Sorry, there are no more players in the queue')
-   
-
 
     @_mod_only
     def reset_queue(self, db_session):
@@ -1102,6 +1114,8 @@ class Bot(object):
 
         !reset_queue
         """
+        for player in self.player_queue.queue:
+            self.command_queue.appendleft(('_delete_last_row', {}))
         self.player_queue = PlayerQueue.PlayerQueue()
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.times_played: 0}))
         self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
