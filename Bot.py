@@ -688,7 +688,7 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        command_str = msg_list[1][1:]
+        command_str = msg_list[1][1:].lower()
         db_commands = db_session.query(db.Command).all()
         for db_command in db_commands:
             if command_str == db_command.call:
