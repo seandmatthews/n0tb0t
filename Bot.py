@@ -50,7 +50,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            # getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -1024,9 +1024,29 @@ class Bot(object):
         except RuntimeError:
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
 
-        self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
-                                       {'username': username, 'times_played':user.times_played}))
+        # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
+        #                                {'username': username, 'times_played':user.times_played}))
         user.times_played += 1
+
+    def leave(self, message, db_session):
+        """
+        Leaves the player queue once you've joined it.
+
+        !leave
+        """
+        username = self.ts.get_user(message)
+        user = db_session.query(db.User).filter(db.User.name == username).one_or_none()
+        if not user:
+            user = db.User(name=username)
+            db_session.add(user)
+        for tup in self.player_queue.queue:
+            if tup[0] == username:
+                self.player_queue.queue.remove(tup)
+                self._add_to_whisper_queue(username, "You've left the queue.")
+                user.times_played -= 1
+                break
+        else:
+            self._add_to_whisper_queue(username, "You're not in the queue and must join before leaving.")
             
     def spot(self, message):
         """
@@ -1045,16 +1065,16 @@ class Bot(object):
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
     
-    def show_player_queue(self, message):
-        """
-        Links the google spreadsheet containing the queue list
-
-        !show_spot
-        """
-        user = self.ts.get_user(message)
-        web_view_link = self.spreadsheets['player_queue'][1]
-        short_url = self.shortener.short(web_view_link)
-        self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
+    # def show_player_queue(self, message):
+    #     """
+    #     Links the google spreadsheet containing the queue list
+    #
+    #     !show_player_queue
+    #     """
+    #     user = self.ts.get_user(message)
+    #     web_view_link = self.spreadsheets['player_queue'][1]
+    #     short_url = self.shortener.short(web_view_link)
+    #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
                 
     @_mod_only
     def cycle(self, message):
@@ -1076,7 +1096,7 @@ class Bot(object):
             whisper_str = 'You may now join {} to play.'.format(channel)
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
-            self.command_queue.appendleft(('_delete_last_row', {}))
+            # self.command_queue.appendleft(('_delete_last_row', {}))
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
             players_str, len(self.player_queue.queue)))
 
@@ -1101,7 +1121,7 @@ class Bot(object):
                 whisper_str = 'You may now join {} to play.'.format(channel)
             self._add_to_whisper_queue(player, whisper_str)
             self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(player, len(self.player_queue.queue)))
-            self.command_queue.appendleft(('_delete_last_row', {}))
+            # self.command_queue.appendleft(('_delete_last_row', {}))
         except IndexError:
             self._add_to_chat_queue('Sorry, there are no more players in the queue')
 
