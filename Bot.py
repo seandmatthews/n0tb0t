@@ -1,4 +1,5 @@
 import os
+import copy
 import time
 import random
 import threading
@@ -986,7 +987,7 @@ class Bot(object):
         ws.update_cell(last_row_index, 1, '')
         ws.update_cell(last_row_index, 2, '')
             
-    def _insert_into_player_queue_spreadsheet(self, username, times_played):
+    def _insert_into_player_queue_spreadsheet(self, username, times_played, player_queue):
         """
         Used by the join command.
         """
@@ -997,7 +998,7 @@ class Bot(object):
         
         records = ws.get_all_records()
         records = records[1:] # We don't want the blank space
-        for i, tup in enumerate(self.player_queue.queue):
+        for i, tup in enumerate(player_queue):
             try:
                 if records[i]['User'] != tup[0]:
                     ws.insert_row([username, times_played], index=i+3)
@@ -1024,8 +1025,9 @@ class Bot(object):
         except RuntimeError:
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
 
+        # queue_snapshot = copy.deepcopy(self.player_queue.queue)
         # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
-        #                                {'username': username, 'times_played':user.times_played}))
+        #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
         user.times_played += 1
 
     def leave(self, message, db_session):
@@ -1099,7 +1101,6 @@ class Bot(object):
             # self.command_queue.appendleft(('_delete_last_row', {}))
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
             players_str, len(self.player_queue.queue)))
-
 
     @_mod_only
     def cycle_one(self, message):
