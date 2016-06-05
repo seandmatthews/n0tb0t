@@ -77,7 +77,7 @@ class Bot(object):
         self.auto_quotes_timers = {}
         for auto_quote in session.query(db.AutoQuote).all():
             self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
-
+        self.player_queue_credentials = None 
         session.close()
 
 # DECORATORS #
@@ -377,7 +377,7 @@ class Bot(object):
         if 'PING' in self.ts.get_human_readable_message(message):  # PING/PONG silliness
             self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
-        db_session = self.Session()
+        db_session = self.Session() 
         command = self._get_command(message, db_session)
         if command is not None:
             user = self.ts.get_user(message)
@@ -838,7 +838,21 @@ class Bot(object):
             quotes = db_session.query(db.Quote).all()
             random_quote_index = random.randrange(len(quotes))
             self._add_to_chat_queue('#{} {}'.format(str(random_quote_index + 1), quotes[random_quote_index].quote))
-
+    
+    def ogod(self, message):
+        """
+        N0tb0t responds with X's delicate sensibilities have been offended!
+        !ogod
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1:
+            offender_str = ' '.join(msg_list[1:])
+            ogod_str = "{} has offended {}'s delicate sensibilities!".format(offender_str, user)
+        else:
+            ogod_str = "{}'s delicate sensibilities have been offended!".format(user)
+        self._add_to_chat_queue(ogod_str)
+        
     @_mod_only
     def so(self, message):
         """
@@ -1094,8 +1108,10 @@ class Bot(object):
             credential_str = ' '.join(msg_list[1:])
             whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
                     channel, credential_str)
+            self.player_queue_credentials = credential_str
         else:
             whisper_str = 'You may now join {} to play.'.format(channel)
+            self.player_queue_credentials = None
         for player in players:
             self._add_to_whisper_queue(player, whisper_str)
             # self.command_queue.appendleft(('_delete_last_row', {}))
@@ -1116,6 +1132,10 @@ class Bot(object):
             player = self.player_queue.pop()
             if len(msg_list) > 1:
                 credential_str = ' '.join(msg_list[1:])
+                whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
+                        channel, credential_str)
+            elif self.player_queue_credentials is not None:
+                credential_str = self.player_queue_credentials
                 whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
                         channel, credential_str)
             else:
