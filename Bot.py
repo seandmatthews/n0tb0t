@@ -841,8 +841,10 @@ class Bot(object):
     
     def ogod(self, message):
         """
-        N0tb0t responds with X's delicate sensibilities have been offended!
+        The bot responds with "X's delicate sensibilities have been offended!"
+
         !ogod
+        !ogod an offensive thing
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')

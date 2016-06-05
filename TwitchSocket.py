@@ -20,6 +20,7 @@ class TwitchSocket(object):
 
     def send_whisper(self, user, message):
         message_temp = "PRIVMSG #jtv :/w " + user + " " + message
+        print("{}\r\n".format(message_temp).encode('utf-8'))
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
     def join_room(self):
@@ -108,5 +109,3 @@ class TwitchSocket(object):
         for k, v in self.fetch_chatters_from_API().items():
             [chatters.append(user) for user in v]
         return chatters
-
-
