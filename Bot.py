@@ -1082,6 +1082,17 @@ class Bot(object):
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
     
+
+    def show_player_queue(self, message):
+        """
+        Sends the user a whisper with the current contents of the player queue
+
+        !show_player_queue
+        """
+        user = self.ts.get_user(message)
+        queue_str = ', '.join([str(item) for item in self.player_queue.queue])
+        self._add_to_whisper_queue(user, queue_str)
+
     # def show_player_queue(self, message):
     #     """
     #     Links the google spreadsheet containing the queue list
