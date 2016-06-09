@@ -90,13 +90,13 @@ class TwitchSocket(object):
         for attempt in range(5):
             try:
                 r = requests.get(url)
-                mods = r.json()['chatters']
+                chatters = r.json()['chatters']
             except ValueError:
                 continue
             except TypeError:
                 continue
             else:
-                return mods
+                return chatters
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
