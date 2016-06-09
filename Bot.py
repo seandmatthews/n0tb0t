@@ -1038,13 +1038,14 @@ class Bot(object):
         try:
             self.player_queue.push(username, user.times_played)
             self._add_to_whisper_queue(username, "You've joined the queue.")
+            user.times_played += 1
         except RuntimeError:
             self._add_to_whisper_queue(username, "You're already in the queue and can't join again.")
 
         # queue_snapshot = copy.deepcopy(self.player_queue.queue)
         # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
         #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
-        user.times_played += 1
+
 
     def leave(self, message, db_session):
         """
@@ -1074,11 +1075,9 @@ class Bot(object):
         """
         try:
             username = self.ts.get_user(message)
-            caster = SOCKET_ARGS['channel']
             for index, tup in enumerate(self.player_queue.queue):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
-                    priority = tup[1]
             self._add_to_whisper_queue(username, "You're number {} in the queue. This may change as other players join.".format(position))
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
@@ -1180,6 +1179,51 @@ class Bot(object):
             self._add_to_whisper_queue(user, "The new room size is {}.".format(cycle_num))
         else:
             self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
+
+    @_mod_only
+    def promote(self, message, db_session):
+        """
+        Promotes a player in the player queue.
+
+        !promote testuser
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.ts.get_user(message)
+        player = msg_list[1]
+        for index, tup in enumerate(self.player_queue.queue):
+            if tup[0] == player:
+                times_played = tup[1]
+                if times_played != 0:
+                    result = db_session.query(db.User).filter(db.User.name == player).one()
+                    result.times_played -= 1
+                    self.player_queue.queue.remove(tup)
+                    self.player_queue.push(player, times_played-1)
+                else:
+                    self._add_to_whisper_queue(user, '{} cannot be promoted in the queue.'.format(player))
+                break
+        else:
+            self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+
+    @_mod_only
+    def demote(self, message, db_session):
+        """
+        Demotes a player in the player queue.
+
+        !demote testuser
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.ts.get_user(message)
+        player = msg_list[1]
+        for index, tup in enumerate(self.player_queue.queue):
+            if tup[0] == player:
+                times_played = tup[1]
+                result = db_session.query(db.User).filter(db.User.name == player).one()
+                result.times_played += 1
+                self.player_queue.queue.remove(tup)
+                self.player_queue.push(player, times_played+1)
+                break
+        else:
+            self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
 
     def enter_contest(self, message, db_session):
         """
