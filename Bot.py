@@ -1,15 +1,9 @@
 import collections
-import datetime
-import functools
 import inspect
 import os
-import random
 import threading
 import time
-
 import gspread
-import pytz
-import requests
 import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
@@ -18,6 +12,7 @@ import db
 import google_auth
 from config import SOCKET_ARGS, bitly_access_token
 from modules import PlayerQueue
+from modules.Utils import _mod_only, _retry_gspread_func
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -128,31 +123,6 @@ class Bot(object):
         db_session.close()
         return session_factory
 
-    @_retry_gspread_func
-    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the quotes google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            qs = sheet.worksheet('Quotes')
-        except gspread.exceptions.WorksheetNotFound:
-            qs = sheet.add_worksheet('Quotes', 1000, 2)
-            sheet1 = sheet.worksheet('Sheet1')
-            sheet.del_worksheet(sheet1)
-
-        qs.update_acell('A1', 'Quote Index')
-        qs.update_acell('B1', 'Quote')
-
-        # self.update_quote_spreadsheet()
-
-
-
-
-
     def _add_to_chat_queue(self, message):
         """
         Adds the message to the left side of the chat queue.
@@ -259,6 +229,9 @@ class Bot(object):
         return False
 
     def _run_command(self, command, message, db_session):
+        """
+        Runs the command. If the signature has parameters, It includes them
+        """
         if type(command[1]) == db.Command:
             db_command = command[1]
             self._add_to_chat_queue(db_command.response)
