@@ -679,6 +679,44 @@ class Bot(object):
             my_thread.daemon = True
             my_thread.start()
 
+    def _get_creation_date(self, user):
+        """
+        Returns the creation date of a given twitch user.
+        """
+        url = 'https://api.twitch.tv/kraken/users/{}'.format(user)
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                creation_date = r.json()['created_at']
+                cut_creation_date = creation_date[:10]
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return cut_creation_date
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+        
+
+    @_mod_only
+    def anti_bot(self, message):
+        """
+        Fuck the police, straight from the underground.
+        Select user and bot will ban all other users who have the same create date.
+        WWE SUPAH-SLAM STYLE
+        
+        !anti_bot testuser1
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        bot_creation_date = self._get_creation_date(msg_list[1])
+        viewers = self.ts.fetch_chatters_from_API()['viewers']
+        for viewer in viewers:
+            if self._get_creation_date(viewer) == bot_creation_date:
+                self.ts.send_message('/ban {}'.format(viewer))
+                self._add_to_whisper_queue('We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod.')
+    
     @_mod_only
     def delete_command(self, message, db_session):
         """

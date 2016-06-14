@@ -103,6 +103,9 @@ class TwitchSocket(object):
 
     def get_mods(self):
         return self.fetch_chatters_from_API()['moderators']
+        
+    def get_viewers(self):
+        return self.fetch_chatters_from_API()['viewers']
 
     def get_all_chatters(self):
         chatters = []

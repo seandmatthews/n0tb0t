@@ -28,4 +28,3 @@ class PlayerQueue:
         for player in range(players):
             return_list.append(self.pop())
         return return_list
-
