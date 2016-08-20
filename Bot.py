@@ -81,7 +81,7 @@ class Bot(object):
             self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
         self.player_queue_credentials = None
         session.close()
-
+        self.strawpoll_id = ''
 # DECORATORS #
     def _retry_gspread_func(f):
         @functools.wraps(f)
@@ -702,12 +702,33 @@ class Bot(object):
                 "Sorry, there was a problem talking to the strawpoll api. Maybe wait a bit and retry your command?")
 
     @_mod_only
+    def create_poll(self, message):
+        '''
+        Generates strawpoll and fetches ID for later use with !endpoll.
+        !create_poll Title: {Poll Title} Options: {Option 1} {Option 2}... {Option N}
+        '''
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        payload = {'title':msg_list[1], 'options':msg_list[2:]}
+        url = 'https://strawpoll.me/api/v2/polls'
+        r = requests.post(url, data=json.dumps(payload))
+        self.strawpoll_id = r.json()['id']
+        self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+
+    @_mod_only
     def endpoll(self, message):
         '''
         !EndPoll ID#
         '''
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        holder_options, holder_votes = self._get_poll_info(msg_list[1])
+        if len(msg_list)==1 and self.strawpoll_id =='':
+            self._add_to_chat_queue('No ID supplied, using random strawpoll!')
+            holder_id = str(random.randint(1,10607514))
+        if len(msg_list)==1 and self.strawpoll_id !='':
+            holder_id = self.strawpoll_id
+            self.strawpoll_id = ''
+        if len(msg_list)==2:
+            holder_id = msg_list[1]
+        holder_options, holder_votes = self._get_poll_info(holder_id)
         probability_list = []
         for vote_number in holder_votes:
             temp_prob = vote_number*(1/sum(holder_votes))
@@ -808,6 +829,17 @@ class Bot(object):
     def whistlist(self, message):
         user = self.ts.get_user(message)
         self._add_to_whisper_queue(user, 'whistlist ain\'t a word, t\'s a card game')
+
+    def roulette(self, message):
+        '''
+        !roulette which has a 1/6 change of timing out the user for 30 seconds.
+        '''
+        user = self.ts.get_user(message)
+        if random.randint(1,6) == 6:
+            self._add_to_chat_queue('/timeout {} 30'.format(user))
+            self._add_to_whisper_queue(user, 'Pow! The shot shoots you into another dimension!')
+        else:
+            self._add_to_whisper_queue(user, 'Clack! You hear the hammer smack the empty chamber with a hollow thud. You live to shitpost another day!')
 
     @_mod_only
     def delete_command(self, message, db_session):
