@@ -1,5 +1,6 @@
 import os
 import copy
+import codecs
 import time
 import random
 import threading
@@ -7,6 +8,7 @@ import datetime
 import collections
 import inspect
 import functools
+import json
 import pytz
 import requests
 import gspread
@@ -77,9 +79,9 @@ class Bot(object):
         self.auto_quotes_timers = {}
         for auto_quote in session.query(db.AutoQuote).all():
             self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
-        self.player_queue_credentials = None 
+        self.player_queue_credentials = None
         session.close()
-
+        self.strawpoll_id = ''
 # DECORATORS #
     def _retry_gspread_func(f):
         @functools.wraps(f)
@@ -125,7 +127,7 @@ class Bot(object):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            if hasattr(getattr(self, method), '_mods_only'): 
+            if hasattr(getattr(self, method), '_mods_only'):
                 methods_dict['for_mods'].append(method)
             else:
                 methods_dict['for_all'].append(method)
@@ -284,7 +286,7 @@ class Bot(object):
         pgs.update_acell('A1', 'User')
         pgs.update_acell('B1', 'Current Guess')
         pgs.update_acell('C1', 'Total Guess')
-        
+
     @_retry_gspread_func
     def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
         """
@@ -301,12 +303,12 @@ class Bot(object):
             pqs = sheet.add_worksheet('Player Queue', 500, 3)
             sheet1 = sheet.worksheet('Sheet1')
             sheet.del_worksheet(sheet1)
-            
+
         info = """Priority is given to players with fewest times played.
         The top of this spreadsheet is the back of the queue
         and the bottom is the front. The closer you are to the bottom,
         the closer you are to playing with {}.""".format(caster)
-        
+
         pqs.update_acell('A1', 'User')
         pqs.update_acell('B1', 'Times played')
         pqs.update_acell('C1', 'Info:')
@@ -377,7 +379,7 @@ class Bot(object):
         if 'PING' in self.ts.get_human_readable_message(message):  # PING/PONG silliness
             self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
 
-        db_session = self.Session() 
+        db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
             user = self.ts.get_user(message)
@@ -679,6 +681,67 @@ class Bot(object):
             my_thread.daemon = True
             my_thread.start()
 
+    def _get_poll_info(self, poll_id):
+        """
+        Returns options and votes for poll ID in json format.
+        """
+        url = 'https://strawpoll.me/api/v2/polls/{}'.format(poll_id)
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                poll_options = r.json()['options']
+                poll_votes = r.json()['votes']
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return poll_options, poll_votes
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the strawpoll api. Maybe wait a bit and retry your command?")
+
+    @_mod_only
+    def create_poll(self, message):
+        '''
+        Generates strawpoll and fetches ID for later use with !endpoll.
+        !create_poll Title: {Poll Title} Options: {Option 1} {Option 2}... {Option N}
+        '''
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        payload = {'title':msg_list[1], 'options':msg_list[2:]}
+        url = 'https://strawpoll.me/api/v2/polls'
+        r = requests.post(url, data=json.dumps(payload))
+        self.strawpoll_id = r.json()['id']
+        self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+
+    @_mod_only
+    def endpoll(self, message):
+        '''
+        !EndPoll ID#
+        '''
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list)==1 and self.strawpoll_id =='':
+            self._add_to_chat_queue('No ID supplied, using random strawpoll!')
+            holder_id = str(random.randint(1,10607514))
+        if len(msg_list)==1 and self.strawpoll_id !='':
+            holder_id = self.strawpoll_id
+            self.strawpoll_id = ''
+        if len(msg_list)==2:
+            holder_id = msg_list[1]
+        holder_options, holder_votes = self._get_poll_info(holder_id)
+        probability_list = []
+        for vote_number in holder_votes:
+            temp_prob = vote_number*(1/sum(holder_votes))
+            probability_list.append(temp_prob)
+        die_roll = random.random()
+        for index, probability in enumerate(probability_list):
+            if die_roll <= sum(probability_list[0:index+1]):
+                winning_chance = round(probability*100)
+                print(winning_chance)
+                self._add_to_chat_queue(
+                    '{} won the poll choice with {} votes and had a {}% chance to win!'.format(holder_options[index], holder_votes[index], winning_chance))
+                break
+
     def _get_creation_date(self, user):
         """
         Returns the creation date of a given twitch user.
@@ -698,7 +761,6 @@ class Bot(object):
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
-        
 
     @_mod_only
     def anti_bot(self, message):
@@ -709,14 +771,76 @@ class Bot(object):
         
         !anti_bot testuser1
         """
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
         bot_creation_date = self._get_creation_date(msg_list[1])
         viewers = self.ts.fetch_chatters_from_API()['viewers']
+        mod_list = self.ts.get_mods()
+        with codecs.open('whitelist.json', 'r', 'utf-8') as f:
+            whitelist = json.load(f)
         for viewer in viewers:
-            if self._get_creation_date(viewer) == bot_creation_date:
+            if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
                 self.ts.send_message('/ban {}'.format(viewer))
-                self._add_to_whisper_queue('We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod.')
-    
+                mod_str = ', '.join(mod_list)
+                self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
+
+    @_mod_only
+    def whitelist(self, message):
+        """
+        Puts username on whitelist so they will NOT be banned from !anti_bot
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        try:
+            with codecs.open('whitelist.json', 'r', 'utf-8') as f:
+                holder_list = json.load(f)
+        except json.decoder.JSONDecodeError:
+            holder_list = []
+        if msg_list[1] not in holder_list:
+            holder_list.append(msg_list[1])
+            with codecs.open('whitelist.json', 'w', 'utf-8') as f:
+                json.dump(holder_list, f, ensure_ascii=False)
+            self._add_to_whisper_queue(user, '{} has been added to the whitelist'.format(msg_list[1]))
+        else:
+            self._add_to_whisper_queue(user, '{} is already in the whitelist!'.format(msg_list[1]))
+
+    @_mod_only
+    def unwhitelist(self, message):
+        '''
+        Removes user from whitelist designation. Why the fuck would you do this? No idea!
+        !unwhitelist testuser1
+        '''
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        with codecs.open('whitelist.json', 'r', 'utf-8') as f:
+            old_whitelist = json.load(f)
+            new_whitelist = []
+        if msg_list[1] not in old_whitelist:
+            self._add_to_whisper_queue(user, '{} is already off the whitelist!'.format(msg_list[1]))
+        else:
+            for person in old_whitelist:
+                if person == msg_list[1]:
+                    self._add_to_whisper_queue(user, '{} has been removed from the whitelist, you monster.'.format(msg_list[1]))
+                    pass
+                else:
+                    new_whitelist.append(person)
+            with codecs.open('whitelist.json', 'w', 'utf-8') as f:
+                json.dump(new_whitelist, f, ensure_ascii=False)
+
+    def whistlist(self, message):
+        user = self.ts.get_user(message)
+        self._add_to_whisper_queue(user, 'whistlist ain\'t a word, t\'s a card game')
+
+    def roulette(self, message):
+        '''
+        !roulette which has a 1/6 change of timing out the user for 30 seconds.
+        '''
+        user = self.ts.get_user(message)
+        if random.randint(1,6) == 6:
+            self._add_to_chat_queue('/timeout {} 30'.format(user))
+            self._add_to_whisper_queue(user, 'Pow! The shot shoots you into another dimension!')
+        else:
+            self._add_to_whisper_queue(user, 'Clack! You hear the hammer smack the empty chamber with a hollow thud. You live to shitpost another day!')
+
     @_mod_only
     def delete_command(self, message, db_session):
         """
@@ -876,7 +1000,7 @@ class Bot(object):
             quotes = db_session.query(db.Quote).all()
             random_quote_index = random.randrange(len(quotes))
             self._add_to_chat_queue('#{} {}'.format(str(random_quote_index + 1), quotes[random_quote_index].quote))
-    
+
     def ogod(self, message):
         """
         The bot responds with "X's delicate sensibilities have been offended!"
@@ -892,7 +1016,7 @@ class Bot(object):
         else:
             ogod_str = "{}'s delicate sensibilities have been offended!".format(user)
         self._add_to_chat_queue(ogod_str)
-        
+
     @_mod_only
     def so(self, message):
         """
@@ -1037,10 +1161,10 @@ class Bot(object):
         ws = sheet.worksheet('Player Queue')
         records = ws.get_all_records()
         last_row_index = len(records) + 1
-        
+
         ws.update_cell(last_row_index, 1, '')
         ws.update_cell(last_row_index, 2, '')
-            
+
     def _insert_into_player_queue_spreadsheet(self, username, times_played, player_queue):
         """
         Used by the join command.
@@ -1049,7 +1173,7 @@ class Bot(object):
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
         ws = sheet.worksheet('Player Queue')
-        
+
         records = ws.get_all_records()
         records = records[1:] # We don't want the blank space
         for i, tup in enumerate(player_queue):
@@ -1104,7 +1228,7 @@ class Bot(object):
                 break
         else:
             self._add_to_whisper_queue(username, "You're not in the queue and must join before leaving.")
-            
+
     def spot(self, message):
         """
         Shows user current location in queue and current priority.
@@ -1119,7 +1243,7 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You're number {} in the queue. This may change as other players join.".format(position))
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
-    
+
 
     def show_player_queue(self, message):
         """
@@ -1141,7 +1265,7 @@ class Bot(object):
     #     web_view_link = self.spreadsheets['player_queue'][1]
     #     short_url = self.shortener.short(web_view_link)
     #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
-                
+
     @_mod_only
     def cycle(self, message):
         """
