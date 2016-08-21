@@ -787,6 +787,8 @@ class Bot(object):
     def whitelist(self, message):
         """
         Puts username on whitelist so they will NOT be banned from !anti_bot
+
+        !whitelist
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
@@ -807,6 +809,7 @@ class Bot(object):
     def unwhitelist(self, message):
         '''
         Removes user from whitelist designation. Why the fuck would you do this? No idea!
+
         !unwhitelist testuser1
         '''
         user = self.ts.get_user(message)
@@ -819,27 +822,25 @@ class Bot(object):
         else:
             for person in old_whitelist:
                 if person == msg_list[1]:
-                    self._add_to_whisper_queue(user, '{} has been removed from the whitelist, you monster.'.format(msg_list[1]))
+                    self._add_to_whisper_queue(user, '{} has been removed from the whitelist.'.format(msg_list[1]))
                     pass
                 else:
                     new_whitelist.append(person)
             with codecs.open('whitelist.json', 'w', 'utf-8') as f:
                 json.dump(new_whitelist, f, ensure_ascii=False)
 
-    def whistlist(self, message):
-        user = self.ts.get_user(message)
-        self._add_to_whisper_queue(user, 'whistlist ain\'t a word, t\'s a card game')
+    def russian_roulette(self, message):
+        '''
+        Roulette which has a 1/6 change of timing out the user for 30 seconds.
 
-    def roulette(self, message):
-        '''
-        !roulette which has a 1/6 change of timing out the user for 30 seconds.
+        !russian_roulette
         '''
         user = self.ts.get_user(message)
-        if random.randint(1,6) == 6:
+        if random.randint(1, 6) == 6:
             self._add_to_chat_queue('/timeout {} 30'.format(user))
-            self._add_to_whisper_queue(user, 'Pow! The shot shoots you into another dimension!')
+            self._add_to_whisper_queue(user, 'Pow!')
         else:
-            self._add_to_whisper_queue(user, 'Clack! You hear the hammer smack the empty chamber with a hollow thud. You live to shitpost another day!')
+            self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
 
     @_mod_only
     def delete_command(self, message, db_session):
@@ -907,6 +908,8 @@ class Bot(object):
         won't be able to do anything else while updating.
         This function will stop looking for quotes when it
         finds an empty row in the spreadsheet.
+
+        !update_quote_db_from_spreadsheet
         """
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
@@ -966,7 +969,7 @@ class Bot(object):
             else:
                 self._add_to_whisper_queue(user, 'Sorry, that\'s not a quote that can be deleted.')
 
-    def show_quotes(self, message, db_session):
+    def show_quotes(self, message):
         """
         Links to the google spreadsheet containing all the quotes.
 
