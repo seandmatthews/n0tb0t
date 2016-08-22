@@ -53,7 +53,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name)
+            getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -765,10 +765,9 @@ class Bot(object):
     @_mod_only
     def anti_bot(self, message):
         """
-        Fuck the police, straight from the underground.
-        Select user and bot will ban all other users who have the same create date.
-        WWE SUPAH-SLAM STYLE
-        
+        Ban that user all other users who have the same creation date.
+        Works under the assumption that bots are created programatically on the same day.
+
         !anti_bot testuser1
         """
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
@@ -808,7 +807,7 @@ class Bot(object):
     @_mod_only
     def unwhitelist(self, message):
         '''
-        Removes user from whitelist designation. Why the fuck would you do this? No idea!
+        Removes user from whitelist designation so they can be banned by anti_bot.
 
         !unwhitelist testuser1
         '''
@@ -829,16 +828,18 @@ class Bot(object):
             with codecs.open('whitelist.json', 'w', 'utf-8') as f:
                 json.dump(new_whitelist, f, ensure_ascii=False)
 
-    def russian_roulette(self, message):
+    def ban_roulette(self, message):
         '''
         Roulette which has a 1/6 change of timing out the user for 30 seconds.
 
-        !russian_roulette
+        !ban_roulette
         '''
         user = self.ts.get_user(message)
         if random.randint(1, 6) == 6:
-            self._add_to_chat_queue('/timeout {} 30'.format(user))
+            timeout_time = 30
+            self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
             self._add_to_whisper_queue(user, 'Pow!')
+            self._add_to_chat_queue('{} was timed out for {} seconds'.format(user, timeout_time))
         else:
             self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
 
