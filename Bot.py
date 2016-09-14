@@ -19,7 +19,7 @@ import db
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from pyshorteners import Shortener
-from config import SOCKET_ARGS, bitly_access_token
+from config import SOCKET_ARGS, bitly_access_token, twitch_api_client_id
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -82,6 +82,8 @@ class Bot(object):
         self.player_queue_credentials = None
         session.close()
         self.strawpoll_id = ''
+
+
 # DECORATORS #
     def _retry_gspread_func(f):
         @functools.wraps(f)
@@ -351,7 +353,7 @@ class Bot(object):
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
-            time.sleep(.5)
+            time.sleep(.1)
 
     def _process_command_queue(self, command_queue):
         """
@@ -749,7 +751,7 @@ class Bot(object):
         url = 'https://api.twitch.tv/kraken/users/{}'.format(user)
         for attempt in range(5):
             try:
-                r = requests.get(url)
+                r = requests.get(url, headers={"Client-ID": twitch_api_client_id})
                 creation_date = r.json()['created_at']
                 cut_creation_date = creation_date[:10]
             except ValueError:
@@ -839,7 +841,7 @@ class Bot(object):
             timeout_time = 30
             self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
             self._add_to_whisper_queue(user, 'Pow!')
-            self._add_to_chat_queue('{} was timed out for {} seconds'.format(user, timeout_time))
+            self._add_to_chat_queue('Bang! {} was timed out.'.format(user))
         else:
             self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
 
@@ -1038,7 +1040,7 @@ class Bot(object):
             url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
             for attempt in range(5):
                 try:
-                    r = requests.get(url)
+                    r = requests.get(url, headers={"Client-ID": twitch_api_client_id})
                     r.raise_for_status()
                     game = r.json()['game']
                     channel_url = r.json()['url']
@@ -1075,7 +1077,7 @@ class Bot(object):
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
         for attempt in range(5):
             try:
-                r = requests.get(url)
+                r = requests.get(url, headers={"Client-ID": twitch_api_client_id})
                 r.raise_for_status()
                 start_time_str = r.json()['stream']['created_at']
                 start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')

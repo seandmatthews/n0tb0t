@@ -6,7 +6,7 @@ class TwitchSocket(object):
 
     def __init__(self, pw, user, channel):
         self.host = 'irc.chat.twitch.tv'
-        self.port = 80
+        self.port = 6667
         self.pw = pw
         self.user = user
         self.channel = channel
