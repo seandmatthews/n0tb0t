@@ -53,7 +53,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            # getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -835,8 +835,12 @@ class Bot(object):
         Roulette which has a 1/6 change of timing out the user for 30 seconds.
 
         !ban_roulette
+        !ban_roulette testuser
         '''
         user = self.ts.get_user(message)
+        if self.ts.check_mod(message):
+            if len(self.ts.get_human_readable_message(message).split(' ')) > 1:
+                user = self.ts.get_human_readable_message(message).split(' ')[1]
         if random.randint(1, 6) == 6:
             timeout_time = 30
             self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
