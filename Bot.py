@@ -353,7 +353,7 @@ class Bot(object):
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
-            time.sleep(.1)
+            time.sleep(1.5)
 
     def _process_command_queue(self, command_queue):
         """
