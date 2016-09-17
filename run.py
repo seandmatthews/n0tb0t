@@ -11,7 +11,12 @@ bot = Bot(ts)
 messages = ""
 
 while True:
-    read_buffer = ts.sock.recv(1024)
+    try:
+        read_buffer = ts.sock.recv(1024)
+    except ConnectionError:
+        ts = TwitchSocket(**SOCKET_ARGS)
+        Bot.ts = ts
+        read_buffer = ts.sock.recv(1024)
 
     messages = messages + read_buffer.decode('utf-8')
     messages_list = messages.split('\r\n')
