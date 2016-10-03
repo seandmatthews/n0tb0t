@@ -4,7 +4,7 @@ from TwitchSocket import TwitchSocket
 from Bot import Bot
 from config import SOCKET_ARGS
 
-logging.basicConfig(filename='error-log.txt',level=logging.WARNING)
+logging.basicConfig(filename='error-log.txt', level=logging.WARNING)
 ts = TwitchSocket(**SOCKET_ARGS)
 bot = Bot(ts)
 
@@ -13,22 +13,24 @@ messages = ""
 while True:
     try:
         read_buffer = ts.sock.recv(1024)
-    except ConnectionError:
+    except ConnectionResetError:
+        print('Connection Error: Reconnecting')
         ts = TwitchSocket(**SOCKET_ARGS)
         Bot.ts = ts
         read_buffer = ts.sock.recv(1024)
 
     messages = messages + read_buffer.decode('utf-8')
     messages_list = messages.split('\r\n')
+    print(messages)
     if len(messages_list) >= 2:
         last_message = messages_list[-2]
-        if "NOTICE" in last_message:
-            print(last_message)
-        else:
-            print("{} {}: {}".format(
-                    time.strftime("%Y-%m-%d %H:%M:%S"),
-                    ts.get_user(last_message),
-                    ts.get_human_readable_message(last_message)))
+        # if "NOTICE" in last_message:
+        #     print(last_message)
+        # else:
+        #     print("{} {}: {}".format(
+        #             time.strftime("%Y-%m-%d %H:%M:%S"),
+        #             ts.get_user(last_message),
+        #             ts.get_human_readable_message(last_message)))
         messages = ""
         if last_message == 'PING :tmi.twitch.tv':
             resp = last_message.replace("PING", "PONG") + "\r\n"

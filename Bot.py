@@ -53,7 +53,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name)
+            getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -86,6 +86,9 @@ class Bot(object):
 
 # DECORATORS #
     def _retry_gspread_func(f):
+        """
+        Retries the function that uses gspread until it completes without throwing an HTTPError
+        """
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             while True:
@@ -368,8 +371,6 @@ class Bot(object):
                 getattr(self, func)(**kwargs)
             time.sleep(.5)
 
-
-
     def _act_on(self, message):
         """
         Takes a message from a user.
@@ -423,7 +424,6 @@ class Bot(object):
         Returns True or False depending on whether the user that
         sent the command has the authority to use that command
         """
-
         if command[1] == 'for_all':
             return True
         if command[1] == 'for_mods' and user_is_mod:
@@ -437,6 +437,10 @@ class Bot(object):
         return False
 
     def _run_command(self, command, message, db_session):
+        """
+        If the command is a database command, send the response to the chat queue.
+        Otherwise call the relevant function, supplying the message and db_session arguments as needed.
+        """
         if type(command[1]) == db.Command:
             db_command = command[1]
             self._add_to_chat_queue(db_command.response)
@@ -705,44 +709,73 @@ class Bot(object):
 
     @_mod_only
     def create_poll(self, message):
-        '''
-        Generates strawpoll and fetches ID for later use with !endpoll.
-        !create_poll Title: {Poll Title} Options: {Option 1} {Option 2}... {Option N}
-        '''
+        """
+        Generates strawpoll and fetches ID for later use with !end_poll.
+        The title is the bit between "title:" and (the first) "options:"
+        Options are delineated by commas; using commas in your options will break things.
+
+        !create_poll Title: Poll Title Options: Option 1, Option 2, ... Option N
+        """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        payload = {'title':msg_list[1], 'options':msg_list[2:]}
-        url = 'https://strawpoll.me/api/v2/polls'
-        r = requests.post(url, data=json.dumps(payload))
-        self.strawpoll_id = r.json()['id']
-        self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+        title_index = -1
+        options_index = -1
+        for index, word in enumerate(msg_list):
+            print(word.lower())
+            if word.lower() == 'title:':
+                title_index = index
+            elif word.lower() == 'options:':
+                options_index = index
+                break
+        print(title_index, options_index)
+        if title_index == -1 or options_index == -1:
+            self._add_to_chat_queue('Please form the command correctly')
+        else:
+            title = ' '.join(msg_list[title_index+1:options_index])
+            options_str = ' '.join(msg_list[options_index+1:])
+            options = options_str.split(', ')
+            payload = {'title': title, 'options': options}
+            url = 'https://strawpoll.me/api/v2/polls'
+            r = requests.post(url, data=json.dumps(payload))
+            self.strawpoll_id = r.json()['id']
+            self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
 
     @_mod_only
-    def endpoll(self, message):
-        '''
-        !EndPoll ID#
-        '''
+    def end_poll(self, message):
+        """
+        Ends the poll that was started with the !create_poll
+
+        !end_poll
+        !end_poll 111111111
+        """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        if len(msg_list)==1 and self.strawpoll_id =='':
-            self._add_to_chat_queue('No ID supplied, using random strawpoll!')
-            holder_id = str(random.randint(1,10607514))
-        if len(msg_list)==1 and self.strawpoll_id !='':
+        if len(msg_list) == 1 and self.strawpoll_id == '':
+            self._add_to_chat_queue('No ID supplied, please try again')
+            holder_id = None
+        elif len(msg_list) == 1 and self.strawpoll_id != '':
             holder_id = self.strawpoll_id
             self.strawpoll_id = ''
-        if len(msg_list)==2:
+        elif len(msg_list) == 2:
             holder_id = msg_list[1]
-        holder_options, holder_votes = self._get_poll_info(holder_id)
-        probability_list = []
-        for vote_number in holder_votes:
-            temp_prob = vote_number*(1/sum(holder_votes))
-            probability_list.append(temp_prob)
-        die_roll = random.random()
-        for index, probability in enumerate(probability_list):
-            if die_roll <= sum(probability_list[0:index+1]):
-                winning_chance = round(probability*100)
-                print(winning_chance)
-                self._add_to_chat_queue(
-                    '{} won the poll choice with {} votes and had a {}% chance to win!'.format(holder_options[index], holder_votes[index], winning_chance))
-                break
+        else:
+            self._add_to_chat_queue('Sorry, no ID could be found. Please ensure the command is formatted correctly.')
+            holder_id = None
+        if holder_id is not None:
+            holder_options, holder_votes = self._get_poll_info(holder_id)
+            probability_list = []
+            for vote_number in holder_votes:
+                try:
+                    temp_prob = vote_number*(1/sum(holder_votes))
+                    probability_list.append(temp_prob)
+                except ZeroDivisionError:
+                    self._add_to_chat_queue('No one has voted yet! You will need to end the poll again by specifying the ID.')
+                    return
+            die_roll = random.random()
+            for index, probability in enumerate(probability_list):
+                if die_roll <= sum(probability_list[0:index+1]):
+                    winning_chance = round(probability*100)
+                    self._add_to_chat_queue(
+                        '{} won the poll choice with {} votes and had a {}% chance to win!'.format(holder_options[index], holder_votes[index], winning_chance))
+                    break
 
     def _get_creation_date(self, user):
         """
@@ -808,11 +841,11 @@ class Bot(object):
 
     @_mod_only
     def unwhitelist(self, message):
-        '''
+        """
         Removes user from whitelist designation so they can be banned by anti_bot.
 
         !unwhitelist testuser1
-        '''
+        """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
         with codecs.open('whitelist.json', 'r', 'utf-8') as f:
@@ -831,23 +864,31 @@ class Bot(object):
                 json.dump(new_whitelist, f, ensure_ascii=False)
 
     def ban_roulette(self, message):
-        '''
+        """
         Roulette which has a 1/6 change of timing out the user for 30 seconds.
 
         !ban_roulette
         !ban_roulette testuser
-        '''
-        user = self.ts.get_user(message)
+        """
         if self.ts.check_mod(message):
             if len(self.ts.get_human_readable_message(message).split(' ')) > 1:
                 user = self.ts.get_human_readable_message(message).split(' ')[1]
-        if random.randint(1, 6) == 6:
-            timeout_time = 30
-            self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
-            self._add_to_whisper_queue(user, 'Pow!')
-            self._add_to_chat_queue('Bang! {} was timed out.'.format(user))
+            else:
+                user = None
+        elif len(self.ts.get_human_readable_message(message).split(' ')) == 1:
+            user = self.ts.get_user(message)
         else:
-            self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
+            self._add_to_whisper_queue(self.ts.get_user(message), 'Sorry, this command is only one word')
+            user = None
+        if user is not None:
+            if random.randint(1, 6) == 6:
+                timeout_time = 30
+                self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
+                self._add_to_whisper_queue(user, 'Pow!')
+                self._add_to_chat_queue('Bang! {} was timed out.'.format(user))
+            else:
+                self._add_to_chat_queue('{} is safe for now.'.format(user))
+                self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
 
     @_mod_only
     def delete_command(self, message, db_session):
@@ -891,6 +932,8 @@ class Bot(object):
         Updates the quote spreadsheet from the database.
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
+
+        !update_quote_spreadsheet
         """
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
@@ -906,6 +949,8 @@ class Bot(object):
         for index, quote_obj in enumerate(quotes):
             qs.update_cell(index+2, 1, index+1)
             qs.update_cell(index+2, 2, quote_obj.quote)
+
+        self._add_to_chat_queue('Quote spreadsheet updated!')
 
     @_mod_only
     def update_quote_db_from_spreadsheet(self, db_session):
@@ -1022,6 +1067,7 @@ class Bot(object):
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             offender_str = ' '.join(msg_list[1:])
+            # TODO: Use NLP magic to figure out whether offender_str is plural or not
             ogod_str = "{} has offended {}'s delicate sensibilities!".format(offender_str, user)
         else:
             ogod_str = "{}'s delicate sensibilities have been offended!".format(user)
@@ -1035,7 +1081,6 @@ class Bot(object):
 
         !SO $caster
         """
-        # TODO: Add a command to be able to set the shout_out_str from within twitch chat, or at least somewhere
         user = self.ts.get_user(message)
         me = SOCKET_ARGS['channel']
         msg_list = self.ts.get_human_readable_message(message).split(' ')
@@ -1185,7 +1230,7 @@ class Bot(object):
         ws = sheet.worksheet('Player Queue')
 
         records = ws.get_all_records()
-        records = records[1:] # We don't want the blank space
+        records = records[1:]  # We don't want the blank space
         for i, tup in enumerate(player_queue):
             try:
                 if records[i]['User'] != tup[0]:
@@ -1217,7 +1262,6 @@ class Bot(object):
         # queue_snapshot = copy.deepcopy(self.player_queue.queue)
         # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
         #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
-
 
     def leave(self, message, db_session):
         """
@@ -1253,7 +1297,6 @@ class Bot(object):
             self._add_to_whisper_queue(username, "You're number {} in the queue. This may change as other players join.".format(position))
         except UnboundLocalError:
             self._add_to_whisper_queue(username, "You're not in the queue. Feel free to join it.")
-
 
     def show_player_queue(self, message):
         """
