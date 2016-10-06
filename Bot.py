@@ -20,6 +20,7 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from pyshorteners import Shortener
 from config import SOCKET_ARGS, bitly_access_token, twitch_api_client_id
+from TwitchSocket import TwitchSocket
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -736,8 +737,13 @@ class Bot(object):
             payload = {'title': title, 'options': options}
             url = 'https://strawpoll.me/api/v2/polls'
             r = requests.post(url, data=json.dumps(payload))
-            self.strawpoll_id = r.json()['id']
-            self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+            try:
+                self.strawpoll_id = r.json()['id']
+                self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+            except KeyError:
+                # Strawpoll got angry at us, possibly due to not enough options
+                self._add_to_chat_queue('Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
+
 
     @_mod_only
     def end_poll(self, message):
