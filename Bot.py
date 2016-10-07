@@ -54,7 +54,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            # getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -1260,10 +1260,10 @@ class Bot(object):
             db_session.add(user)
         try:
             self.player_queue.push(username, user.times_played)
-            self._add_to_chat_queue("You've joined the queue.")
+            self._add_to_chat_queue("{0}, you've joined the queue.".format(username))
             user.times_played += 1
         except RuntimeError:
-            self._add_to_chat_queue("{0} You're already in the queue and can't join again.".format(username))
+            self._add_to_chat_queue("{0}, you're already in the queue and can't join again.".format(username))
 
         # queue_snapshot = copy.deepcopy(self.player_queue.queue)
         # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
@@ -1283,7 +1283,7 @@ class Bot(object):
         for tup in self.player_queue.queue:
             if tup[0] == username:
                 self.player_queue.queue.remove(tup)
-                self._add_to_chat_queue("{0} left the queue.".format(username))
+                self._add_to_chat_queue("{0}, you've left the queue.".format(username))
                 user.times_played -= 1
                 break
         else:
