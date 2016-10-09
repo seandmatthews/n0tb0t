@@ -54,7 +54,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name)
+            getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -107,7 +107,6 @@ class Bot(object):
         func._mods_only = True
         return func
 # END DECORATORS #
-
 
     def _sort_methods(self):
         """
@@ -499,6 +498,8 @@ class Bot(object):
         Updates the auto_quote spreadsheet with all current auto quotes
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
+
+        !update_auto_quote_spreadsheet
         """
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
@@ -612,6 +613,8 @@ class Bot(object):
         Updates the commands google sheet with all available user commands.
         Only call directly if you really need to as the bot
         won't be able to do anything else while updating.
+
+        !update_command_spreadsheet
         """
         spreadsheet_name, web_view_link = self.spreadsheets['commands']
         gc = gspread.authorize(self.credentials)

@@ -1,9 +1,20 @@
+import functools
 import socket
 import requests
 
 
-class TwitchSocket(object):
+def reconnect_on_ConnectionResetError(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            f(*args, **kwargs)
+        except ConnectionResetError:
+            args[0].__init__()
+            f(*args, **kwargs)
+    return wrapper
 
+
+class TwitchSocket(object):
     def __init__(self, pw, user, channel):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
@@ -14,10 +25,12 @@ class TwitchSocket(object):
 
         self.join_room()
 
+    @reconnect_on_ConnectionResetError
     def send_message(self, message):
         message_temp = "PRIVMSG #" + self.channel + " :" + message
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
+    @reconnect_on_ConnectionResetError
     def send_whisper(self, user, message):
         message_temp = "PRIVMSG #jtv :/w " + user + " " + message
         print("{}\r\n".format(message_temp).encode('utf-8'))
