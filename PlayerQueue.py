@@ -2,9 +2,12 @@ import collections
 
 
 class PlayerQueue:
-    def __init__(self, cycle_num=7):
+    def __init__(self, cycle_num=7, dump=None):
         self.queue = collections.deque()
         self.cycle_num = cycle_num
+        if dump != None:
+            for tup in dump:
+                self.push(tup[0], tup[1])
 
     def push(self, player, priority):
         index = None
@@ -27,4 +30,10 @@ class PlayerQueue:
         players = min(self.cycle_num, len(self.queue))
         for player in range(players):
             return_list.append(self.pop())
+        return return_list
+    
+    def dumpable(self):
+        return_list = []
+        for tup in self.queue:
+            return_list.append(tup)
         return return_list

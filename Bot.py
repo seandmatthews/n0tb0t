@@ -36,7 +36,11 @@ class Bot(object):
 
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
-        self.player_queue = PlayerQueue.PlayerQueue()
+        try:
+            with open("player_queue.json", 'r', encoding="utf-8") as player_file:
+                self.player_queue = PlayerQueue.PlayerQueue(dump=json.loads(player_file.read()))
+        except FileNotFoundError:
+            self.player_queue = PlayerQueue.PlayerQueue()
 
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
@@ -1247,6 +1251,14 @@ class Bot(object):
                     break
             except IndexError:
                 ws.insert_row([username, times_played], index=i+3)
+                
+    def _write_player_queue():
+        """
+        Writes the player queue to a json file
+        to be loaded on startup if needed.
+        """
+        with open("player_queue.json", 'w', encoding="utf-8") as player_file:
+            player_file.write(json.dump(self.player_queue.dumpable(), f, ensure_ascii=False))            
 
     def join(self, message, db_session):
         """
@@ -1263,6 +1275,7 @@ class Bot(object):
             db_session.add(user)
         try:
             self.player_queue.push(username, user.times_played)
+            self._write_player_queue()
             self._add_to_chat_queue("{0}, you've joined the queue.".format(username))
             user.times_played += 1
         except RuntimeError:
@@ -1286,6 +1299,7 @@ class Bot(object):
         for tup in self.player_queue.queue:
             if tup[0] == username:
                 self.player_queue.queue.remove(tup)
+                self._write_player_queue()
                 self._add_to_chat_queue("{0}, you've left the queue.".format(username))
                 user.times_played -= 1
                 break
@@ -1338,6 +1352,7 @@ class Bot(object):
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         players = self.player_queue.pop_all()
+        self._write_player_queue()
         players_str = ' '.join(players)
         channel = SOCKET_ARGS['channel']
         if len(msg_list) > 1:
@@ -1366,6 +1381,7 @@ class Bot(object):
         channel = SOCKET_ARGS['channel']
         try:
             player = self.player_queue.pop()
+            self._write_player_queue()
             if len(msg_list) > 1:
                 credential_str = ' '.join(msg_list[1:])
                 whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
