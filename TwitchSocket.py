@@ -9,7 +9,8 @@ def reconnect_on_ConnectionResetError(f):
         try:
             f(*args, **kwargs)
         except ConnectionResetError:
-            args[0].__init__()
+            print('ConnectionResetError: Reconnecting to the socket.')
+            args[0].__init__(args[0].pw, args[0].user, args[0].channel)
             f(*args, **kwargs)
     return wrapper
 

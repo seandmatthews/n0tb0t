@@ -20,7 +20,6 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from pyshorteners import Shortener
 from config import SOCKET_ARGS, bitly_access_token, twitch_api_client_id
-from TwitchSocket import TwitchSocket
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -38,7 +37,7 @@ class Bot(object):
         self.whisper_message_queue = collections.deque()
         try:
             with open("player_queue.json", 'r', encoding="utf-8") as player_file:
-                self.player_queue = PlayerQueue.PlayerQueue(dump=json.loads(player_file.read()))
+                self.player_queue = PlayerQueue.PlayerQueue(input_iterable=json.loads(player_file.read()))
         except FileNotFoundError:
             self.player_queue = PlayerQueue.PlayerQueue()
 
@@ -58,7 +57,7 @@ class Bot(object):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            # getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -1252,13 +1251,13 @@ class Bot(object):
             except IndexError:
                 ws.insert_row([username, times_played], index=i+3)
                 
-    def _write_player_queue():
+    def _write_player_queue(self):
         """
         Writes the player queue to a json file
         to be loaded on startup if needed.
         """
         with open("player_queue.json", 'w', encoding="utf-8") as player_file:
-            player_file.write(json.dump(self.player_queue.dumpable(), f, ensure_ascii=False))            
+            json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
     def join(self, message, db_session):
         """
@@ -1407,9 +1406,13 @@ class Bot(object):
 
         !reset_queue
         """
-        for player in self.player_queue.queue:
+        for _ in self.player_queue.queue:
             self.command_queue.appendleft(('_delete_last_row', {}))
         self.player_queue = PlayerQueue.PlayerQueue()
+        try:
+            os.remove("player_queue.json")
+        except FileNotFoundError:
+            pass
         db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.times_played: 0}))
         self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
 
