@@ -8,9 +8,10 @@ def reconnect_on_ConnectionResetError(f):
     def wrapper(*args, **kwargs):
         try:
             f(*args, **kwargs)
-        except ConnectionResetError:
-            print('ConnectionResetError: Reconnecting to the socket.')
-            args[0].__init__(args[0].pw, args[0].user, args[0].channel)
+        except Exception as e:
+            print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
+            args[0].sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            args[0].join_room()
             f(*args, **kwargs)
     return wrapper
 
@@ -61,12 +62,17 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def get_user(self, line):
-        if 'emotes=;' in line:
-            num_colons = 2
-        else:
-            num_colons = 3
-        line_list = line.split(':', num_colons)
-        user = line_list[-2].split('!')[0]
+        try:
+            line_list = line.split(';')
+            user = line_list[2][13:].lower()
+        except IndexError:
+            user = 'system'
+        # if 'emotes=;' in line:
+        #     num_colons = 2
+        # else:
+        #     num_colons = 3
+        # line_list = line.split(':', num_colons)
+        # user = line_list[-2].split('!')[0]
         return user
 
     def get_human_readable_message(self, line):
