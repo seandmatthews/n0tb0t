@@ -810,19 +810,22 @@ class Bot(object):
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
 
     @_mod_only
-    def anti_bot(self, message):
+    def anti_bot(self, message, db_session):
         """
         Ban that user all other users who have the same creation date.
         Works under the assumption that bots are created programatically on the same day.
 
         !anti_bot testuser1
         """
+        user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        if len(msg_list) == 1:
+            self._add_to_whisper_queue(user, 'You need to type out a username.')
+            return
         bot_creation_date = self._get_creation_date(msg_list[1])
         viewers = self.ts.fetch_chatters_from_API()['viewers']
         mod_list = self.ts.get_mods()
-        with codecs.open('whitelist.json', 'r', 'utf-8') as f:
-            whitelist = json.load(f)
+        whitelist = db_session.query(db.User.name).filter(db.User.whitelisted == True).all()
         for viewer in viewers:
             if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
                 self.ts.send_message('/ban {}'.format(viewer))
@@ -830,29 +833,31 @@ class Bot(object):
                 self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
 
     @_mod_only
-    def whitelist(self, message):
+    def whitelist(self, message, db_session):
         """
-        Puts username on whitelist so they will NOT be banned from !anti_bot
+        Puts username on whitelist so they will NOT be banned by !anti_bot
 
         !whitelist
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
-        try:
-            with codecs.open('whitelist.json', 'r', 'utf-8') as f:
-                holder_list = json.load(f)
-        except json.decoder.JSONDecodeError:
-            holder_list = []
-        if msg_list[1] not in holder_list:
-            holder_list.append(msg_list[1])
-            with codecs.open('whitelist.json', 'w', 'utf-8') as f:
-                json.dump(holder_list, f, ensure_ascii=False)
-            self._add_to_whisper_queue(user, '{} has been added to the whitelist'.format(msg_list[1]))
-        else:
+        if len(msg_list) == 1:
+            self._add_to_whisper_queue(user, 'You need to type out a username.')
+            return
+        
+        user_db_obj = db_session.query(db.User).filter(db.User.name == msg_list[1]).one_or_none()
+        if not user_db_obj:
+            user_db_obj = db.User(name=msg_list[1])
+            db_session.add(user_db_obj)
+        if bool(user_db_obj.whitelisted) is True:
             self._add_to_whisper_queue(user, '{} is already in the whitelist!'.format(msg_list[1]))
+        else:
+            user_db_obj.whitelisted = True
+            self._add_to_whisper_queue(user, '{} has been added to the whitelist.'.format(msg_list[1]))
+        
 
     @_mod_only
-    def unwhitelist(self, message):
+    def unwhitelist(self, message, db_session):
         """
         Removes user from whitelist designation so they can be banned by anti_bot.
 
@@ -860,21 +865,17 @@ class Bot(object):
         """
         user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
-        with codecs.open('whitelist.json', 'r', 'utf-8') as f:
-            old_whitelist = json.load(f)
-            new_whitelist = []
-        if msg_list[1] not in old_whitelist:
-            self._add_to_whisper_queue(user, '{} is already off the whitelist!'.format(msg_list[1]))
-        else:
-            for person in old_whitelist:
-                if person == msg_list[1]:
-                    self._add_to_whisper_queue(user, '{} has been removed from the whitelist.'.format(msg_list[1]))
-                    pass
-                else:
-                    new_whitelist.append(person)
-            with codecs.open('whitelist.json', 'w', 'utf-8') as f:
-                json.dump(new_whitelist, f, ensure_ascii=False)
-
+        if len(msg_list) == 1:
+            self._add_to_whisper_queue(user, 'You need to type out a username.')
+            return
+        user_db_obj = db_session.query(db.User).filter(db.User.name == msg_list[1]).one_or_none()
+        if bool(user_db_obj.whitelisted) is False:
+            self._add_to_whisper_queue(user, '{} is already off the whitelist.'.format(msg_list[1]))
+        if bool(user_db_obj.whitelisted) is True:
+            user_db_obj.whitelisted = False
+            self._add_to_whisper_queue(user, '{} has been removed from the whitelist.'.format(msg_list[1]))
+        
+     
     def ban_roulette(self, message):
         """
         Roulette which has a 1/6 change of timing out the user for 30 seconds.
