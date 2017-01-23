@@ -1,6 +1,6 @@
 import threading
 import gspread
-import db
+import models
 from .Utils import _mod_only, _retry_gspread_func
 
 

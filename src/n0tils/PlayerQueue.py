@@ -1,7 +1,7 @@
 import collections
 import gspread
 import sqlalchemy
-import db
+import models
 from config import SOCKET_ARGS
 from .Utils import _mod_only
 

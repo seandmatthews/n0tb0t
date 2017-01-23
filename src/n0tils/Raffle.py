@@ -1,6 +1,6 @@
 import random
 import sqlalchemy
-import db
+import models
 from .Utils import _mod_only
 
 

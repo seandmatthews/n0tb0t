@@ -1,6 +1,6 @@
 import gspread
 import sqlalchemy
-import db
+import models
 from .Utils import _mod_only, _retry_gspread_func
 from config import SOCKET_ARGS
 
