@@ -16,11 +16,11 @@ import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
-import PlayerQueue
-import models
-import google_auth
+import src.PlayerQueue as PlayerQueue
+import src.models as models
+import src.google_auth as google_auth
 
-import modules
+import src.modules as modules
 mixin_classes = []
 for index, mod in enumerate(dir(modules)):
     if mod[0] != '_':
@@ -67,7 +67,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name)
+            # getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -97,29 +97,30 @@ class Bot(*mixin_classes):
         session.close()
         self.strawpoll_id = ''
 
-
-# DECORATORS #
+    # DECORATORS #
     def _retry_gspread_func(f):
         """
         Retries the function that uses gspread until it completes without throwing an HTTPError
         """
+
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             while True:
                 try:
                     f(*args, **kwargs)
-                except gspread.exceptions.HTTPError:
+                except gspread.exceptions.GSpreadException:
                     continue
                 break
+
         return wrapper
 
-    def _mod_only(func):
+    def _mod_only(f):
         """
         Set's the method's _mods_only property to True
         """
-        func._mods_only = True
-        return func
-# END DECORATORS #
+        f._mods_only = True
+        return f
+        # END DECORATORS #
 
     def _sort_methods(self):
         """
@@ -596,7 +597,7 @@ class Bot(*mixin_classes):
             # # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'Auto quote added.')
             self._add_to_chat_queue('Auto quote added.')
-            self.stop_auto_quotes(db_session)
+            self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
             # TODO: Fix Whisper Stuff
@@ -626,7 +627,7 @@ class Bot(*mixin_classes):
                 # TODO: Fix Whisper Stuff
                 # self._add_to_whisper_queue(user, 'Auto quote deleted.')
                 self._add_to_chat_queue('Auto quote deleted')
-                self.stop_auto_quotes(db_session)
+                self.stop_auto_quotes()
                 self.start_auto_quotes(db_session)
             else:
                 self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
