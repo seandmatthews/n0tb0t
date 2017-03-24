@@ -1,11 +1,25 @@
+import functools
 import socket
 import requests
+
+
+def reconnect_on_ConnectionResetError(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            f(*args, **kwargs)
+        except Exception as e:
+            print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
+            args[0].sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            args[0].join_room()
+            f(*args, **kwargs)
+    return wrapper
 
 
 class TwitchSocket(object):
     def __init__(self, pw, user, channel):
         self.host = 'irc.chat.twitch.tv'
-        self.port = 80
+        self.port = 6667
         self.pw = pw
         self.user = user
         self.channel = channel
@@ -13,10 +27,12 @@ class TwitchSocket(object):
 
         self.join_room()
 
+    @reconnect_on_ConnectionResetError
     def send_message(self, message):
         message_temp = "PRIVMSG #" + self.channel + " :" + message
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
+    @reconnect_on_ConnectionResetError
     def send_whisper(self, user, message):
         message_temp = "PRIVMSG #jtv :/w " + user + " " + message
         print("{}\r\n".format(message_temp).encode('utf-8'))
@@ -46,12 +62,17 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
     def get_user(self, line):
-        if 'emotes=;' in line:
-            num_colons = 2
-        else:
-            num_colons = 3
-        line_list = line.split(':', num_colons)
-        user = line_list[-2].split('!')[0]
+        try:
+            line_list = line.split(';')
+            user = line_list[2][13:].lower()
+        except IndexError:
+            user = 'system'
+        # if 'emotes=;' in line:
+        #     num_colons = 2
+        # else:
+        #     num_colons = 3
+        # line_list = line.split(':', num_colons)
+        # user = line_list[-2].split('!')[0]
         return user
 
     def get_human_readable_message(self, line):
@@ -102,6 +123,9 @@ class TwitchSocket(object):
 
     def get_mods(self):
         return self.fetch_chatters_from_API()['moderators']
+        
+    def get_viewers(self):
+        return self.fetch_chatters_from_API()['viewers']
 
     def get_all_chatters(self):
         chatters = []

@@ -14,6 +14,7 @@ class User(Base):
     entered_in_contest = sqlalchemy.Column(sqlalchemy.Boolean)
     times_played = sqlalchemy.Column(sqlalchemy.Integer)
     points = sqlalchemy.Column(sqlalchemy.Integer)
+    whitelisted = sqlalchemy.Column(sqlalchemy.Boolean)
 
     def __init__(self, **kwargs):
         self.entered_in_contest = False

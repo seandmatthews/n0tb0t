@@ -1,15 +1,10 @@
 .idea/
-.__pycache__/
-.credentials/
-__pycache__/
-config.py
+*__pycache__/
+src/.credentials/
+src/config.py
 *.db
-auto-quotes.json
-quotes.json
-commands.json
-user-commands.json
-misc-values.json
-users-contest-list.json
-gspread test-279fb617abd8.json
-error-log.txt
-LICENSE
+*.json
+*.txt
+sublime_project.*
+*~
+venv/*

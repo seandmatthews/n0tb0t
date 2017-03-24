@@ -1,42 +1,67 @@
 import collections
+import datetime
+import functools
+import importlib
 import inspect
+import json
 import os
+import random
 import threading
 import time
+
 import gspread
+import pytz
+import requests
 import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
-import db
+import PlayerQueue
+import models
 import google_auth
-from config import SOCKET_ARGS, bitly_access_token
-from modules import PlayerQueue
-from modules.Utils import _mod_only, _retry_gspread_func
+
+import modules
+mixin_classes = []
+for index, mod in enumerate(dir(modules)):
+    if mod[0] != '_':
+        imported = importlib.import_module(f'modules.{mod}')
+        for item in dir(imported):
+            if item[0] != '_':
+                if isinstance(getattr(imported, item), type):
+                    mixin_classes.append(getattr(imported, item))
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
-class Bot(object):
-    def __init__(self, twitch_socket):
+class Bot(*mixin_classes):
+    def __init__(self, twitch_socket, BOT_INFO, bitly_access_token, current_dir, data_dir):
 
         self.ts = twitch_socket
+        self.info = BOT_INFO
 
         self.sorted_methods = self._sort_methods()
 
+        # Most functions run in the main thread, but we can put slow ones here
+        self.command_queue = collections.deque()
+
         self.chat_message_queue = collections.deque()
         self.whisper_message_queue = collections.deque()
-        self.player_queue = PlayerQueue.PlayerQueue()
+        try:
+            with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
+                self.player_queue = PlayerQueue.PlayerQueue(input_iterable=json.loads(player_file.read()))
+        except FileNotFoundError:
+            self.player_queue = PlayerQueue.PlayerQueue()
+
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
         self.cur_dir = os.path.dirname(os.path.realpath(__file__))
-        self.Session = self._initialize_db(self.cur_dir)
+        self.Session = self._initialize_db(data_dir)
         session = self.Session()
 
-        self.credentials = google_auth.get_credentials()
-        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses']
+        self.credentials = google_auth.get_credentials(credentials_parent_dir=current_dir, client_secret_dir=current_dir)
+        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses', 'player_queue']
         self.spreadsheets = {}
         for sheet in starting_spreadsheets_list:
-            sheet_name = '{}-{}-{}'.format(SOCKET_ARGS['channel'], SOCKET_ARGS['user'], sheet)
+            sheet_name = '{}-{}-{}'.format(BOT_INFO['channel'], BOT_INFO['user'], sheet)
             already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
             web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
             sheet_tuple = (sheet_name, web_view_link)
@@ -44,7 +69,7 @@ class Bot(object):
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
             getattr(self, init_command)(sheet_name)
 
-        self.guessing_enabled = session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled') == 'True'
+        self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
         self.allowed_to_chat = True
 
@@ -58,14 +83,43 @@ class Bot(object):
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
 
-        self._add_to_chat_queue('{} is online'.format(SOCKET_ARGS['user']))
+        self.command_thread = threading.Thread(target=self._process_command_queue,
+                                               kwargs={'command_queue': self.command_queue})
+        self.command_thread.daemon = True
+        self.command_thread.start()
+
+        self._add_to_chat_queue('{} is online'.format(BOT_INFO['user']))
 
         self.auto_quotes_timers = {}
-        for auto_quote in session.query(db.AutoQuote).all():
+        for auto_quote in session.query(models.AutoQuote).all():
             self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
-
+        self.player_queue_credentials = None
         session.close()
+        self.strawpoll_id = ''
 
+
+# DECORATORS #
+    def _retry_gspread_func(f):
+        """
+        Retries the function that uses gspread until it completes without throwing an HTTPError
+        """
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            while True:
+                try:
+                    f(*args, **kwargs)
+                except gspread.exceptions.HTTPError:
+                    continue
+                break
+        return wrapper
+
+    def _mod_only(func):
+        """
+        Set's the method's _mods_only property to True
+        """
+        func._mods_only = True
+        return func
+# END DECORATORS #
 
     def _sort_methods(self):
         """
@@ -91,7 +145,7 @@ class Bot(object):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            if hasattr(getattr(self, method), '_mods_only'): 
+            if hasattr(getattr(self, method), '_mods_only'):
                 methods_dict['for_mods'].append(method)
             else:
                 methods_dict['for_all'].append(method)
@@ -105,23 +159,178 @@ class Bot(object):
         """
         Creates the database and domain model and Session Class
         """
-        channel = SOCKET_ARGS['channel']
+        channel = self.info['channel']
         self.db_path = os.path.join(db_location, '{}.db'.format(channel))
-        engine = sqlalchemy.create_engine('sqlite:///{}'.format(self.db_path), connect_args={'check_same_thread':False})
+        engine = sqlalchemy.create_engine('sqlite:///{}'.format(self.db_path), connect_args={'check_same_thread': False})
         # noinspection PyPep8Naming
         session_factory = sessionmaker(bind=engine)
-        db.Base.metadata.create_all(engine)
+        models.Base.metadata.create_all(engine)
         db_session = session_factory()
-        misc_values = db_session.query(db.MiscValue).all()
+        misc_values = db_session.query(models.MiscValue).all()
         if len(misc_values) == 0:
             db_session.add_all([
-                db.MiscValue(mv_key='guess-total-enabled', mv_value='False'),
-                db.MiscValue(mv_key='current-deaths', mv_value='0'),
-                db.MiscValue(mv_key='total-deaths', mv_value='0'),
-                db.MiscValue(mv_key='guessing-enabled', mv_value='False')])
+                models.MiscValue(mv_key='guess-total-enabled', mv_value='False'),
+                models.MiscValue(mv_key='current-deaths', mv_value='0'),
+                models.MiscValue(mv_key='total-deaths', mv_value='0'),
+                models.MiscValue(mv_key='guessing-enabled', mv_value='False')])
         db_session.commit()
         db_session.close()
         return session_factory
+
+    @_retry_gspread_func
+    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the quotes google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            qs = sheet.worksheet('Quotes')
+        except gspread.exceptions.WorksheetNotFound:
+            qs = sheet.add_worksheet('Quotes', 1000, 2)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        qs.update_acell('A1', 'Quote Index')
+        qs.update_acell('B1', 'Quote')
+
+        # self.update_quote_spreadsheet()
+
+    @_retry_gspread_func
+    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the auto_quotes google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            aqs = sheet.worksheet('Auto Quotes')
+        except gspread.exceptions.WorksheetNotFound:
+            aqs = sheet.add_worksheet('Auto Quotes', 1000, 3)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        aqs.update_acell('A1', 'Auto Quote Index')
+        aqs.update_acell('B1', 'Quote')
+        aqs.update_acell('C1', 'Period\n(In seconds)')
+
+        # self.update_auto_quote_spreadsheet()
+
+    @_retry_gspread_func
+    def _initialize_commands_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the commands google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            cs = sheet.worksheet('Commands')
+        except gspread.exceptions.WorksheetNotFound:
+            cs = sheet.add_worksheet('Commands', 1000, 20)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        cs.update_acell('A1', 'Commands\nfor\nEveryone')
+        cs.update_acell('B1', 'Command\nDescription')
+        cs.update_acell('D1', 'Commands\nfor\nMods')
+        cs.update_acell('E1', 'Command\nDescription')
+        cs.update_acell('G1', 'User\nCreated\nCommands')
+        cs.update_acell('H1', 'Bot Response')
+        cs.update_acell('J1', 'User\nSpecific\nCommands')
+        cs.update_acell('K1', 'Bot Response')
+        cs.update_acell('L1', 'User List')
+
+        for index in range(len(self.sorted_methods['for_all'])+10):
+            cs.update_cell(index+2, 1, '')
+            cs.update_cell(index+2, 2, '')
+
+        for index, method in enumerate(self.sorted_methods['for_all']):
+            cs.update_cell(index+2, 1, '!{}'.format(method))
+            cs.update_cell(index+2, 2, getattr(self, method).__doc__)
+
+        for index in range(len(self.sorted_methods['for_mods'])+10):
+            cs.update_cell(index+2, 4, '')
+            cs.update_cell(index+2, 5, '')
+
+        for index, method in enumerate(self.sorted_methods['for_mods']):
+            cs.update_cell(index+2, 4, '!{}'.format(method))
+            cs.update_cell(index+2, 5, getattr(self, method).__doc__)
+
+        # self.update_command_spreadsheet()
+
+    @_retry_gspread_func
+    def _initialize_highlights_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the highlights google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            hls = sheet.worksheet('Highlight List')
+        except gspread.exceptions.WorksheetNotFound:
+            hls = sheet.add_worksheet('Highlight List', 1000, 4)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        hls.update_acell('A1', 'User')
+        hls.update_acell('B1', 'Stream Start Time EST')
+        hls.update_acell('C1', 'Highlight Time')
+        hls.update_acell('D1', 'User Note')
+
+    @_retry_gspread_func
+    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the player_guesses google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            pgs = sheet.worksheet('Player Guesses')
+        except gspread.exceptions.WorksheetNotFound:
+            pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        pgs.update_acell('A1', 'User')
+        pgs.update_acell('B1', 'Current Guess')
+        pgs.update_acell('C1', 'Total Guess')
+
+    @_retry_gspread_func
+    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the player_queue google sheet with its initial data.
+        """
+        caster = self.info['channel']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            pqs = sheet.worksheet('Player Queue')
+        except gspread.exceptions.WorksheetNotFound:
+            pqs = sheet.add_worksheet('Player Queue', 500, 3)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        info = """Priority is given to players with fewest times played.
+        The top of this spreadsheet is the back of the queue
+        and the bottom is the front. The closer you are to the bottom,
+        the closer you are to playing with {}.""".format(caster)
+
+        pqs.update_acell('A1', 'User')
+        pqs.update_acell('B1', 'Times played')
+        pqs.update_acell('C1', 'Info:')
+        pqs.update_acell('C2', info)
 
     def _add_to_chat_queue(self, message):
         """
@@ -142,7 +351,7 @@ class Bot(object):
         If there are messages in the chat queue that need
         to be sent, pop off the oldest one and pass it
         to the ts.send_message function. Then sleep for
-        two seconds to stay below the twitch rate limit.
+        half a second to stay below the twitch rate limit.
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
@@ -154,12 +363,25 @@ class Bot(object):
         If there are whispers in the queue that need
         to be sent, pop off the oldest one and pass it
         to the ts.send_whisper function. Then sleep for
-        one second to stay below the twitch rate limit.
+        half a second to stay below the twitch rate limit.
         """
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
                 self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
+            time.sleep(1.5)
+
+    def _process_command_queue(self, command_queue):
+        """
+        If there are commands in the queue, pop off the
+        oldest one and run it. Then sleep for half a second
+        to avoid busy waiting the CPU into a space heater.
+        """
+        while True:
+            if len(command_queue) > 0:
+                command_tuple = command_queue.pop()
+                func, kwargs = command_tuple[0], command_tuple[1]
+                getattr(self, func)(**kwargs)
             time.sleep(.5)
 
     def _act_on(self, message):
@@ -180,10 +402,11 @@ class Bot(object):
             user_is_mod = self.ts.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
-            else:
-                self._add_to_whisper_queue(user,
-                                           'Sorry {} you\'re not authorized to use the command: !{}'
-                                           .format(user, command[0]))
+            # TODO: Fix Whisper Stuff
+            # else:
+            #     self._add_to_whisper_queue(user,
+            #                                'Sorry {} you\'re not authorized to use the command: !{}'
+            #                                .format(user, command[0]))
         db_session.commit()
         db_session.close()
 
@@ -203,7 +426,7 @@ class Bot(object):
             return [potential_command, 'for_all']
         if potential_command in self.sorted_methods['for_mods']:
             return [potential_command, 'for_mods']
-        db_result = db_session.query(db.Command).filter(db.Command.call == potential_command).all()
+        db_result = db_session.query(models.Command).filter(models.Command.call == potential_command).all()
         if db_result:
             return [potential_command, db_result[0]]
         return None
@@ -215,12 +438,11 @@ class Bot(object):
         Returns True or False depending on whether the user that
         sent the command has the authority to use that command
         """
-
         if command[1] == 'for_all':
             return True
         if command[1] == 'for_mods' and user_is_mod:
             return True
-        if type(command[1]) == db.Command:
+        if type(command[1]) == models.Command:
             db_command = command[1]
             if bool(db_command.permissions) is False:
                 return True
@@ -230,9 +452,10 @@ class Bot(object):
 
     def _run_command(self, command, message, db_session):
         """
-        Runs the command. If the signature has parameters, It includes them
+        If the command is a database command, send the response to the chat queue.
+        Otherwise call the relevant function, supplying the message and db_session arguments as needed.
         """
-        if type(command[1]) == db.Command:
+        if type(command[1]) == models.Command:
             db_command = command[1]
             self._add_to_chat_queue(db_command.response)
         else:
@@ -269,3 +492,1446 @@ class Bot(object):
         self.chat_thread.daemon = True
         self.chat_thread.start()
 
+    def _auto_quote(self, index, quote, period):
+        """
+        Takes an index, quote and time in seconds.
+        Starts a thread that waits the specified time, says the quote
+        and starts another thread with the same arguments, ensuring
+        that the quotes continue to be said forever or until they're stopped by the user.
+        """
+        key = 'AQ{}'.format(index)
+        self.auto_quotes_timers[key] = threading.Timer(period, self._auto_quote,
+                                                       kwargs={'index': index, 'quote': quote, 'period': period})
+        self.auto_quotes_timers[key].start()
+        self._add_to_chat_queue(quote)
+
+    @_mod_only
+    @_retry_gspread_func
+    def update_auto_quote_spreadsheet(self, db_session):
+        """
+        Updates the auto_quote spreadsheet with all current auto quotes
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
+
+        !update_auto_quote_spreadsheet
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        aqs = sheet.worksheet('Auto Quotes')
+
+        auto_quotes = db_session.query(models.AutoQuote).all()
+
+        for index in range(len(auto_quotes)+10):
+            aqs.update_cell(index+2, 1, '')
+            aqs.update_cell(index+2, 2, '')
+            aqs.update_cell(index+2, 3, '')
+
+        for index, aq in enumerate(auto_quotes):
+            aqs.update_cell(index+2, 1, index+1)
+            aqs.update_cell(index+2, 2, aq.quote)
+            aqs.update_cell(index+2, 3, aq.period)
+
+    @_mod_only
+    def start_auto_quotes(self, db_session):
+        """
+        Starts the bot spitting out auto quotes by calling the
+        _auto_quote function on all quotes in the AUTOQUOTES table
+
+        !start_auto_quotes
+        """
+        auto_quotes = db_session.query(models.AutoQuote).all()
+        self.auto_quotes_timers = {}
+        for index, auto_quote in enumerate(auto_quotes):
+            quote = auto_quote.quote
+            period = auto_quote.period
+            self._auto_quote(index=index, quote=quote, period=period)
+
+    @_mod_only
+    def stop_auto_quotes(self):
+        """
+        Stops the bot from spitting out quotes by cancelling all auto quote threads.
+
+        !stop_auto_quotes
+        """
+        for AQ in self.auto_quotes_timers:
+            self.auto_quotes_timers[AQ].cancel()
+            time.sleep(1)
+            self.auto_quotes_timers[AQ].cancel()
+
+    def show_auto_quotes(self, message):
+        """
+        Links to a google spreadsheet containing all auto quotes
+
+        !show_auto_quotes
+        """
+        user = self.ts.get_user(message)
+        web_view_link = self.spreadsheets['auto_quotes'][1]
+        short_url = self.shortener.short(web_view_link)
+        # TODO: Fix Whisper Stuff
+        self._add_to_chat_queue('View the auto quotes at: {}'.format(short_url))
+        # self._add_to_whisper_queue(user, 'View the auto quotes at: {}'.format(short_url))
+
+    @_mod_only
+    def add_auto_quote(self, message, db_session):
+        """
+        Makes a new sentence that the bot periodically says.
+        The first "word" after !add_auto_quote is the number of seconds
+        in the interval for the bot to wait before saying the sentence again.
+        Requires stopping and starting the auto quotes to take effect.
+
+        !add_auto_quote 600 This is a rudimentary twitch bot.
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1 and msg_list[1].isdigit():
+            delay = int(msg_list[1])
+            quote = ' '.join(msg_list[2:])
+            db_session.add(models.AutoQuote(quote=quote, period=delay))
+            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+
+            # # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'Auto quote added.')
+            self._add_to_chat_queue('Auto quote added.')
+            self.stop_auto_quotes(db_session)
+            self.start_auto_quotes(db_session)
+        else:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'Sorry, the command isn\'t formatted properly.')
+            self._add_to_chat_queue('Sorry, the command isn\'t formatted properly.')
+
+    @_mod_only
+    def delete_auto_quote(self, message, db_session):
+        """
+        Deletes a sentence that the bot periodically says.
+        Takes a 1 indexed auto quote index.
+        Requires stopping and starting the auto quotes to take effect.
+
+        !delete_auto_quote 1
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1 and msg_list[1].isdigit():
+            auto_quotes = db_session.query(models.AutoQuote).all()
+            if int(msg_list[1]) <= len(auto_quotes):
+                index = int(msg_list[1]) - 1
+                db_session.delete(auto_quotes[index])
+                my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                             kwargs={'db_session': db_session})
+                my_thread.daemon = True
+                my_thread.start()
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(user, 'Auto quote deleted.')
+                self._add_to_chat_queue('Auto quote deleted')
+                self.stop_auto_quotes(db_session)
+                self.start_auto_quotes(db_session)
+            else:
+                self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
+                # self._add_to_whisper_queue(user, 'Sorry, there aren\'t that many auto quotes.')
+        else:
+            pass
+            # self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
+
+    @_mod_only
+    @_retry_gspread_func
+    def update_command_spreadsheet(self, db_session):
+        """
+        Updates the commands google sheet with all available user commands.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
+
+        !update_command_spreadsheet
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['commands']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        cs = sheet.worksheet('Commands')
+
+        db_commands = db_session.query(models.Command).all()
+        everyone_commands = []
+        user_specific_commands = []
+        for command in db_commands:
+            if bool(command.permissions) is False:
+                everyone_commands.append(command)
+            else:
+                user_specific_commands.append(command)
+
+        for index in range(len(everyone_commands)+10):
+            cs.update_cell(index+2, 7, '')
+            cs.update_cell(index+2, 8, '')
+
+        for index, command in enumerate(everyone_commands):
+            cs.update_cell(index+2, 7, '!{}'.format(command.call))
+            cs.update_cell(index+2, 8, command.response)
+
+        for index in range(len(everyone_commands)+10):
+            cs.update_cell(index+2, 10, '')
+            cs.update_cell(index+2, 11, '')
+            cs.update_cell(index+2, 12, '')
+
+        for index, command in enumerate(user_specific_commands):
+            users = [permission.user_entity for permission in command.permissions]
+            users_str = ', '.join(users)
+            cs.update_cell(index+2, 10, '!{}'.format(command.call))
+            cs.update_cell(index+2, 11, command.response)
+            cs.update_cell(index+2, 12, users_str)
+
+    @_mod_only
+    def add_command(self, message, db_session):
+        """
+        Adds a new command.
+        The first word after !add_command with an exclamation mark is the command.
+        The rest of the sentence is the reply.
+        Optionally takes the names of twitch users before the command.
+        This would make the command only available to those users.
+
+        !add_command !test_command This is a test.
+        !add_command TestUser1 TestUser2 !test_command This is a test
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
+            if word[0] == '!':
+                command = word.lower()
+                users = msg_list[1:index + 1]
+                response = ' '.join(msg_list[index + 2:])
+                break
+        else:
+            # TODO: Fix Whisper Stuff
+            self._add_to_chat_queue('Sorry, the command needs ot have an ! in it.')
+            # self._add_to_whisper_queue(user, 'Sorry, the command needs to have an ! in it.')
+            return
+        db_commands = db_session.query(models.Command).all()
+        if command[1:] in [db_command.call for db_command in db_commands]:
+            # TODO: Fix Whisper Stuff
+            self._add_to_chat_queue('Sorry, that command already exists. Please delete it first.')
+            # self._add_to_whisper_queue(user, 'Sorry, that command already exists. Please delete it first.')
+        else:
+            db_command = models.Command(call=command[1:], response=response)
+            if len(users) != 0:
+                users = [user.lower() for user in users]
+                permissions = []
+                for user in users:
+                    permissions.append(models.Permission(user_entity=user))
+                db_command.permissions = permissions
+            db_session.add(db_command)
+            # TODO: Fix Whisper Stuff
+            self._add_to_chat_queue('Command added.')
+            # self._add_to_whisper_queue(user, 'Command added.')
+            my_thread = threading.Thread(target=self.update_command_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+
+    def _get_poll_info(self, poll_id):
+        """
+        Returns options and votes for poll ID in json format.
+        """
+        url = 'https://strawpoll.me/api/v2/polls/{}'.format(poll_id)
+        for attempt in range(5):
+            try:
+                r = requests.get(url)
+                poll_options = r.json()['options']
+                poll_votes = r.json()['votes']
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return poll_options, poll_votes
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the strawpoll api. Maybe wait a bit and retry your command?")
+
+    @_mod_only
+    def create_poll(self, message):
+        """
+        Generates strawpoll and fetches ID for later use with !end_poll.
+        The title is the bit between "title:" and (the first) "options:"
+        Options are delineated by commas; using commas in your options will break things.
+
+        !create_poll Title: Poll Title Options: Option 1, Option 2, ... Option N
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        title_index = -1
+        options_index = -1
+        for index, word in enumerate(msg_list):
+            print(word.lower())
+            if word.lower() == 'title:':
+                title_index = index
+            elif word.lower() == 'options:':
+                options_index = index
+                break
+        print(title_index, options_index)
+        if title_index == -1 or options_index == -1:
+            self._add_to_chat_queue('Please form the command correctly')
+        else:
+            title = ' '.join(msg_list[title_index+1:options_index])
+            options_str = ' '.join(msg_list[options_index+1:])
+            options = options_str.split(', ')
+            payload = {'title': title, 'options': options}
+            url = 'https://strawpoll.me/api/v2/polls'
+            r = requests.post(url, data=json.dumps(payload))
+            try:
+                self.strawpoll_id = r.json()['id']
+                self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+            except KeyError:
+                # Strawpoll got angry at us, possibly due to not enough options
+                self._add_to_chat_queue('Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
+
+
+    @_mod_only
+    def end_poll(self, message):
+        """
+        Ends the poll that was started with the !create_poll
+
+        !end_poll
+        !end_poll 111111111
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) == 1 and self.strawpoll_id == '':
+            self._add_to_chat_queue('No ID supplied, please try again')
+            holder_id = None
+        elif len(msg_list) == 1 and self.strawpoll_id != '':
+            holder_id = self.strawpoll_id
+            self.strawpoll_id = ''
+        elif len(msg_list) == 2:
+            holder_id = msg_list[1]
+        else:
+            self._add_to_chat_queue('Sorry, no ID could be found. Please ensure the command is formatted correctly.')
+            holder_id = None
+        if holder_id is not None:
+            holder_options, holder_votes = self._get_poll_info(holder_id)
+            probability_list = []
+            for vote_number in holder_votes:
+                try:
+                    temp_prob = vote_number*(1/sum(holder_votes))
+                    probability_list.append(temp_prob)
+                except ZeroDivisionError:
+                    self._add_to_chat_queue('No one has voted yet! You will need to end the poll again by specifying the ID.')
+                    return
+            die_roll = random.random()
+            for index, probability in enumerate(probability_list):
+                if die_roll <= sum(probability_list[0:index+1]):
+                    winning_chance = round(probability*100)
+                    self._add_to_chat_queue(
+                        '{} won the poll choice with {} votes and had a {}% chance to win!'.format(holder_options[index], holder_votes[index], winning_chance))
+                    break
+
+    def _get_creation_date(self, user):
+        """
+        Returns the creation date of a given twitch user.
+        """
+        url = 'https://api.twitch.tv/kraken/users/{}'.format(user)
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.info['twitch_api_client_id']})
+                creation_date = r.json()['created_at']
+                cut_creation_date = creation_date[:10]
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return cut_creation_date
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    @_mod_only
+    def anti_bot(self, message, db_session):
+        """
+        Ban that user all other users who have the same creation date.
+        Works under the assumption that bots are created programatically on the same day.
+
+        !anti_bot testuser1
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        if len(msg_list) == 1:
+            # TODO: Fix Whisper Stuff
+            self._add_to_chat_queue('You need to type out a username.')
+            # self._add_to_whisper_queue(user, 'You need to type out a username.')
+            return
+        bot_creation_date = self._get_creation_date(msg_list[1])
+        viewers = self.ts.fetch_chatters_from_API()['viewers']
+        mod_list = self.ts.get_mods()
+        whitelist = db_session.query(models.User.name).filter(models.User.whitelisted == True).all()
+        mod_str = ', '.join(mod_list)
+        for viewer in viewers:
+            if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
+                self.ts.send_message('/ban {}'.format(viewer))
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
+        self._add_to_chat_queue('We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
+
+    @_mod_only
+    def whitelist(self, message, db_session):
+        """
+        Puts username on whitelist so they will NOT be banned by !anti_bot
+
+        !whitelist
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        if len(msg_list) == 1:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'You need to type out a username.')
+            self._add_to_chat_queue('You need to type out a username.')
+            return
+        
+        user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
+        if not user_db_obj:
+            user_db_obj = models.User(name=msg_list[1])
+            db_session.add(user_db_obj)
+        if bool(user_db_obj.whitelisted) is True:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, '{} is already in the whitelist!'.format(msg_list[1]))
+            self._add_to_chat_queue('{} is already in the whitelist!'.format(msg_list[1]))
+        else:
+            user_db_obj.whitelisted = True
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, '{} has been added to the whitelist.'.format(msg_list[1]))
+            self._add_to_chat_queue('{} has been added to the whitelist.'.format(msg_list[1]))
+
+    @_mod_only
+    def unwhitelist(self, message, db_session):
+        """
+        Removes user from whitelist designation so they can be banned by anti_bot.
+
+        !unwhitelist testuser1
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        if len(msg_list) == 1:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'You need to type out a username.')
+            self._add_to_chat_queue('You need to type out a username.')
+            return
+        user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
+        if bool(user_db_obj.whitelisted) is False:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, '{} is already off the whitelist.'.format(msg_list[1]))
+            self._add_to_chat_queue('{} is already off the whitelist.'.format(msg_list[1]))
+        if bool(user_db_obj.whitelisted) is True:
+            user_db_obj.whitelisted = False
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, '{} has been removed from the whitelist.'.format(msg_list[1]))
+            self._add_to_chat_queue('{} has been removed from the whitelist.'.format(msg_list[1]))
+
+    def ban_roulette(self, message):
+        """
+        Roulette which has a 1/6 change of timing out the user for 30 seconds.
+
+        !ban_roulette
+        !ban_roulette testuser
+        """
+        if self.ts.check_mod(message):
+            if len(self.ts.get_human_readable_message(message).split(' ')) > 1:
+                user = self.ts.get_human_readable_message(message).split(' ')[1]
+            else:
+                user = None
+        elif len(self.ts.get_human_readable_message(message).split(' ')) == 1:
+            user = self.ts.get_user(message)
+        else:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(self.ts.get_user(message), 'Sorry, this command is only one word')
+            user = None
+        if user is not None:
+            if random.randint(1, 6) == 6:
+                timeout_time = 30
+                self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
+                # self._add_to_whisper_queue(user, 'Pow!')
+                self._add_to_chat_queue('Bang! {} was timed out.'.format(user))
+            else:
+                self._add_to_chat_queue('{} is safe for now.'.format(user))
+                # self._add_to_whisper_queue(user, 'You\'re safe! For now at least.')
+
+    @_mod_only
+    def delete_command(self, message, db_session):
+        """
+        Removes a user created command.
+        Takes the name of the command.
+
+        !delete_command !test
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        command_str = msg_list[1][1:].lower()
+        db_commands = db_session.query(models.Command).all()
+        for db_command in db_commands:
+            if command_str == db_command.call:
+                db_session.delete(db_command)
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(user, 'Command deleted.')
+                self._add_to_chat_queue('Command deleted.')
+                my_thread = threading.Thread(target=self.update_command_spreadsheet,
+                                             kwargs={'db_session': db_session})
+                my_thread.daemon = True
+                my_thread.start()
+                break
+        else:
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'Sorry, that command doesn\'t exist.')
+            self._add_to_chat_queue('Sorry, that command doesn\'t exist.')
+
+    def show_commands(self, message):
+        """
+        Links the google spreadsheet containing all commands in chat
+
+        !show_commands
+        """
+        user = self.ts.get_user(message)
+        web_view_link = self.spreadsheets['commands'][1]
+        short_url = self.shortener.short(web_view_link)
+        # TODO: Fix Whisper Stuff
+        # self._add_to_whisper_queue(user, 'View the commands at: {}'.format(short_url))
+        self._add_to_chat_queue('View the commands at: {}'.format(short_url))
+
+    @_mod_only
+    @_retry_gspread_func
+    def update_quote_spreadsheet(self, db_session):
+        """
+        Updates the quote spreadsheet from the database.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
+
+        !update_quote_spreadsheet
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        qs = sheet.worksheet('Quotes')
+
+        quotes = db_session.query(models.Quote).all()
+
+        for index in range(len(quotes)+10):
+            qs.update_cell(index+2, 1, '')
+            qs.update_cell(index+2, 2, '')
+
+        for index, quote_obj in enumerate(quotes):
+            qs.update_cell(index+2, 1, index+1)
+            qs.update_cell(index+2, 2, quote_obj.quote)
+
+        self._add_to_chat_queue('Quote spreadsheet updated!')
+
+    @_mod_only
+    def update_quote_db_from_spreadsheet(self, db_session):
+        """
+        Updates the database from the quote spreadsheet.
+        Only call directly if you really need to as the bot
+        won't be able to do anything else while updating.
+        This function will stop looking for quotes when it
+        finds an empty row in the spreadsheet.
+
+        !update_quote_db_from_spreadsheet
+        """
+        spreadsheet_name, web_view_link = self.spreadsheets['quotes']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        qs = sheet.worksheet('Quotes')
+        cell_location = [2, 2]
+        quotes_list = []
+        while True:
+            if bool(qs.cell(*cell_location).value) is not False:
+                quotes_list.append(models.Quote(quote=qs.cell(*cell_location).value))
+                cell_location[0] += 1
+            else:
+                break
+
+        db_session.execute(
+            "DELETE FROM QUOTES;"
+        )
+        db_session.add_all(quotes_list)
+
+    def add_quote(self, message, db_session):
+        """
+        Adds a quote to the database.
+
+        !add_quote Oh look, the caster has uttered an innuendo!
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        quote = ' '.join(msg_list[1:])
+        quote_obj = models.Quote(quote=quote)
+        db_session.add(quote_obj)
+        self._add_to_chat_queue('Quote added as quote #{}.'.format(db_session.query(models.Quote).count()))
+        my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                     kwargs={'db_session': db_session})
+        my_thread.daemon = True
+        my_thread.start()
+
+    @_mod_only
+    def delete_quote(self, message, db_session):
+        """
+        Removes a user created quote.
+        Takes a 1 indexed quote index.
+
+        !delete_quote 1
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.ts.get_user(message)
+        if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
+            quotes = db_session.query(models.Quote).all()
+            if int(msg_list[1]) <= len(quotes):
+                index = int(msg_list[1]) - 1
+                db_session.delete(quotes[index])
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(user, 'Quote deleted.')
+                self._add_to_chat_queue('Quote deleted.')
+                my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                             kwargs={'db_session': db_session})
+                my_thread.daemon = True
+                my_thread.start()
+            else:
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(user, 'Sorry, that\'s not a quote that can be deleted.')
+                self._add_to_chat_queue('Sorry, that\'s not a quote that can be deleted.')
+
+    def show_quotes(self, message):
+        """
+        Links to the google spreadsheet containing all the quotes.
+
+        !show_quotes
+        """
+        user = self.ts.get_user(message)
+        web_view_link = self.spreadsheets['quotes'][1]
+        short_url = self.shortener.short(web_view_link)
+        # TODO: Fix Whisper Stuff
+        # self._add_to_whisper_queue(user, 'View the quotes at: {}'.format(short_url))
+        self._add_to_chat_queue('View the quotes at: {}'.format(short_url))
+
+    def quote(self, message, db_session):
+        """
+        Displays a quote in chat. Takes a 1 indexed quote index.
+        If no index is specified, displays a random quote.
+
+        !quote 5
+        !quote
+        """
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1 and msg_list[1].isdigit():
+            if int(msg_list[1]) > 0:
+                index = int(msg_list[1]) - 1
+                quotes = db_session.query(models.Quote).all()
+                if index <= len(quotes)-1:
+                    self._add_to_chat_queue('#{} {}'.format(str(index + 1), quotes[index].quote))
+                else:
+                    self._add_to_chat_queue('Sorry, there are only {} quotes.'.format(len(quotes)))
+            else:
+                self._add_to_chat_queue('Sorry, a quote index must be greater than or equal to 1.')
+        else:
+            quotes = db_session.query(models.Quote).all()
+            random_quote_index = random.randrange(len(quotes))
+            self._add_to_chat_queue('#{} {}'.format(str(random_quote_index + 1), quotes[random_quote_index].quote))
+
+    def ogod(self, message):
+        """
+        The bot responds with "X's delicate sensibilities have been offended!"
+
+        !ogod
+        !ogod an offensive thing
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1:
+            offender_str = ' '.join(msg_list[1:])
+            # TODO: Use NLP magic to figure out whether offender_str is plural or not
+            ogod_str = "{} has offended {}'s delicate sensibilities!".format(offender_str, user)
+        else:
+            ogod_str = "{}'s delicate sensibilities have been offended!".format(user)
+        self._add_to_chat_queue(ogod_str)
+
+    @_mod_only
+    def so(self, message):
+        """
+        Shouts out a twitch caster in chat. Uses the twitch API to confirm
+        that the caster is real and to fetch their last played game.
+
+        !SO $caster
+        """
+        user = self.ts.get_user(message)
+        me = self.info['channel']
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1:
+            channel = msg_list[1]
+            url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())
+            for attempt in range(5):
+                try:
+                    r = requests.get(url, headers={"Client-ID": self.info['twitch_api_client_id']})
+                    r.raise_for_status()
+                    game = r.json()['game']
+                    channel_url = r.json()['url']
+                    shout_out_str = 'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {url}! Tell \'em {I} sent you!'.format(
+                        channel=channel, game=game, url=channel_url, I=me)
+                    self._add_to_chat_queue(shout_out_str)
+                except requests.exceptions.HTTPError:
+                    self._add_to_chat_queue('Hey {}, that\'s not a real streamer!'.format(user))
+                    break
+                except ValueError:
+                    continue
+                else:
+                    break
+            else:
+                self._add_to_chat_queue(
+                    "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+        else:
+            self._add_to_chat_queue('Sorry {}, you need to specify a caster to shout out.'.format(user))
+
+
+    def _get_live_time(self):
+        """
+        Uses the kraken API to fetch the start time of the current stream.
+        Computes how long the stream has been running, returns that value in a dictionary.
+        """
+        channel = self.info['channel']
+        url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.info['twitch_api_client_id']})
+                r.raise_for_status()
+                start_time_str = r.json()['stream']['created_at']
+                start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')
+                now_dt = datetime.datetime.utcnow()
+                time_delta = now_dt - start_time_dt
+                time_dict = {'hour': None,
+                             'minute': None,
+                             'second': None,
+                             }
+
+                time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
+                time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
+                for time_var in time_dict:
+                    if time_dict[time_var] == 1:
+                        time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
+                    else:
+                        time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
+                time_dict['stream_start'] = start_time_dt
+                time_dict['now'] = now_dt
+            except requests.exceptions.HTTPError:
+                continue
+            except TypeError:
+                self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
+                break
+            except ValueError:
+                continue
+            else:
+                return time_dict
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def uptime(self):
+        """
+        Sends a message to stream saying how long the caster has been streaming for.
+
+        !uptime
+        """
+        time_dict = self._get_live_time()
+        if time_dict is not None:
+            uptime_str = 'The channel has been live for {hours}, {minutes} and {seconds}.'.format(
+                    hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+            self._add_to_chat_queue(uptime_str)
+
+    def highlight(self, message):
+        """
+        Logs the time in the video when something amusing happened.
+        Takes an optional short sentence describing the event.
+        Writes that data to a google spreadsheet.
+
+        !highlight
+        !highlight The caster screamed like a little girl!
+        """
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) > 1:
+            user_note = ' '.join(msg_list[1:])
+        else:
+            user_note = ''
+        time_dict = self._get_live_time()
+        if time_dict is not None:
+            est_tz = pytz.timezone('US/Eastern')
+            start_time_utc = time_dict['stream_start']
+            start_time_est = est_tz.normalize(start_time_utc.replace(tzinfo=pytz.utc).astimezone(est_tz))
+            time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
+                    hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
+
+            spreadsheet_name, _ = self.spreadsheets['highlights']
+            gc = gspread.authorize(self.credentials)
+            sheet = gc.open(spreadsheet_name)
+            ws = sheet.worksheet('Highlight List')
+            records = ws.get_all_records()  # Doesn't include the first row
+            next_row = len(records) + 2
+            ws.update_cell(next_row, 1, user)
+            ws.update_cell(next_row, 2, str(start_time_est)[:-6])
+            ws.update_cell(next_row, 3, time_str)
+            ws.update_cell(next_row, 4, user_note)
+            # TODO: Fix Whisper Stuff
+            # self._add_to_whisper_queue(user, 'The highlight has been added to the spreadsheet for review.')
+
+    def _delete_last_row(self):
+        """
+        Deletes the last row of the player_queue spreadsheet
+        """
+        spreadsheet_name, _ = self.spreadsheets['player_queue']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Queue')
+        records = ws.get_all_records()
+        last_row_index = len(records) + 1
+
+        ws.update_cell(last_row_index, 1, '')
+        ws.update_cell(last_row_index, 2, '')
+
+    def _insert_into_player_queue_spreadsheet(self, username, times_played, player_queue):
+        """
+        Used by the join command.
+        """
+        spreadsheet_name, _ = self.spreadsheets['player_queue']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Queue')
+
+        records = ws.get_all_records()
+        records = records[1:]  # We don't want the blank space
+        for i, tup in enumerate(player_queue):
+            try:
+                if records[i]['User'] != tup[0]:
+                    ws.insert_row([username, times_played], index=i+3)
+                    break
+            except IndexError:
+                ws.insert_row([username, times_played], index=i+3)
+                
+    def _write_player_queue(self):
+        """
+        Writes the player queue to a json file
+        to be loaded on startup if needed.
+        """
+        with open(f"{self.info['channel']}_player_queue.json", 'w', encoding="utf-8") as player_file:
+            json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
+
+    def join(self, message, db_session):
+        """
+        Adds the user to the game queue.
+        The players who've played the fewest
+        times with the caster get priority.
+
+        !join
+        """
+        username = self.ts.get_user(message)
+        user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
+        if not user:
+            user = models.User(name=username)
+            db_session.add(user)
+        try:
+            self.player_queue.push(username, user.times_played)
+            self._write_player_queue()
+            self._add_to_chat_queue("{0}, you've joined the queue.".format(username))
+            user.times_played += 1
+        except RuntimeError:
+            self._add_to_chat_queue("{0}, you're already in the queue and can't join again.".format(username))
+
+        # queue_snapshot = copy.deepcopy(self.player_queue.queue)
+        # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
+        #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
+
+    def leave(self, message, db_session):
+        """
+        Leaves the player queue once you've joined it.
+
+        !leave
+        """
+        username = self.ts.get_user(message)
+        user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
+        if not user:
+            user = models.User(name=username)
+            db_session.add(user)
+        for tup in self.player_queue.queue:
+            if tup[0] == username:
+                self.player_queue.queue.remove(tup)
+                self._write_player_queue()
+                self._add_to_chat_queue("{0}, you've left the queue.".format(username))
+                user.times_played -= 1
+                break
+        else:
+            self._add_to_chat_queue("You're not in the queue and must join before leaving.")
+
+    def spot(self, message):
+        """
+        Shows user current location in queue and current priority.
+        
+        !spot
+        """
+        try:
+            username = self.ts.get_user(message)
+            for index, tup in enumerate(self.player_queue.queue):
+                if tup[0] == username:
+                    position = len(self.player_queue.queue) - index
+            self._add_to_chat_queue("{0} is number {1} in the queue. This may change as other players join.".format(username, position))
+        except UnboundLocalError:
+            self._add_to_chat_queue("{0} not in the queue. Feel free to join it.".format(username))
+
+    # def show_player_queue(self, message):
+    #     """
+    #     Sends the user a whisper with the current contents of the player queue
+    #
+    #     !show_player_queue
+    #     """
+    #     user = self.ts.get_user(message)
+    #     queue_str = ', '.join([str(item) for item in self.player_queue.queue])
+    #     self._add_to_whisper_queue(user, queue_str)
+
+    # def show_player_queue(self, message):
+    #     """
+    #     Links the google spreadsheet containing the queue list
+    #
+    #     !show_player_queue
+    #     """
+    #     user = self.ts.get_user(message)
+    #     web_view_link = self.spreadsheets['player_queue'][1]
+    #     short_url = self.shortener.short(web_view_link)
+    #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
+
+    # @_mod_only
+    # def cycle(self, message):
+    #     """
+    #     Sends out a message to the next set of players.
+    #
+    #     !cycle
+    #     !cycle Password!1
+    #     """
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     players = self.player_queue.pop_all()
+    #     self._write_player_queue()
+    #     players_str = ' '.join(players)
+    #     channel = self.info['channel']
+    #     if len(msg_list) > 1:
+    #         credential_str = ' '.join(msg_list[1:])
+    #         whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
+    #                 channel, credential_str)
+    #         self.player_queue_credentials = credential_str
+    #     else:
+    #         whisper_str = 'You may now join {} to play.'.format(channel)
+    #         self.player_queue_credentials = None
+    #     for player in players:
+    #         self._add_to_whisper_queue(player, whisper_str)
+    #         # self.command_queue.appendleft(('_delete_last_row', {}))
+    #     self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
+    #         players_str, len(self.player_queue.queue)))
+    #
+    # @_mod_only
+    # def cycle_one(self, message):
+    #     """
+    #     Sends out a message to the next player.
+    #
+    #     !cycle_one
+    #     !cycle_one Password!1
+    #     """
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     channel = self.info['channel']
+    #     try:
+    #         player = self.player_queue.pop()
+    #         self._write_player_queue()
+    #         if len(msg_list) > 1:
+    #             credential_str = ' '.join(msg_list[1:])
+    #             whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
+    #                     channel, credential_str)
+    #         elif self.player_queue_credentials is not None:
+    #             credential_str = self.player_queue_credentials
+    #             whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
+    #                     channel, credential_str)
+    #         else:
+    #             whisper_str = 'You may now join {} to play.'.format(channel)
+    #         self._add_to_whisper_queue(player, whisper_str)
+    #         self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(player, len(self.player_queue.queue)))
+    #         # self.command_queue.appendleft(('_delete_last_row', {}))
+    #     except IndexError:
+    #         self._add_to_chat_queue('Sorry, there are no more players in the queue')
+    #
+    # @_mod_only
+    # def reset_queue(self, db_session):
+    #     """
+    #     Creates a new queue with the default room size
+    #     and resets all players stats for how many
+    #     times they've played with the caster.
+    #
+    #     !reset_queue
+    #     """
+    #     for _ in self.player_queue.queue:
+    #         self.command_queue.appendleft(('_delete_last_row', {}))
+    #     self.player_queue = PlayerQueue.PlayerQueue()
+    #     try:
+    #         os.remove(f"{self.info['channel']}_player_queue.json")
+    #     except FileNotFoundError:
+    #         pass
+    #     db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.times_played: 0}))
+    #     self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
+    #
+    # @_mod_only
+    # def set_cycle_number(self, message):
+    #     """
+    #     Sets the number of players to cycle
+    #     in when it's time to play with new people.
+    #     By default this value is 7.
+    #
+    #     !set_cycle_number 5
+    #     """
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     user = self.ts.get_user(message)
+    #     if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
+    #         cycle_num = int(msg_list[1])
+    #         self.player_queue.cycle_num = cycle_num
+    #         self._add_to_whisper_queue(user, "The new room size is {}.".format(cycle_num))
+    #     else:
+    #         self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
+    #
+    # @_mod_only
+    # def promote(self, message, db_session):
+    #     """
+    #     Promotes a player in the player queue.
+    #
+    #     !promote testuser
+    #
+    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
+    #             move some of the logic
+    #     """
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     user = self.ts.get_user(message)
+    #     player = msg_list[1]
+    #     for index, tup in enumerate(self.player_queue.queue):
+    #         if tup[0] == player:
+    #             times_played = tup[1]
+    #             if times_played != 0:
+    #                 result = db_session.query(db.User).filter(db.User.name == player).one()
+    #                 result.times_played -= 1
+    #                 self.player_queue.queue.remove(tup)
+    #                 self.player_queue.push(player, times_played-1)
+    #             else:
+    #                 self._add_to_whisper_queue(user, '{} cannot be promoted in the queue.'.format(player))
+    #             break
+    #     else:
+    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+    #
+    # @_mod_only
+    # def demote(self, message, db_session):
+    #     """
+    #     Demotes a player in the player queue.
+    #
+    #     !demote testuser
+    #
+    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
+    #             move some of the logic
+    #     """
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     user = self.ts.get_user(message)
+    #     player = msg_list[1]
+    #     for index, tup in enumerate(self.player_queue.queue):
+    #         if tup[0] == player:
+    #             times_played = tup[1]
+    #             result = db_session.query(db.User).filter(db.User.name == player).one()
+    #             result.times_played += 1
+    #             self.player_queue.queue.remove(tup)
+    #             self.player_queue.push(player, times_played+1)
+    #             break
+    #     else:
+    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+
+    def enter_contest(self, message, db_session):
+        """
+        Adds the user to the contest entrants
+        or informs them that they're already entered if they've already
+        entered since the last time the entrants were cleared.
+
+        !enter_contest
+        """
+
+        username = self.ts.get_user(message)
+        user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
+        if user:
+            print('user found')
+            if user.entered_in_contest:
+                # TODO: Fix Whisper Stuff
+                # self._add_to_whisper_queue(user.name, 'You\'re already entered into the contest, you can\'t enter again.')
+                pass
+            else:
+                user.entered_in_contest = True
+                # self._add_to_whisper_queue(user.name, 'You\'re entered into the contest!')
+        else:
+            user = models.User(entered_in_contest=True, name=username)
+            db_session.add(user)
+            # self._add_to_whisper_queue(username, 'You\'re entered into the contest!')
+
+    @_mod_only
+    def show_contest_winner(self, db_session):
+        """
+        Selects a contest entrant at random.
+        Sends their name to the chat.
+
+        !show_contest_winner
+        """
+        users_contest_list = db_session.query(models.User).filter(models.User.entered_in_contest.isnot(False)).all()
+        if len(users_contest_list) > 0:
+            winner = random.choice(users_contest_list)
+            self._add_to_chat_queue('The winner is {}!'.format(winner.name))
+        else:
+            self._add_to_chat_queue('There are currently no entrants for the contest.')
+
+    # @_mod_only
+    # def clear_contest_entrants(self, db_session):
+    #     """
+    #     Sets the entrants list to be an empty list and then writes
+    #     that to the entrants file.
+    #
+    #     !clear_contest_entrants
+    #     """
+    #     db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.entered_in_contest: False}))
+    #     self._add_to_chat_queue("Contest entrants cleared.")
+    #
+    # @_mod_only
+    # def enable_guessing(self, db_session):
+    #     """
+    #     Allows users to guess about the number of deaths
+    #     before the next progression checkpoint.
+    #     Expresses this in chat.
+    #
+    #     !enable_guessing
+    #     """
+    #     mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one()
+    #     mv_obj.mv_value = "True"
+    #     self._add_to_chat_queue("Guessing is now enabled.")
+    #
+    # @_mod_only
+    # def disable_guessing(self, db_session):
+    #     """
+    #     Stops users from guess about the number of deaths
+    #     before the next progression checkpoint.
+    #     Expresses this in chat.
+    #
+    #     !disable_guessing
+    #     """
+    #     mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one()
+    #     mv_obj.mv_value = "False"
+    #     self._add_to_chat_queue("Guessing is now disabled.")
+    #
+    # def guess(self, message, db_session):
+    #     """
+    #     Updates the database with a user's guess
+    #     or informs the user that their guess
+    #     doesn't fit the acceptable parameters
+    #     or that guessing is disabled for everyone.
+    #
+    #     !guess 50
+    #     """
+    #     user = self.ts.get_user(message)
+    #     if db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guessing-enabled').one().mv_value == 'True':
+    #         msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #         if len(msg_list) > 1:
+    #             guess = msg_list[1]
+    #             if guess.isdigit() and int(guess) >= 0:
+    #                 self._set_current_guess(user, guess, db_session)
+    #                 self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+    #             else:
+    #                 self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+    #         else:
+    #             self._add_to_whisper_queue(user,
+    #                                        "Sorry {}, !guess must be followed by a non-negative integer.".format(user))
+    #     else:
+    #         self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
+    #
+    # @_mod_only
+    # def enable_guesstotal(self, db_session):
+    #     """
+    #     Enables guessing for the total number of deaths for the run.
+    #     Modifies the value associated with the guess-total-enabled key
+    #     in the miscellaneous values dictionary and writes it to the json file.
+    #
+    #     !enable_guesstotal
+    #     """
+    #     mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one()
+    #     mv_obj.mv_value = "True"
+    #     self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
+    #
+    # @_mod_only
+    # def disable_guesstotal(self, db_session):
+    #     """
+    #     Disables guessing for the total number of deaths for the run.
+    #
+    #     !disable_guesstotal
+    #     """
+    #     mv_obj = db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one()
+    #     mv_obj.mv_value = "False"
+    #     self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
+    #
+    # def guesstotal(self, message, db_session):
+    #     """
+    #     Updates the database with a user's guess
+    #     for the total number of deaths in the run
+    #     or informs the user that their guess
+    #     doesn't fit the acceptable parameters
+    #     or that guessing is disabled for everyone.
+    #
+    #     !guesstotal 50
+    #     """
+    #     user = self.ts.get_user(message)
+    #     if db_session.query(db.MiscValue).filter(db.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
+    #         msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #         if len(msg_list) > 1:
+    #             guess = msg_list[1]
+    #             if guess.isdigit() and int(guess) >= 0:
+    #                 self._set_total_guess(user, guess, db_session)
+    #                 self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+    #             else:
+    #                 self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+    #         else:
+    #             self._add_to_whisper_queue(user,
+    #                                        "Sorry {}, you need to include a number after your guess.".format(user))
+    #     else:
+    #         self._add_to_whisper_queue(user,
+    #                                    "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
+    #
+    # @_mod_only
+    # def clear_guesses(self, db_session):
+    #     """
+    #     Clear all guesses so that users
+    #     can guess again for the next segment
+    #     of the run.
+    #
+    #     !clear_guesses
+    #     """
+    #     db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.current_guess: None}))
+    #     self._add_to_chat_queue("Guesses have been cleared.")
+    #
+    # @_mod_only
+    # def clear_total_guesses(self, db_session):
+    #     """
+    #     Clear all total guesses so that users
+    #     can guess again for the next game
+    #     where they guess about the total number of deaths
+    #
+    #     !clear_total_guesses
+    #     """
+    #     db_session.execute(sqlalchemy.update(db.User.__table__, values={db.User.__table__.c.total_guess: None}))
+    #     self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
+    #
+    # @_retry_gspread_func
+    # def _update_player_guesses_spreadsheet(self):
+    #     """
+    #     Updates the player guesses spreadsheet from the database.
+    #     """
+    #     db_session = self.Session()
+    #     spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
+    #     gc = gspread.authorize(self.credentials)
+    #     sheet = gc.open(spreadsheet_name)
+    #     ws = sheet.worksheet('Player Guesses')
+    #     all_users = db_session.query(db.User).all()
+    #     users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
+    #     for i in range(2, len(users) + 10):
+    #         ws.update_cell(i, 1, '')
+    #         ws.update_cell(i, 2, '')
+    #         ws.update_cell(i, 3, '')
+    #     for index, user in enumerate(users):
+    #         row_num = index + 2
+    #         ws.update_cell(row_num, 1, user.name)
+    #         ws.update_cell(row_num, 2, user.current_guess)
+    #         ws.update_cell(row_num, 3, user.total_guess)
+    #     return web_view_link
+    #
+    # @_mod_only
+    # def show_guesses(self, db_session):
+    #     """
+    #     Clears all guesses out of the google
+    #     spreadsheet, then repopulate it from
+    #     the database.
+    #
+    #     !show_guesses
+    #     """
+    #     self._add_to_chat_queue(
+    #         "Formatting the google sheet with the latest information about all the guesses may take a bit." +
+    #         " I'll let you know when it's done.")
+    #     web_view_link = self.spreadsheets['player_guesses'][1]
+    #     short_url = self.shortener.short(web_view_link)
+    #     self._update_player_guesses_spreadsheet()
+    #     self._add_to_chat_queue(
+    #         "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
+    #         "Here's a link. {}".format(short_url))
+    #
+    # @_mod_only
+    # def set_deaths(self, message, db_session):
+    #     """
+    #     Sets the number of deaths for the current
+    #     leg of the run. Needs a non-negative integer.
+    #
+    #     !set_deaths 5
+    #     """
+    #     user = self.ts.get_user(message)
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     if len(msg_list) > 1:
+    #         deaths_num = msg_list[1]
+    #         if deaths_num.isdigit() and int(deaths_num) >= 0:
+    #             self._set_deaths(deaths_num, db_session)
+    #             self._add_to_whisper_queue(user, 'Current deaths: {}'.format(deaths_num))
+    #         else:
+    #             self._add_to_whisper_queue(user,
+    #                                        'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(
+    #                                            user))
+    #     else:
+    #         self._add_to_whisper_queue(user,
+    #                                    'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(
+    #                                        user))
+    #
+    # @_mod_only
+    # def set_total_deaths(self, message, db_session):
+    #     """
+    #     Sets the total number of deaths for the run.
+    #     Needs a non-negative integer.
+    #
+    #     !set_total_deaths 5
+    #     """
+    #     user = self.ts.get_user(message)
+    #     msg_list = self.ts.get_human_readable_message(message).split(' ')
+    #     if len(msg_list) > 1:
+    #         total_deaths_num = msg_list[1]
+    #         if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
+    #             self._set_total_deaths(total_deaths_num, db_session)
+    #             self._add_to_whisper_queue(user, 'Total deaths: {}'.format(total_deaths_num))
+    #         else:
+    #             self._add_to_whisper_queue(user,
+    #                                        'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(
+    #                                            user))
+    #     else:
+    #         self._add_to_whisper_queue(user,
+    #                                    'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(
+    #                                        user))
+    #
+    # @_mod_only
+    # def add_death(self, message, db_session):
+    #     """
+    #     Adds one to both the current sequence
+    #     and total death counters.
+    #
+    #     !add_death
+    #     """
+    #     user = self.ts.get_user(message)
+    #     deaths = int(self._get_current_deaths(db_session))
+    #     total_deaths = int(self._get_total_deaths(db_session))
+    #     deaths += 1
+    #     total_deaths += 1
+    #     self._set_deaths(str(deaths), db_session)
+    #     self._set_total_deaths(str(total_deaths), db_session)
+    #     whisper_msg = 'Current Deaths: {}, Total Deaths: {}'.format(deaths, total_deaths)
+    #     self._add_to_whisper_queue(user, whisper_msg)
+    #
+    # @_mod_only
+    # def clear_deaths(self, db_session):
+    #     """
+    #     Sets the number of deaths for the current
+    #     stage of the run to 0. Used after progressing
+    #     to the next stage of the run.
+    #
+    #     !clear_deaths
+    #     """
+    #     self._set_deaths('0', db_session)
+    #     self.show_deaths()
+    #
+    # def show_deaths(self, db_session):
+    #     """
+    #     Sends the current and total death
+    #     counters to the chat.
+    #
+    #     !show_deaths
+    #     """
+    #     deaths = self._get_current_deaths(db_session)
+    #     total_deaths = self._get_total_deaths(db_session)
+    #     self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
+    #
+    # def show_winner(self, db_session):
+    #     """
+    #     Sends the name of the currently winning
+    #     player to the chat. Should be used after
+    #     stage completion to display who won.
+    #
+    #     !show_winner
+    #     """
+    #     winners_list = []
+    #     deaths = self._get_current_deaths(db_session)
+    #     last_winning_guess = -1
+    #     users = db_session.query(db.User).filter(db.User.current_guess.isnot(None)).all()
+    #     for user in users:
+    #         # If your guess was over the number of deaths you lose due to the price is right rules.
+    #         if int(user.current_guess) <= int(deaths):
+    #             if user.current_guess > last_winning_guess:
+    #                 winners_list = [user.name]
+    #                 last_winning_guess = user.current_guess
+    #             elif user.current_guess == last_winning_guess:
+    #                 winners_list.append(user.name)
+    #     if len(winners_list) == 1:
+    #         winners_str = "The winner is {}.".format(winners_list[0])
+    #     elif len(winners_list) > 1:
+    #         winners_str = 'The winners are '
+    #         for winner in winners_list[:-1]:
+    #             winners_str += "{}, ".format(winner)
+    #         winners_str = '{} and {}!'.format(winners_str[:-2], winners_list[-1])
+    #     else:
+    #         me = self.info['channel']
+    #         winners_str = 'You all guessed too high. You should have had more faith in {}. {} wins!'.format(me, me)
+    #     self._add_to_chat_queue(winners_str)
+
+    def _set_current_guess(self, user, guess, db_session):
+        """
+        Takes a user and a guess.
+        Adds the user (if they don't already exist)
+        and their guess to the users table.
+        """
+        db_user = db_session.query(models.User).filter(models.User.name == user).first()
+        if not db_user:
+            db_user = models.User(name=user)
+            db_session.add(db_user)
+        db_user.current_guess = guess
+
+    def _set_total_guess(self, user, guess, db_session):
+        """
+        Takes a user and a guess
+        for the total number of deaths.
+        Adds the user and their guess
+        to the users table.
+        """
+        db_user = db_session.query(models.User).filter(models.User.name == user).first()
+        if not db_user:
+            db_user = models.User(name=user)
+            db_session.add(db_user)
+        db_user.total_guess = guess
+
+    def _get_current_deaths(self, db_session):
+        """
+        Returns the current number of deaths
+        for the current leg of the run.
+        """
+        deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
+        return deaths_obj.mv_value
+
+    def _get_total_deaths(self, db_session):
+        """
+        Returns the total deaths that
+        have occurred in the run so far.
+        """
+        total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
+        return total_deaths_obj.mv_value
+
+    def _set_deaths(self, deaths_num, db_session):
+        """
+        Takes a string for the number of deaths.
+        Updates the miscellaneous values table.
+        """
+        deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
+        deaths_obj.mv_value = deaths_num
+
+    def _set_total_deaths(self, total_deaths_num, db_session):
+        """
+        Takes a string for the total number of deaths.
+        Updates the miscellaneous values table.
+        """
+        total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
+        total_deaths_obj.mv_value = total_deaths_num
