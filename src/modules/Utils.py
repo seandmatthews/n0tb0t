@@ -5,11 +5,36 @@ import requests
 from config import BOT_INFO
 
 
+# DECORATORS #
+def _retry_gspread_func(f):
+    """
+    Retries the function that uses gspread until it completes without throwing an HTTPError
+    """
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        while True:
+            try:
+                f(*args, **kwargs)
+            except gspread.exceptions.GSpreadException:
+                continue
+            break
+
+    return wrapper
+
+
+def _mod_only(f):
+    """
+    Set's the method's _mods_only property to True
+    """
+    f._mods_only = True
+    return f
+    # END DECORATORS #
+
+
 class UtilsMixin(object):
     def __init__(self):
         super(UtilsMixin, self).__init__()
-
-
 
     def _get_live_time(self):
         """
