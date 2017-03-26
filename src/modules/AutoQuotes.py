@@ -7,7 +7,7 @@ import src.models as models
 import src.modules.Utils as Utils
 
 
-class AutoQuoteMixin(object):
+class AutoQuoteMixin:
 
     def _auto_quote(self, index, quote, period):
         """

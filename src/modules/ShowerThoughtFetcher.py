@@ -1,12 +1,13 @@
-#!/usr/bin/python3
 import random
+
 import praw
+
 from config import reddit_client_id
 from config import reddit_client_secret
 from config import reddit_user_agent
 
 
-class ShowerThoughtFetcherMixin(object):
+class ShowerThoughtFetcherMixin:
     """docstring for ShowerThoughtFetcher"""
     def __init__(self):
         super(ShowerThoughtFetcherMixin, self).__init__()

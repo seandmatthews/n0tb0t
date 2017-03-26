@@ -1,11 +1,12 @@
 import json
 import random
+
 import requests
 
 import src.modules.Utils as Utils
 
 
-class StrawPollMixin(object):
+class StrawPollMixin:
     def _get_poll_info(self, poll_id):
         """
         Returns options and votes for poll ID in json format.

@@ -1,7 +1,9 @@
 import functools
 import datetime
+
 import gspread
 import requests
+
 from config import BOT_INFO
 
 
@@ -32,7 +34,7 @@ def _mod_only(f):
     # END DECORATORS #
 
 
-class UtilsMixin(object):
+class UtilsMixin:
     def __init__(self):
         super(UtilsMixin, self).__init__()
 
@@ -73,6 +75,26 @@ class UtilsMixin(object):
                 continue
             else:
                 return time_dict
+        else:
+            self._add_to_chat_queue(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def _get_creation_date(self, user):
+        """
+        Returns the creation date of a given twitch user.
+        """
+        url = 'https://api.twitch.tv/kraken/users/{}'.format(user)
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.info['twitch_api_client_id']})
+                creation_date = r.json()['created_at']
+                cut_creation_date = creation_date[:10]
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return cut_creation_date
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
