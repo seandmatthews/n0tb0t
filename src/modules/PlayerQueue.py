@@ -21,7 +21,7 @@ class PlayerQueue:
         """
         @params:
             player is the twitch username of a prospective player
-            priority 
+            priority is the number of times they've played with the caster
         """
         index = None
         for i, tup in enumerate(self.queue):
@@ -37,10 +37,7 @@ class PlayerQueue:
 
     def pop(self):
         """
-        @todo(n0t1337): Write three page essay on:
-            what this function is for
-            the context it should be used in
-            etc
+        Removes one player, priority tuple from the player queue and returns them
         """
         return self.queue.pop()[0]
 

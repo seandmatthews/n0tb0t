@@ -8,8 +8,8 @@ import src.modules.Utils as Utils
 
 
 class QuotesMixin:
-    @Utils._mod_only
     @Utils._retry_gspread_func
+    @Utils._mod_only
     def update_quote_spreadsheet(self, db_session):
         """
         Updates the quote spreadsheet from the database.
@@ -32,8 +32,6 @@ class QuotesMixin:
         for index, quote_obj in enumerate(quotes):
             qs.update_cell(index + 2, 1, index + 1)
             qs.update_cell(index + 2, 2, quote_obj.quote)
-
-        self._add_to_chat_queue('Quote spreadsheet updated!')
 
     @Utils._mod_only
     def update_quote_db_from_spreadsheet(self, db_session):

@@ -69,7 +69,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name)
+            getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -181,7 +181,7 @@ class Bot(*mixin_classes):
         return session_factory
 
     @_retry_gspread_func
-    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
+    def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the quotes google sheet with its initial data.
         """
@@ -199,10 +199,10 @@ class Bot(*mixin_classes):
         qs.update_acell('A1', 'Quote Index')
         qs.update_acell('B1', 'Quote')
 
-        # self.update_quote_spreadsheet()
+        self.update_quote_spreadsheet(db_session)
 
     @_retry_gspread_func
-    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
+    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the auto_quotes google sheet with its initial data.
         """
@@ -221,10 +221,10 @@ class Bot(*mixin_classes):
         aqs.update_acell('B1', 'Quote')
         aqs.update_acell('C1', 'Period\n(In seconds)')
 
-        # self.update_auto_quote_spreadsheet()
+        self.update_auto_quote_spreadsheet(db_session)
 
     @_retry_gspread_func
-    def _initialize_commands_spreadsheet(self, spreadsheet_name):
+    def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the commands google sheet with its initial data.
         """
@@ -265,10 +265,10 @@ class Bot(*mixin_classes):
             cs.update_cell(index+2, 4, '!{}'.format(method))
             cs.update_cell(index+2, 5, getattr(self, method).__doc__)
 
-        # self.update_command_spreadsheet()
+        self.update_command_spreadsheet(db_session)
 
     @_retry_gspread_func
-    def _initialize_highlights_spreadsheet(self, spreadsheet_name):
+    def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the highlights google sheet with its initial data.
         """
@@ -289,7 +289,7 @@ class Bot(*mixin_classes):
         hls.update_acell('D1', 'User Note')
 
     @_retry_gspread_func
-    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
+    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_guesses google sheet with its initial data.
         """
@@ -309,7 +309,7 @@ class Bot(*mixin_classes):
         pgs.update_acell('C1', 'Total Guess')
 
     @_retry_gspread_func
-    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
+    def _initialize_player_queue_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_queue google sheet with its initial data.
         """

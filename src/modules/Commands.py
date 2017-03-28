@@ -6,7 +6,7 @@ import src.models as models
 import src.modules.Utils as Utils
 
 
-class Commands:
+class CommandsMixin:
 
     @Utils._mod_only
     @Utils._retry_gspread_func
