@@ -27,12 +27,12 @@ def run(BOT_INFO, ts, bot):
             last_message = messages_list[-2]
             if "NOTICE" in last_message:
                 print(messages)
-            elif ts.get_user(last_message) in [BOT_INFO['user'], 'system']:
+            elif ts.get_username(last_message) in [BOT_INFO['user'], 'system']:
                 pass
             else:
                 print("{} {}: {}".format(
                         time.strftime("%Y-%m-%d %H:%M:%S"),
-                        ts.get_user(last_message),
+                        ts.get_username(last_message),
                         ts.get_human_readable_message(last_message)))
             messages = ""
             if last_message == 'PING :tmi.twitch.tv':

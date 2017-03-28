@@ -103,7 +103,7 @@ class PlayerQueueMixin:
 
         !join
         """
-        username = self.ts.get_user(message)
+        username = self.ts.get_username(message)
         user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
         if not user:
             user = models.User(name=username)
@@ -126,7 +126,7 @@ class PlayerQueueMixin:
 
         !leave
         """
-        username = self.ts.get_user(message)
+        username = self.ts.get_username(message)
         user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
         if not user:
             user = models.User(name=username)
@@ -148,7 +148,7 @@ class PlayerQueueMixin:
         !spot
         """
         try:
-            username = self.ts.get_user(message)
+            username = self.ts.get_username(message)
             for index, tup in enumerate(self.player_queue.queue):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
@@ -163,7 +163,7 @@ class PlayerQueueMixin:
 
         !show_player_queue
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         queue_str = ', '.join([str(item) for item in self.player_queue.queue])
         self._add_to_whisper_queue(user, queue_str)
 
@@ -173,7 +173,7 @@ class PlayerQueueMixin:
 
         !show_player_queue
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         web_view_link = self.spreadsheets['player_queue'][1]
         short_url = self.shortener.short(web_view_link)
         self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
@@ -263,7 +263,7 @@ class PlayerQueueMixin:
         !set_cycle_number 5
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
             self.player_queue.cycle_num = cycle_num
@@ -282,7 +282,7 @@ class PlayerQueueMixin:
                 move some of the logic
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         player = msg_list[1]
         for index, tup in enumerate(self.player_queue.queue):
             if tup[0] == player:
@@ -309,7 +309,7 @@ class PlayerQueueMixin:
                 move some of the logic
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         player = msg_list[1]
         for index, tup in enumerate(self.player_queue.queue):
             if tup[0] == player:

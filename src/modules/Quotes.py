@@ -68,7 +68,7 @@ class QuotesMixin:
 
         !add_quote Oh look, the caster has uttered an innuendo!
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         quote = ' '.join(msg_list[1:])
         quote_obj = models.Quote(quote=quote)
@@ -88,7 +88,7 @@ class QuotesMixin:
         !delete_quote 1
         """
         msg_list = self.ts.get_human_readable_message(message).split(' ')
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             quotes = db_session.query(models.Quote).all()
             if int(msg_list[1]) <= len(quotes):
@@ -112,7 +112,7 @@ class QuotesMixin:
 
         !show_quotes
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         web_view_link = self.spreadsheets['quotes'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff

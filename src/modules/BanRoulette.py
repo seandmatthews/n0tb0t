@@ -16,7 +16,7 @@ class BanRouletteMixin:
             else:
                 user = None
         elif len(self.ts.get_human_readable_message(message).split(' ')) == 1:
-            user = self.ts.get_user(message)
+            user = self.ts.get_username(message)
         else:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(self.ts.get_user(message), 'Sorry, this command is only one word')

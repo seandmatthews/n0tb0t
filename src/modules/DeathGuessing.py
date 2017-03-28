@@ -41,7 +41,7 @@ class DeathGuessingMixin:
 
         !guess 50
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one().mv_value == 'True':
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
@@ -91,7 +91,7 @@ class DeathGuessingMixin:
 
         !guesstotal 50
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
             msg_list = self.ts.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
@@ -182,7 +182,7 @@ class DeathGuessingMixin:
 
         !set_deaths 5
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             deaths_num = msg_list[1]
@@ -206,7 +206,7 @@ class DeathGuessingMixin:
 
         !set_total_deaths 5
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             total_deaths_num = msg_list[1]
@@ -230,7 +230,7 @@ class DeathGuessingMixin:
 
         !add_death
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         deaths = int(self._get_current_deaths(db_session))
         total_deaths = int(self._get_total_deaths(db_session))
         deaths += 1

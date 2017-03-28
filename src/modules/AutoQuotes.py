@@ -82,7 +82,7 @@ class AutoQuoteMixin:
 
         !show_auto_quotes
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff
@@ -99,12 +99,13 @@ class AutoQuoteMixin:
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
-            db_session.add(models.AutoQuote(quote=quote, period=delay))
+            auto_quote = models.AutoQuote(quote=quote, period=delay)
+            db_session.add(auto_quote)
             my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                          kwargs={'db_session': db_session})
             my_thread.daemon = True
@@ -129,7 +130,7 @@ class AutoQuoteMixin:
 
         !delete_auto_quote 1
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quotes = db_session.query(models.AutoQuote).all()

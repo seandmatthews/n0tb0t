@@ -13,7 +13,7 @@ class ShoutOutMixin:
 
         !SO $caster
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         me = self.info['channel']
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:

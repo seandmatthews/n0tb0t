@@ -61,26 +61,26 @@ class TwitchSocket(object):
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
-    def get_user(self, line):
-        try:
-            line_list = line.split(';')
-            user = line_list[2][13:].lower()
-        except IndexError:
-            user = 'system'
-        # if 'emotes=;' in line:
-        #     num_colons = 2
-        # else:
-        #     num_colons = 3
-        # line_list = line.split(':', num_colons)
-        # user = line_list[-2].split('!')[0]
-        return user
+    def get_username(self, line):
+        if 'display-name=' in line:
+            _, *rest_of_line = line.split('display-name=')
+            username = rest_of_line[0].split(';')[0]
+            return username
+        else:
+            return 'system'
+
+    def get_user_id(self, line):
+        if 'user-id=' in line:
+            _, *rest_of_line = line.split('user-id=')
+            user_id = rest_of_line[0].split(';')[0]
+            return user_id
 
     def get_human_readable_message(self, line):
         if 'emotes=;' in line:
             num_colons = 2
         else:
             num_colons = 3
-        if "PRIVMSG" in line or ("WHISPER" in line and self.get_user(line) in self.get_mods()):
+        if "PRIVMSG" in line or ("WHISPER" in line and self.get_username(line) in self.get_mods()):
             line_list = line.split(':', num_colons)
             hr_message = line_list[-1]
             return hr_message
@@ -90,12 +90,12 @@ class TwitchSocket(object):
     def check_mod(self, line):
         line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            if ('user-type=mod' in line_list[0]) or (self.get_user(line) == self.channel):
+            if ('user-type=mod' in line_list[0]) or (self.get_username(line) == self.channel):
                 return True
             else:
                 return False
         elif "WHISPER" in line:
-            if (self.get_user(line) in self.get_mods()) or (self.get_user(line) == self.channel):
+            if (self.get_username(line) in self.get_mods()) or (self.get_username(line) == self.channel):
                 return True
             else:
                 return False

@@ -69,7 +69,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name, session)
+            # getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -401,7 +401,7 @@ class Bot(*mixin_classes):
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.ts.get_user(message)
+            user = self.ts.get_username(message)
             user_is_mod = self.ts.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
