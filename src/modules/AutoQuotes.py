@@ -57,7 +57,7 @@ class AutoQuoteMixin:
 
         !start_auto_quotes
         """
-        auto_quotes = db_session.query(models.AutoQuote).all()
+        auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         self.auto_quotes_timers = {}
         for index, auto_quote in enumerate(auto_quotes):
             quote = auto_quote.quote
@@ -104,7 +104,10 @@ class AutoQuoteMixin:
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
-            db_session.add(models.AutoQuote(quote=quote, period=delay))
+            autoquote = models.AutoQuote(quote=quote, period=delay, active=True)
+            db_session.add(autoquote)
+            db_session.flush()
+            last_autoquote_id = autoquote.id
             my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                          kwargs={'db_session': db_session})
             my_thread.daemon = True
@@ -112,7 +115,8 @@ class AutoQuoteMixin:
 
             # # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'Auto quote added.')
-            self._add_to_chat_queue('Auto quote added.')
+            displayed_feedback_message = "Auto quote added (ID #{}).".format(last_autoquote_id)
+            self._add_to_chat_queue(displayed_feedback_message)
             self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
