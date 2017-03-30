@@ -35,6 +35,7 @@ class AutoQuote(Base):
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     quote = sqlalchemy.Column(sqlalchemy.String)
     period = sqlalchemy.Column(sqlalchemy.Integer)
+    active = sqlalchemy.Column(sqlalchemy.Boolean)
 
 
 class MiscValue(Base):

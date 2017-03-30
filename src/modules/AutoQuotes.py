@@ -57,12 +57,26 @@ class AutoQuoteMixin:
 
         !start_auto_quotes
         """
-        auto_quotes = db_session.query(models.AutoQuote).all()
+        auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         self.auto_quotes_timers = {}
         for index, auto_quote in enumerate(auto_quotes):
             quote = auto_quote.quote
             period = auto_quote.period
             self._auto_quote(index=index, quote=quote, period=period)
+
+    @Utils._mod_only
+    def _start_auto_quote(self, id, db_session):
+        """
+        Starts the bot spitting out a specific auto quote again, depending from its index.
+
+        !start_auto_quotes
+        """
+        auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).filter(
+            models.AutoQuote.id == id).one()
+        index = 'AQ{}'.format(id)
+        quote = auto_quote.quote
+        period = auto_quote.period
+        self._auto_quote(index=index, quote=quote, period=period)
 
     @Utils._mod_only
     def stop_auto_quotes(self):
@@ -76,13 +90,24 @@ class AutoQuoteMixin:
             time.sleep(1)
             self.auto_quotes_timers[AQ].cancel()
 
+    @Utils._mod_only
+    def _stop_auto_quotes(self, id):
+        """
+        Stops the bot from spitting out a specific quote by cancelling the quote thread, depending from its index.
+
+        !stop_auto_quote
+        """
+        fullid = 'AQ{}'.format(id)
+        self.auto_quotes_timers[fullid].cancel()
+        time.sleep(1)
+
     def show_auto_quotes(self, message):
         """
         Links to a google spreadsheet containing all auto quotes
 
         !show_auto_quotes
         """
-        user = self.ts.get_username(message)
+        user = self.ts.get_user(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff
@@ -99,13 +124,15 @@ class AutoQuoteMixin:
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        user = self.ts.get_username(message)
+        user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
-            auto_quote = models.AutoQuote(quote=quote, period=delay)
-            db_session.add(auto_quote)
+            autoquote = models.AutoQuote(quote=quote, period=delay, active=True)
+            db_session.add(autoquote)
+            db_session.flush()
+            last_autoquote_id = autoquote.id
             my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                          kwargs={'db_session': db_session})
             my_thread.daemon = True
@@ -113,7 +140,8 @@ class AutoQuoteMixin:
 
             # # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'Auto quote added.')
-            self._add_to_chat_queue('Auto quote added.')
+            displayed_feedback_message = "Auto quote added (ID #{}).".format(last_autoquote_id)
+            self._add_to_chat_queue(displayed_feedback_message)
             self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
@@ -130,7 +158,7 @@ class AutoQuoteMixin:
 
         !delete_auto_quote 1
         """
-        user = self.ts.get_username(message)
+        user = self.ts.get_user(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quotes = db_session.query(models.AutoQuote).all()
@@ -152,3 +180,41 @@ class AutoQuoteMixin:
         else:
             pass
             # self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
+
+    @Utils._mod_only
+    def activate_auto_quote(self, message, db_session):
+
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) == 2 and msg_list[1].isdigit():
+            id = int(msg_list[1]) - 1
+
+            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == id).one()
+
+            autoquote.active = True
+            db_session.flush()
+
+            self._start_auto_quote(self, autoquote.id, db_session)
+            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+
+    @Utils._mod_only
+    def deactivate_auto_quote(self, message, db_session):
+
+        user = self.ts.get_user(message)
+        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        if len(msg_list) == 2 and msg_list[1].isdigit():
+            id = int(msg_list[1]) - 1
+
+            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == id).one()
+
+            autoquote.active = False
+            db_session.flush()
+
+            self._stop_auto_quotes(self, id)
+            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()

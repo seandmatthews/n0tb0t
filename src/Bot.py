@@ -220,6 +220,7 @@ class Bot(*mixin_classes):
         aqs.update_acell('A1', 'Auto Quote Index')
         aqs.update_acell('B1', 'Quote')
         aqs.update_acell('C1', 'Period\n(In seconds)')
+        aqs.update_acell('D1', 'Active')
 
         self.update_auto_quote_spreadsheet(db_session)
 
