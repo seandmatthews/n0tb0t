@@ -5,7 +5,7 @@ import src.models as models
 import src.modules.Utils as Utils
 
 
-class DeathGuessingMixin:
+class DeathGuessingDisabled:
     @Utils._mod_only
     def enable_guessing(self, db_session):
         """

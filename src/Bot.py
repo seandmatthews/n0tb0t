@@ -24,12 +24,12 @@ module_files = onlyfiles = [f for f in os.listdir(modules_dir) if os.path.isfile
 mixin_classes = []
 for file in module_files:
     if file[0] != '_' and file[-3:] == '.py':
-        print(file)
         imported = importlib.import_module(f'src.modules.{file[:-3]}')
         for item in dir(imported):
             if item[0] != '_':
                 if isinstance(getattr(imported, item), type) and 'Mixin' in item:
                     mixin_classes.append(getattr(imported, item))
+                    print(item)
 
 
 # noinspection PyArgumentList,PyIncorrectDocstring
@@ -69,7 +69,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name, session)
+            getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 

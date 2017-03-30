@@ -53,7 +53,7 @@ class PlayerQueue:
         return return_list
 
 
-class PlayerQueueMixin:
+class PlayerQueueDisabled:
     def _delete_last_row(self):
         """
         Deletes the last row of the player_queue spreadsheet
