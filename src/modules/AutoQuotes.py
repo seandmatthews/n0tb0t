@@ -2,6 +2,7 @@ import threading
 import time
 
 import gspread
+import sqlalchemy
 
 import src.models as models
 import src.modules.Utils as Utils
@@ -43,11 +44,13 @@ class AutoQuoteMixin:
             aqs.update_cell(index+2, 1, '')
             aqs.update_cell(index+2, 2, '')
             aqs.update_cell(index+2, 3, '')
+            aqs.update_cell(index+2, 4, '')
 
         for index, aq in enumerate(auto_quotes):
             aqs.update_cell(index+2, 1, index+1)
             aqs.update_cell(index+2, 2, aq.quote)
             aqs.update_cell(index+2, 3, aq.period)
+            aqs.update_cell(index+2, 4, aq.active)
 
     @Utils._mod_only
     def start_auto_quotes(self, db_session):
@@ -65,15 +68,13 @@ class AutoQuoteMixin:
             self._auto_quote(index=index, quote=quote, period=period)
 
     @Utils._mod_only
-    def _start_auto_quote(self, id, db_session):
+    def _start_auto_quote(self, auto_quote_id, db_session):
         """
         Starts the bot spitting out a specific auto quote again, depending from its index.
-
-        !start_auto_quotes
         """
         auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).filter(
-            models.AutoQuote.id == id).one()
-        index = 'AQ{}'.format(id)
+            models.AutoQuote.id == auto_quote_id).one()
+        index = 'AQ{}'.format(auto_quote_id)
         quote = auto_quote.quote
         period = auto_quote.period
         self._auto_quote(index=index, quote=quote, period=period)
@@ -91,15 +92,14 @@ class AutoQuoteMixin:
             self.auto_quotes_timers[AQ].cancel()
 
     @Utils._mod_only
-    def _stop_auto_quotes(self, id):
+    def _stop_auto_quote(self, auto_quote_id):
         """
         Stops the bot from spitting out a specific quote by cancelling the quote thread, depending from its index.
-
-        !stop_auto_quote
         """
-        fullid = 'AQ{}'.format(id)
+        fullid = 'AQ{}'.format(auto_quote_id)
         self.auto_quotes_timers[fullid].cancel()
         time.sleep(1)
+        self.auto_quotes_timers[fullid].cancel()
 
     def show_auto_quotes(self, message):
         """
@@ -107,7 +107,7 @@ class AutoQuoteMixin:
 
         !show_auto_quotes
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff
@@ -120,11 +120,10 @@ class AutoQuoteMixin:
         Makes a new sentence that the bot periodically says.
         The first "word" after !add_auto_quote is the number of seconds
         in the interval for the bot to wait before saying the sentence again.
-        Requires stopping and starting the auto quotes to take effect.
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
@@ -154,17 +153,18 @@ class AutoQuoteMixin:
         """
         Deletes a sentence that the bot periodically says.
         Takes a 1 indexed auto quote index.
-        Requires stopping and starting the auto quotes to take effect.
 
         !delete_auto_quote 1
         """
-        user = self.ts.get_user(message)
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
-            auto_quotes = db_session.query(models.AutoQuote).all()
-            if int(msg_list[1]) <= len(auto_quotes):
+            auto_quote_id = int(msg_list[1])
+            auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
+            try:
                 index = int(msg_list[1]) - 1
-                db_session.delete(auto_quotes[index])
+                db_session.delete(auto_quote)
+                db_session.flush()
                 my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                              kwargs={'db_session': db_session})
                 my_thread.daemon = True
@@ -174,7 +174,7 @@ class AutoQuoteMixin:
                 self._add_to_chat_queue('Auto quote deleted')
                 self.stop_auto_quotes()
                 self.start_auto_quotes(db_session)
-            else:
+            except sqlalchemy.orm.exc.NoResultFound:
                 self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
                 # self._add_to_whisper_queue(user, 'Sorry, there aren\'t that many auto quotes.')
         else:
@@ -183,18 +183,23 @@ class AutoQuoteMixin:
 
     @Utils._mod_only
     def activate_auto_quote(self, message, db_session):
+        """
+        Starts an auto_quote after it has been deactivated
+        Takes the id of an auto_quote
 
-        user = self.ts.get_user(message)
+        !deactivate_auto_quote 1
+        """
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
-            id = int(msg_list[1]) - 1
+            auto_quote_id = int(msg_list[1])
 
-            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == id).one()
+            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
 
             autoquote.active = True
             db_session.flush()
 
-            self._start_auto_quote(self, autoquote.id, db_session)
+            self._start_auto_quote(autoquote.id, db_session)
             my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                          kwargs={'db_session': db_session})
             my_thread.daemon = True
@@ -202,18 +207,23 @@ class AutoQuoteMixin:
 
     @Utils._mod_only
     def deactivate_auto_quote(self, message, db_session):
-
-        user = self.ts.get_user(message)
+        """
+        Stops an auto_quote from being posted to chat, but leaves it intact to be easily activated later
+        Takes the id of an auto_quote
+        
+        !deactivate_auto_quote 1
+        """
+        user = self.ts.get_username(message)
         msg_list = self.ts.get_human_readable_message(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
-            id = int(msg_list[1]) - 1
+            auto_auote_id = int(msg_list[1])
 
-            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == id).one()
+            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_auote_id).one()
 
             autoquote.active = False
             db_session.flush()
 
-            self._stop_auto_quotes(self, id)
+            self._stop_auto_quote(auto_auote_id)
             my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                          kwargs={'db_session': db_session})
             my_thread.daemon = True

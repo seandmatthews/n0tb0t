@@ -213,7 +213,7 @@ class Bot(*mixin_classes):
         try:
             aqs = sheet.worksheet('Auto Quotes')
         except gspread.exceptions.WorksheetNotFound:
-            aqs = sheet.add_worksheet('Auto Quotes', 1000, 3)
+            aqs = sheet.add_worksheet('Auto Quotes', 1000, 4)
             sheet1 = sheet.get_worksheet(0)
             sheet.del_worksheet(sheet1)
 
