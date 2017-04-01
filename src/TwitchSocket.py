@@ -38,6 +38,7 @@ class TwitchSocket(object):
         print("{}\r\n".format(message_temp).encode('utf-8'))
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
+    @reconnect_on_ConnectionResetError
     def join_room(self):
         self.sock.connect((self.host, self.port))
         self.sock.send("PASS {PASS}\r\n".format(PASS=self.pw).encode('utf-8'))
