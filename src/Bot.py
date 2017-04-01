@@ -16,14 +16,15 @@ from src.modules.PlayerQueue import PlayerQueue
 import src.models as models
 import src.google_auth as google_auth
 
-
+ 
 print('Loading Modules')
 cur_dir = os.path.dirname(os.path.realpath(__file__))
 modules_dir = os.path.join(cur_dir, 'modules')
-module_files = onlyfiles = [f for f in os.listdir(modules_dir) if os.path.isfile(os.path.join(modules_dir, f))]
+module_files = [f for f in os.listdir(modules_dir) if os.path.isfile(os.path.join(modules_dir, f))]
 mixin_classes = []
+
 for file in module_files:
-    if file[0] != '_' and file[-3:] == '.py':
+    if file != '__init__.py' and file[-3:] == '.py':
         imported = importlib.import_module(f'src.modules.{file[:-3]}')
         for item in dir(imported):
             if item[0] != '_':
