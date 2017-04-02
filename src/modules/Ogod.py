@@ -12,7 +12,7 @@ class OgodMixin:
         if len(msg_list) > 1:
             offender_str = ' '.join(msg_list[1:])
             # TODO: Use NLP magic to figure out whether offender_str is plural or not
-            plural = False #we are lazy right now
+            plural = False  # We are lazy right now
             if plural:
                 ogod_str = "{} have offended {}'s delicate sensibilities!".format(offender_str, user)
             else:

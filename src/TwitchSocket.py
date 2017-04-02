@@ -66,6 +66,10 @@ class TwitchSocket(object):
         if 'display-name=' in line:
             _, *rest_of_line = line.split('display-name=')
             username = rest_of_line[0].split(';')[0]
+            # Occasionally, no usernames are found; debug this if we see it happen.
+            if bool(username) is False:
+                print('No username found')
+                print(line)
             return username
         else:
             return 'system'
