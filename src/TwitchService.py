@@ -5,6 +5,8 @@ import time
 
 import requests
 
+import src.message
+
 
 def reconnect_on_ConnectionResetError(f):
     @functools.wraps(f)

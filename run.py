@@ -3,7 +3,6 @@ import os
 
 from src.Bot import Bot
 from src.TwitchService import TwitchService
-from src import twitch_loop
 import config
 
 if not os.path.exists(config.data_dir):
