@@ -1,5 +1,8 @@
 import functools
+import logging
 import socket
+import time
+
 import requests
 
 
@@ -137,3 +140,48 @@ class TwitchService(object):
         for k, v in self.fetch_chatters_from_API().items():
             [chatters.append(user) for user in v]
         return chatters
+
+    def run(self, bot):
+        messages = ""
+
+        while True:
+            try:
+                read_buffer = self.sock.recv(1024)
+            except Exception as e:
+                print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.join_room()
+                read_buffer = self.sock.recv(1024)
+
+            if len(read_buffer) == 0:
+                print('Disconnected: Attempting to reconnecting to the socket.')
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.join_room()
+                read_buffer = self.sock.recv(1024)
+
+            messages = messages + read_buffer.decode('utf-8')
+            messages_list = messages.split('\r\n')
+            if len(messages_list) >= 2:
+                last_message = messages_list[-2]
+                if "NOTICE" in last_message:
+                    print(messages)
+                elif self.get_username(last_message) in [bot.info['user'], 'system']:
+                    pass
+                else:
+                    print("{} {}: {}".format(
+                        time.strftime("%Y-%m-%d %H:%M:%S"),
+                        self.get_username(last_message),
+                        self.get_human_readable_message(last_message)))
+                messages = ""
+                if last_message == 'PING :tmi.twitch.tv':
+                    resp = last_message.replace("PING", "PONG") + "\r\n"
+                    self.sock.send(resp.encode('utf-8'))
+                else:
+                    try:
+                        bot._act_on(last_message)
+                    except Exception as e:
+                        print(e)
+                        logging.exception("Error occurred at {}".format(time.strftime("%Y-%m-%d %H:%M:%S")))
+                        self.send_message("Something went wrong. The error has been logged.")
+
+            time.sleep(.02)

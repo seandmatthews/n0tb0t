@@ -19,4 +19,4 @@ if config.service == config.Service.TWITCH:
               bitly_access_token=config.bitly_access_token,
               current_dir=config.current_dir,
               data_dir=config.data_dir)
-    twitch_loop.run(bi, ts, bot)
+    ts.run(bot)

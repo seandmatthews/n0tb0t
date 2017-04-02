@@ -12,9 +12,9 @@ import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
-from src.modules.PlayerQueue import PlayerQueue
 import src.models as models
 import src.google_auth as google_auth
+from src.modules.PlayerQueue import PlayerQueue
 
  
 print('Loading Modules')
@@ -407,11 +407,6 @@ class Bot(*mixin_classes):
             user_is_mod = self.ts.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
-            # TODO: Fix Whisper Stuff
-            # else:
-            #     self._add_to_whisper_queue(user,
-            #                                'Sorry {} you\'re not authorized to use the command: !{}'
-            #                                .format(user, command[0]))
         db_session.commit()
         db_session.close()
 
