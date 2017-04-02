@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 import src.models as models
 import src.google_auth as google_auth
+from config import time_zone_choice
 from src.modules.PlayerQueue import PlayerQueue
 
  
@@ -286,7 +287,7 @@ class Bot(*mixin_classes):
             sheet.del_worksheet(sheet1)
 
         hls.update_acell('A1', 'User')
-        hls.update_acell('B1', 'Stream Start Time EST')
+        hls.update_acell('B1', 'Stream Start Time {}'.format(time_zone_choice))
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
 

@@ -47,7 +47,7 @@ class UtilsMixin:
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
         for attempt in range(5):
             try:
-                r = requests.get(url)
+                r = requests.get(url, headers={"Client-ID": self.info['twitch_api_client_id']})
                 r.raise_for_status()
                 start_time_str = r.json()['stream']['created_at']
                 start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')

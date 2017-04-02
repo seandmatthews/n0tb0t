@@ -1,6 +1,7 @@
 import gspread
 import pytz
 
+from config import time_zone_choice
 
 class HighlightMixin:
     def highlight(self, message):
@@ -20,9 +21,9 @@ class HighlightMixin:
             user_note = ''
         time_dict = self._get_live_time()
         if time_dict is not None:
-            est_tz = pytz.timezone('US/Eastern')
+            user_tz = pytz.timezone(time_zone_choice)
             start_time_utc = time_dict['stream_start']
-            start_time_est = est_tz.normalize(start_time_utc.replace(tzinfo=pytz.utc).astimezone(est_tz))
+            start_time_est = user_tz.normalize(start_time_utc.replace(tzinfo=pytz.utc).astimezone(user_tz))
             time_str = 'Approximately {hours}, {minutes} and {seconds} into the stream.'.format(
                     hours=time_dict['hour'], minutes=time_dict['minute'], seconds=time_dict['second'])
 
