@@ -2,7 +2,7 @@ import logging
 import os
 
 from src.Bot import Bot
-from src.TwitchSocket import TwitchSocket
+from src.TwitchService import TwitchService
 from src import twitch_loop
 import config
 
@@ -13,7 +13,7 @@ logging.basicConfig(filename=os.path.join(config.data_dir, 'error-log.txt'), lev
 bi = config.BOT_INFO
 
 if config.service == config.Service.TWITCH:
-    ts = TwitchSocket(pw=bi['pw'], user=bi['user'], channel=bi['channel'])
+    ts = TwitchService(pw=bi['pw'], user=bi['user'], channel=bi['channel'])
     bot = Bot(BOT_INFO=bi,
               twitch_socket=ts,
               bitly_access_token=config.bitly_access_token,

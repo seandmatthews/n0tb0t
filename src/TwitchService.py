@@ -16,7 +16,7 @@ def reconnect_on_ConnectionResetError(f):
     return wrapper
 
 
-class TwitchSocket(object):
+class TwitchService(object):
     def __init__(self, pw, user, channel):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
