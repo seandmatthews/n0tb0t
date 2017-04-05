@@ -5,7 +5,7 @@ import time
 
 import requests
 
-import src.message
+import src.message as message
 
 
 def reconnect_on_ConnectionResetError(f):
@@ -20,6 +20,8 @@ def reconnect_on_ConnectionResetError(f):
             f(*args, **kwargs)
     return wrapper
 
+class TwitchMessage(message.Message):
+    pass
 
 class TwitchService(object):
     def __init__(self, pw, user, channel):
@@ -65,9 +67,9 @@ class TwitchService(object):
             except:
                 continue
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
-        self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
-    def get_username(self, line):
+
+    def get_username(self, line): #replace all instances of this with get_generic
         if 'display-name=' in line:
             _, *rest_of_line = line.split('display-name=')
             username = rest_of_line[0].split(';')[0]
@@ -79,17 +81,25 @@ class TwitchService(object):
         else:
             return 'system'
 
-    def get_user_id(self, line):
+    def get_generic(self, line, thing): #give this a better name
+        if thing in line:
+            junk, *rest_of_line = line.split("{}=".format(thing),1)
+            generic = rest_of_line[0].split(';')[0]
+            return generic
+
+    def get_user_id(self, line): #replace all instances of this with get_generic
         if 'user-id=' in line:
             _, *rest_of_line = line.split('user-id=')
             user_id = rest_of_line[0].split(';')[0]
             return user_id
 
-    def get_human_readable_message(self, line):
-        if 'emotes=;' in line:
-            num_colons = 2
-        else:
-            num_colons = 3
+    def get_human_readable_message(self, line): #@todo(sean) replace this with MessageObjectThing.conetnts
+        line = self.get_generic(line, 'user-type=')
+        # if 'emotes=;' in line:
+        #     num_colons = 2
+        # else:
+        #     num_colons = 3
+        num_colons = 2
         if "PRIVMSG" in line or ("WHISPER" in line and self.get_username(line) in self.get_mods()):
             line_list = line.split(':', num_colons)
             hr_message = line_list[-1]
@@ -143,6 +153,32 @@ class TwitchService(object):
             [chatters.append(user) for user in v]
         return chatters
 
+
+    def line_to_message(self, line):
+        '''
+        Takes a twitch api protocol line and converts it to a Message
+        
+        @params:
+            line is a twitch api protocol line
+        '''
+        service = TWITCH #@todo(someone) probably move the Service enum out of Config.py
+        user = self.get_generic(line, "display-name")
+
+        msg_info = self.get_generic(line, "user-type")
+        "user-type= :metruption!metruption@metruption.tmi.twitch.tv PRIVMSG #n0t1337 :THIS IS A PUBLIC MESSAGE"
+         msg_info = msg_info.split(":{0}!{0}@{0}.tmi.twitch.tv".format(user.lower()),1)[1]
+        msg_info = msg_info.strip()
+        msg_info, content = msg_info.split(":",1)
+        msg_info = msg_info.split(" ",1)[0]
+
+        if msg_info == "PRIVMSG":
+            message_type = TWITCH_PUBLIC_MESSAGE #sort out twitch message enum
+        elif msg_info == "WHISPER":
+            message_type = TWITCH_WHISPER #sort out twitch message enum
+        
+        return message.Message(service=service, message_type=message_type, user=user, content=content)
+
+
     def run(self, bot):
         messages = ""
 
@@ -180,6 +216,7 @@ class TwitchService(object):
                     self.sock.send(resp.encode('utf-8'))
                 else:
                     try:
+                        print(self.get_human_readable_message(last_message))
                         bot._act_on(last_message)
                     except Exception as e:
                         print(e)
