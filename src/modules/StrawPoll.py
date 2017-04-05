@@ -36,7 +36,7 @@ class StrawPollMixin:
 
         !create_poll Title: Poll Title Options: Option 1, Option 2, ... Option N
         """
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_human_readable_message(message).split(' ')
         title_index = -1
         options_index = -1
         for index, word in enumerate(msg_list):
@@ -72,7 +72,7 @@ class StrawPollMixin:
         !end_poll
         !end_poll 111111111
         """
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_human_readable_message(message).split(' ')
         if len(msg_list) == 1 and self.strawpoll_id == '':
             self._add_to_chat_queue('No ID supplied, please try again')
             holder_id = None

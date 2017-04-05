@@ -1,5 +1,4 @@
 import collections
-import functools
 import importlib
 import inspect
 import json
@@ -14,10 +13,13 @@ from sqlalchemy.orm import sessionmaker
 
 import src.models as models
 import src.google_auth as google_auth
+import src.modules.Utils as Utils
 from config import time_zone_choice
 from src.modules.PlayerQueue import PlayerQueue
 
- 
+
+# Collect all the Mixin classes from all the modules in the src/modules directory
+# Store these class objects in a mixin_classes list so that Bot can inherit from them
 print('Loading Modules')
 cur_dir = os.path.dirname(os.path.realpath(__file__))
 modules_dir = os.path.join(cur_dir, 'modules')
@@ -26,6 +28,7 @@ mixin_classes = []
 
 for file in module_files:
     if file != '__init__.py' and file[-3:] == '.py':
+        # Take these .py files and import them, turning them into module objects
         imported = importlib.import_module(f'src.modules.{file[:-3]}')
         for item in dir(imported):
             if item[0] != '_':
@@ -36,9 +39,9 @@ for file in module_files:
 
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
-    def __init__(self, twitch_socket, BOT_INFO, bitly_access_token, current_dir, data_dir):
+    def __init__(self, service, BOT_INFO, bitly_access_token, current_dir, data_dir):
 
-        self.ts = twitch_socket
+        self.service = service
         self.info = BOT_INFO
 
         self.sorted_methods = self._sort_methods()
@@ -71,7 +74,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name, session)
+            getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -100,31 +103,6 @@ class Bot(*mixin_classes):
         self.player_queue_credentials = None
         session.close()
         self.strawpoll_id = ''
-
-    # DECORATORS #
-    def _retry_gspread_func(f):
-        """
-        Retries the function that uses gspread until it completes without throwing an HTTPError
-        """
-
-        @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            while True:
-                try:
-                    f(*args, **kwargs)
-                except gspread.exceptions.GSpreadException:
-                    continue
-                break
-
-        return wrapper
-
-    def _mod_only(f):
-        """
-        Set's the method's _mods_only property to True
-        """
-        f._mods_only = True
-        return f
-        # END DECORATORS #
 
     def _sort_methods(self):
         """
@@ -182,7 +160,7 @@ class Bot(*mixin_classes):
         db_session.close()
         return session_factory
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the quotes google sheet with its initial data.
@@ -203,7 +181,7 @@ class Bot(*mixin_classes):
 
         self.update_quote_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the auto_quotes google sheet with its initial data.
@@ -226,7 +204,7 @@ class Bot(*mixin_classes):
 
         self.update_auto_quote_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the commands google sheet with its initial data.
@@ -270,7 +248,7 @@ class Bot(*mixin_classes):
 
         self.update_command_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the highlights google sheet with its initial data.
@@ -291,7 +269,7 @@ class Bot(*mixin_classes):
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_guesses google sheet with its initial data.
@@ -311,7 +289,7 @@ class Bot(*mixin_classes):
         pgs.update_acell('B1', 'Current Guess')
         pgs.update_acell('C1', 'Total Guess')
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_player_queue_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_queue google sheet with its initial data.
@@ -361,7 +339,7 @@ class Bot(*mixin_classes):
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
-                self.ts.send_message(chat_queue.pop())
+                self.service.send_message(chat_queue.pop())
             time.sleep(.5)
 
     def _process_whisper_queue(self, whisper_queue):
@@ -374,7 +352,7 @@ class Bot(*mixin_classes):
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
-                self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
+                self.service.send_whisper(whisper_tuple[0], whisper_tuple[1])
             time.sleep(1.5)
 
     def _process_command_queue(self, command_queue):
@@ -398,14 +376,14 @@ class Bot(*mixin_classes):
         Checks permissions for that command.
         Runs the command if the permissions check out.
         """
-        if 'PING' in self.ts.get_human_readable_message(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
+        if 'PING' in self.service.get_human_readable_message(message):  # PING/PONG silliness
+            self._add_to_chat_queue(self.service.get_human_readable_message(message.replace('PING', 'PONG')))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.ts.get_username(message)
-            user_is_mod = self.ts.check_mod(message)
+            user = self.service.get_username(message)
+            user_is_mod = self.service.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
         db_session.commit()
@@ -418,7 +396,7 @@ class Bot(*mixin_classes):
         If it's a method, that place will be the key in the sorted_methods dictionary which
         has the corresponding list containing the command. Otherwise it will be the word 'Database'.
         """
-        first_word = self.ts.get_human_readable_message(message).split(' ')[0]
+        first_word = self.service.get_human_readable_message(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
             potential_command = first_word[1:].lower()
         else:
@@ -468,7 +446,7 @@ class Bot(*mixin_classes):
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
 
-    @_mod_only
+    @Utils._mod_only
     def stop_speaking(self):
         """
         Stops the bot from putting stuff in chat to cut down on bot spam.
@@ -476,10 +454,10 @@ class Bot(*mixin_classes):
 
         !stop_speaking
         """
-        self.ts.send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.service.send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
-    @_mod_only
+    @Utils._mod_only
     def start_speaking(self):
         """
         Allows the bot to start speaking again.

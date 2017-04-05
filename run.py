@@ -14,7 +14,7 @@ bi = config.BOT_INFO
 if config.service == config.Service.TWITCH:
     ts = TwitchService(pw=bi['pw'], user=bi['user'], channel=bi['channel'])
     bot = Bot(BOT_INFO=bi,
-              twitch_socket=ts,
+              service=ts,
               bitly_access_token=config.bitly_access_token,
               current_dir=config.current_dir,
               data_dir=config.data_dir)

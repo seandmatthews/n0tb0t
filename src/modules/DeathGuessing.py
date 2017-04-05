@@ -41,9 +41,9 @@ class DeathGuessingDisabled:
 
         !guess 50
         """
-        user = self.ts.get_username(message)
+        user = self.service.get_username(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one().mv_value == 'True':
-            msg_list = self.ts.get_human_readable_message(message).split(' ')
+            msg_list = self.service.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
@@ -91,9 +91,9 @@ class DeathGuessingDisabled:
 
         !guesstotal 50
         """
-        user = self.ts.get_username(message)
+        user = self.service.get_username(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
-            msg_list = self.ts.get_human_readable_message(message).split(' ')
+            msg_list = self.service.get_human_readable_message(message).split(' ')
             if len(msg_list) > 1:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
@@ -182,8 +182,8 @@ class DeathGuessingDisabled:
 
         !set_deaths 5
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.service.get_username(message)
+        msg_list = self.service.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
@@ -206,8 +206,8 @@ class DeathGuessingDisabled:
 
         !set_total_deaths 5
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        user = self.service.get_username(message)
+        msg_list = self.service.get_human_readable_message(message).split(' ')
         if len(msg_list) > 1:
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
@@ -230,7 +230,7 @@ class DeathGuessingDisabled:
 
         !add_death
         """
-        user = self.ts.get_username(message)
+        user = self.service.get_username(message)
         deaths = int(self._get_current_deaths(db_session))
         total_deaths = int(self._get_total_deaths(db_session))
         deaths += 1
