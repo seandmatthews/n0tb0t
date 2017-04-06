@@ -163,10 +163,8 @@ class TwitchService(object):
         '''
         service = TWITCH #@todo(someone) probably move the Service enum out of Config.py
         user = self.get_generic(line, "display-name")
-
         msg_info = self.get_generic(line, "user-type")
-        "user-type= :metruption!metruption@metruption.tmi.twitch.tv PRIVMSG #n0t1337 :THIS IS A PUBLIC MESSAGE"
-         msg_info = msg_info.split(":{0}!{0}@{0}.tmi.twitch.tv".format(user.lower()),1)[1]
+        msg_info = msg_info.split(":{0}!{0}@{0}.tmi.twitch.tv".format(user.lower()),1)[1]
         msg_info = msg_info.strip()
         msg_info, content = msg_info.split(":",1)
         msg_info = msg_info.split(" ",1)[0]
@@ -180,7 +178,8 @@ class TwitchService(object):
 
 
     def run(self, bot):
-        messages = ""
+        messages = []
+        lines = ""
 
         while True:
             try:
@@ -197,25 +196,31 @@ class TwitchService(object):
                 self.join_room()
                 read_buffer = self.sock.recv(1024)
 
-            messages = messages + read_buffer.decode('utf-8')
-            messages_list = messages.split('\r\n')
-            if len(messages_list) >= 2:
-                last_message = messages_list[-2]
-                if "NOTICE" in last_message:
-                    print(messages)
-                elif self.get_username(last_message) in [bot.info['user'], 'system']:
-                    pass
-                else:
-                    print("{} {}: {}".format(
-                        time.strftime("%Y-%m-%d %H:%M:%S"),
-                        self.get_username(last_message),
-                messages = ""
-                if last_message == 'PING :tmi.twitch.tv':
-                    resp = last_message.replace("PING", "PONG") + "\r\n"
+            lines = lines + read_buffer.decode('utf-8')
+            lines = messages.split('\r\n')
+            for line in lines:
+                messages.append(self.line_to_message(line))
+            lines =  ""
+
+            if len(messages) >= 2:
+                last_message = messages[0]
+                if last_message.message_type == NOTICE:#@tood(someone) sort out message type enums
+                    print(message)
+                # elif self.get_username(last_message) in [bot.info['user'], 'system']:
+                #     pass
+                # else: not sure what this is for, commenting out incase we need it
+                #     print("{} {}: {}".format(
+                #         time.strftime("%Y-%m-%d %H:%M:%S"),
+                #         self.get_username(last_message),
+                #         self.get_human_readable_message(last_message)))
+                # messages = ""
+                elif last_message.message_type == PING: #todo sort out mesage type
+                    #resp = last_message.replace("PING", "PONG") + "\r\n"
+                    #what does a pong response look like?
+                    resp = "pong resonse make one please sean"
                     self.sock.send(resp.encode('utf-8'))
                 else:
                     try:
-                        print(self.get_human_readable_message(last_message))
                         bot._act_on(last_message)
                     except Exception as e:
                         print(e)
