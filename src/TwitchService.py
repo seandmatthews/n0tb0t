@@ -209,7 +209,6 @@ class TwitchService(object):
                     print("{} {}: {}".format(
                         time.strftime("%Y-%m-%d %H:%M:%S"),
                         self.get_username(last_message),
-                        self.get_human_readable_message(last_message)))
                 messages = ""
                 if last_message == 'PING :tmi.twitch.tv':
                     resp = last_message.replace("PING", "PONG") + "\r\n"
