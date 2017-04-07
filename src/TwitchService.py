@@ -2,13 +2,17 @@ import functools
 import logging
 import socket
 import time
+from enum import Enum, auto
+
+from src.Service import Service
+
 
 import requests
 
 import src.message as message
 
 
-def reconnect_on_ConnectionResetError(f):
+def reconnect_on_error(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         try:
@@ -20,8 +24,15 @@ def reconnect_on_ConnectionResetError(f):
             f(*args, **kwargs)
     return wrapper
 
+
+class MessageTypes(Enum):
+    PUBLIC = auto()
+    PRIVATE = auto()
+
+
 class TwitchMessage(message.Message):
     pass
+
 
 class TwitchService(object):
     def __init__(self, pw, user, channel):
@@ -34,18 +45,18 @@ class TwitchService(object):
 
         self.join_room()
 
-    @reconnect_on_ConnectionResetError
+    @reconnect_on_error
     def send_message(self, message):
         message_temp = "PRIVMSG #" + self.channel + " :" + message
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
-    @reconnect_on_ConnectionResetError
+    @reconnect_on_error
     def send_whisper(self, user, message):
         message_temp = "PRIVMSG #jtv :/w " + user + " " + message
         print("{}\r\n".format(message_temp).encode('utf-8'))
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
-    @reconnect_on_ConnectionResetError
+    @reconnect_on_error
     def join_room(self):
         self.sock.connect((self.host, self.port))
         self.sock.send("PASS {PASS}\r\n".format(PASS=self.pw).encode('utf-8'))
@@ -68,7 +79,6 @@ class TwitchService(object):
                 continue
         self.sock.send("CAP REQ :twitch.tv/commands\r\n".encode('utf-8'))
 
-
     def get_username(self, line): #replace all instances of this with get_generic
         if 'display-name=' in line:
             _, *rest_of_line = line.split('display-name=')
@@ -81,19 +91,19 @@ class TwitchService(object):
         else:
             return 'system'
 
-    def get_generic(self, line, thing): #give this a better name
+    def get_generic(self, line, thing):  # Give this a better name
         if thing in line:
             junk, *rest_of_line = line.split("{}=".format(thing),1)
             generic = rest_of_line[0].split(';')[0]
             return generic
 
-    def get_user_id(self, line): #replace all instances of this with get_generic
+    def get_user_id(self, line):  # Replace all instances of this with get_generic
         if 'user-id=' in line:
             _, *rest_of_line = line.split('user-id=')
             user_id = rest_of_line[0].split(';')[0]
             return user_id
 
-    def get_human_readable_message(self, line): #@todo(sean) replace this with MessageObjectThing.conetnts
+    def get_human_readable_message(self, line):  # TODO @Sean replace this with MessageObjectThing.contents
         line = self.get_generic(line, 'user-type=')
         # if 'emotes=;' in line:
         #     num_colons = 2
@@ -155,27 +165,26 @@ class TwitchService(object):
 
 
     def line_to_message(self, line):
-        '''
+        """
         Takes a twitch api protocol line and converts it to a Message
         
         @params:
             line is a twitch api protocol line
-        '''
-        service = TWITCH #@todo(someone) probably move the Service enum out of Config.py
+        """
+        service = Service.TWITCH
         user = self.get_generic(line, "display-name")
         msg_info = self.get_generic(line, "user-type")
-        msg_info = msg_info.split(":{0}!{0}@{0}.tmi.twitch.tv".format(user.lower()),1)[1]
+        msg_info = msg_info.split(":{0}!{0}@{0}.tmi.twitch.tv".format(user.lower()), 1)[1]
         msg_info = msg_info.strip()
-        msg_info, content = msg_info.split(":",1)
-        msg_info = msg_info.split(" ",1)[0]
+        msg_info, content = msg_info.split(":", 1)
+        msg_info = msg_info.split(" ", 1)[0]
 
         if msg_info == "PRIVMSG":
-            message_type = TWITCH_PUBLIC_MESSAGE #sort out twitch message enum
+            message_type = MessageTypes.PUBLIC
         elif msg_info == "WHISPER":
-            message_type = TWITCH_WHISPER #sort out twitch message enum
+            message_type = MessageTypes.PRIVATE
         
         return message.Message(service=service, message_type=message_type, user=user, content=content)
-
 
     def run(self, bot):
         messages = []
