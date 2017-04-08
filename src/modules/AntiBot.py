@@ -13,7 +13,7 @@ class AntiBotMixin:
         !anti_bot testuser1
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).lower().split(' ')
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             self._add_to_chat_queue('You need to type out a username.')
@@ -42,7 +42,7 @@ class AntiBotMixin:
         !whitelist
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).lower().split(' ')
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'You need to type out a username.')
@@ -72,7 +72,7 @@ class AntiBotMixin:
         !unwhitelist testuser1
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).lower().split(' ')
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'You need to type out a username.')

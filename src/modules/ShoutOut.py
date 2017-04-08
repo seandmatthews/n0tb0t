@@ -15,7 +15,7 @@ class ShoutOutMixin:
         """
         user = self.service.get_username(message)
         me = self.info['channel']
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
             channel = msg_list[1]
             url = 'https://api.twitch.tv/kraken/channels/{channel}'.format(channel=channel.lower())

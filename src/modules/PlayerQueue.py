@@ -186,7 +186,7 @@ class PlayerQueueDisabled:
         !cycle
         !cycle Password!1
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         players = self.player_queue.pop_all()
         self._write_player_queue()
         players_str = ' '.join(players)
@@ -213,7 +213,7 @@ class PlayerQueueDisabled:
         !cycle_one
         !cycle_one Password!1
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         channel = self.info['channel']
         try:
             player = self.player_queue.pop()
@@ -262,7 +262,7 @@ class PlayerQueueDisabled:
 
         !set_cycle_number 5
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         user = self.service.get_username(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
@@ -281,7 +281,7 @@ class PlayerQueueDisabled:
         # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
                 move some of the logic
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         user = self.service.get_username(message)
         player = msg_list[1]
         for index, tup in enumerate(self.player_queue.queue):
@@ -308,7 +308,7 @@ class PlayerQueueDisabled:
         # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
                 move some of the logic
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         user = self.service.get_username(message)
         player = msg_list[1]
         for index, tup in enumerate(self.player_queue.queue):

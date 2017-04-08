@@ -65,7 +65,7 @@ class CommandsMixin:
         !add_command TestUser1 TestUser2 !test_command This is a test
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
             if word[0] == '!':
                 command = word.lower()
@@ -109,7 +109,7 @@ class CommandsMixin:
         !delete_command !test
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         command_str = msg_list[1][1:].lower()
         db_commands = db_session.query(models.Command).all()
         for db_command in db_commands:

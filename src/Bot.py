@@ -74,7 +74,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            getattr(self, init_command)(sheet_name, session)
+            # getattr(self, init_command)(sheet_name, session)
 
         self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -376,8 +376,8 @@ class Bot(*mixin_classes):
         Checks permissions for that command.
         Runs the command if the permissions check out.
         """
-        if 'PING' in self.service.get_human_readable_message(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.service.get_human_readable_message(message.replace('PING', 'PONG')))
+        if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
+            self._add_to_chat_queue(self.service.get_message_content(message.replace('PING', 'PONG')))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
@@ -396,7 +396,7 @@ class Bot(*mixin_classes):
         If it's a method, that place will be the key in the sorted_methods dictionary which
         has the corresponding list containing the command. Otherwise it will be the word 'Database'.
         """
-        first_word = self.service.get_human_readable_message(message).split(' ')[0]
+        first_word = self.service.get_message_content(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
             potential_command = first_word[1:].lower()
         else:

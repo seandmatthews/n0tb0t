@@ -69,7 +69,7 @@ class QuotesMixin:
         !add_quote Oh look, the caster has uttered an innuendo!
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         quote = ' '.join(msg_list[1:])
         quote_obj = models.Quote(quote=quote)
         db_session.add(quote_obj)
@@ -87,7 +87,7 @@ class QuotesMixin:
 
         !delete_quote 1
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         user = self.service.get_username(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             quotes = db_session.query(models.Quote).all()
@@ -127,7 +127,7 @@ class QuotesMixin:
         !quote 5
         !quote
         """
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             if int(msg_list[1]) > 0:
                 index = int(msg_list[1]) - 1

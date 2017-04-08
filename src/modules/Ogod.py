@@ -7,7 +7,7 @@ class OgodMixin:
         !ogod an offensive thing
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
 
         if len(msg_list) > 1:
             offender_str = ' '.join(msg_list[1:])

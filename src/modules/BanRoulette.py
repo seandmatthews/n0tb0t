@@ -11,11 +11,11 @@ class BanRouletteMixin:
         !ban_roulette testuser
         """
         if self.service.check_mod(message):
-            if len(self.service.get_human_readable_message(message).split(' ')) > 1:
-                user = self.service.get_human_readable_message(message).split(' ')[1]
+            if len(self.service.get_message_content(message).split(' ')) > 1:
+                user = self.service.get_message_content(message).split(' ')[1]
             else:
                 user = None
-        elif len(self.service.get_human_readable_message(message).split(' ')) == 1:
+        elif len(self.service.get_message_content(message).split(' ')) == 1:
             user = self.service.get_username(message)
         else:
             # TODO: Fix Whisper Stuff

@@ -124,7 +124,7 @@ class AutoQuoteMixin:
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
@@ -157,7 +157,7 @@ class AutoQuoteMixin:
         !delete_auto_quote 1
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
             auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
@@ -190,7 +190,7 @@ class AutoQuoteMixin:
         !deactivate_auto_quote 1
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
 
@@ -214,7 +214,7 @@ class AutoQuoteMixin:
         !deactivate_auto_quote 1
         """
         user = self.service.get_username(message)
-        msg_list = self.service.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_auote_id = int(msg_list[1])
 
