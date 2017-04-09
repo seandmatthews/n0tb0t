@@ -107,7 +107,7 @@ class AutoQuoteMixin:
 
         !show_auto_quotes
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff
@@ -123,7 +123,7 @@ class AutoQuoteMixin:
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
@@ -156,7 +156,7 @@ class AutoQuoteMixin:
 
         !delete_auto_quote 1
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
@@ -189,7 +189,7 @@ class AutoQuoteMixin:
 
         !deactivate_auto_quote 1
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
@@ -213,7 +213,7 @@ class AutoQuoteMixin:
         
         !deactivate_auto_quote 1
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_auote_id = int(msg_list[1])

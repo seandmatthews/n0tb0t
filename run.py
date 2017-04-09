@@ -19,3 +19,7 @@ if config.service == config.Service.TWITCH:
               current_dir=config.current_dir,
               data_dir=config.data_dir)
     ts.run(bot)
+
+else:
+    raise NotImplementedError("We don't actually care about anything but Twitch yet. Sorry")
+

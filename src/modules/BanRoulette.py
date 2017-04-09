@@ -16,7 +16,7 @@ class BanRouletteMixin:
             else:
                 user = None
         elif len(self.service.get_message_content(message).split(' ')) == 1:
-            user = self.service.get_username(message)
+            user = self.service.get_display_name(message)
         else:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(self.service.get_user(message), 'Sorry, this command is only one word')

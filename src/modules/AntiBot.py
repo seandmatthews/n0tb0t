@@ -12,7 +12,7 @@ class AntiBotMixin:
     
         !anti_bot testuser1
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
@@ -41,7 +41,7 @@ class AntiBotMixin:
     
         !whitelist
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
@@ -71,7 +71,7 @@ class AntiBotMixin:
     
         !unwhitelist testuser1
         """
-        user = self.service.get_username(message)
+        user = self.service.get_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff

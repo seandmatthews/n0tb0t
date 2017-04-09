@@ -382,7 +382,7 @@ class Bot(*mixin_classes):
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.service.get_username(message)
+            user = self.service.get_display_name(message)
             user_is_mod = self.service.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)

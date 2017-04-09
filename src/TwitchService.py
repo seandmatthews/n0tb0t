@@ -5,7 +5,9 @@ import time
 from enum import Enum, auto
 
 import requests
+import sqlalchemy
 
+import src.models as models
 from src.Service import Service
 from src.Message import Message
 
@@ -28,10 +30,13 @@ class MessageTypes(Enum):
     PRIVATE = auto()
     NOTICE = auto()
     PING = auto()
+    SYSTEM_MESSAGE = auto()
 
 
 class TwitchMessage(Message):
-    pass
+    def __init__(self, service=None, message_type=None, user=None, content=None, display_name=None):
+        Message.__init__(self, service=service, message_type=message_type, user=user, content=content)
+        self.display_name = display_name
 
 
 class TwitchService(object):
@@ -39,21 +44,30 @@ class TwitchService(object):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
-        self.user = user
-        self.channel = channel
+        self.user = user.lower()
+        self.display_user = user
+        self.channel = channel.lower()
+        self.display_channel = channel
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.join_room()
 
     @reconnect_on_error
-    def send_message(self, message):
-        message_temp = 'PRIVMSG #' + self.channel + " :" + message
+    def send_message(self, message_content):
+        message_temp = 'PRIVMSG #' + self.channel + " :" + message_content
+        print('{} {}: {}'.format(
+            time.strftime('%Y-%m-%d %H:%M:%S'),
+            self.display_user,
+            message_content))
         self.sock.send('{}\r\n'.format(message_temp).encode('utf-8'))
 
     @reconnect_on_error
-    def send_whisper(self, user, message):
-        message_temp = 'PRIVMSG #jtv :/w ' + user + ' ' + message
-        print('{}\r\n'.format(message_temp).encode('utf-8'))
+    def send_whisper(self, user, whisper):
+        message_temp = 'PRIVMSG #jtv :/w ' + user + ' ' + whisper
+        print('{} {}: {}'.format(
+            time.strftime('%Y-%m-%d %H:%M:%S'),
+            self.display_user,
+            whisper))
         self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
 
     @reconnect_on_error
@@ -61,6 +75,7 @@ class TwitchService(object):
         self.sock.connect((self.host, self.port))
         self.sock.send('PASS {PASS}\r\n'.format(PASS=self.pw).encode('utf-8'))
         self.sock.send('NICK {USER}\r\n'.format(USER=self.user).encode('utf-8'))
+        self.sock.send('CAP REQ: twitch.tv/membership\r\n'.encode('utf-8'))
         self.sock.send('JOIN #{CHANNEL}\r\n'.format(CHANNEL=self.channel).encode('utf-8'))
 
         messages = ''
@@ -77,32 +92,37 @@ class TwitchService(object):
                     loading = True
             except:
                 continue
+
         self.sock.send('CAP REQ :twitch.tv/commands\r\n'.encode('utf-8'))
+        self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
-    def get_username(self, line):
-        print(line)
-        username = None
-        return username
+    def _get_username(self, line):
+        for i, char in enumerate(line):
+            if char == '!':
+                exclam_index = i
+            if char == '@':
+                at_index = i
+                break
+        return line[exclam_index+1:at_index]
 
-    def get_data_from_line(self, line, thing):
-        if thing in line:
-            _, *rest_of_line = line.split("{}=".format(thing), 1)
-            return rest_of_line[0].split(';')[0]
+    def _get_data_from_line(self, line, data_type):
+        if data_type in line:
+            _, *rest_of_line = line.split("{}=".format(data_type), 1)
+            for i, char in enumerate(rest_of_line[0]):
+                if char in [' ', ';']:
+                    return rest_of_line[0][:i]
 
     def get_display_name(self, line):
-        display_name = self.get_data_from_line('display-name')
+        display_name = self._get_data_from_line(line, 'display-name')
         if display_name is not None:
             return display_name
         else:
-            username = self.get_username(line)
+            username = self._get_username(line)
             display_name = f'{username[0].upper()}{username[1:]}'
             return display_name
 
-    def get_user_id(self, line):  # Replace all instances of this with get_generic
-        if 'user-id=' in line:
-            _, *rest_of_line = line.split('user-id=')
-            user_id = rest_of_line[0].split(';')[0]
-            return user_id
+    def get_user_id(self, line):
+        return self._get_data_from_line(line, 'user-id')
 
     def get_message_content(self, message):
         return message.content
@@ -110,12 +130,12 @@ class TwitchService(object):
     def check_mod(self, line):
         line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            if ('user-type=mod' in line_list[0]) or (self.get_username(line).lower() == self.channel.lower()):
+            if ('user-type=mod' in line_list[0]) or (self._get_username(line) == self.channel.lower()):
                 return True
             else:
                 return False
         elif "WHISPER" in line:
-            if (self.get_username(line) in self.get_mods()) or (self.get_username(line).lower() == self.channel.lower()):
+            if (self._get_username(line) in self.get_mods()) or (self._get_username(line) == self.channel.lower()):
                 return True
             else:
                 return False
@@ -142,7 +162,6 @@ class TwitchService(object):
                 'Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?')
 
     def get_mods(self):
-        print(self.fetch_chatters_from_API()['moderators'])
         return self.fetch_chatters_from_API()['moderators']
         
     def get_viewers(self):
@@ -162,28 +181,38 @@ class TwitchService(object):
             line is a twitch IRC line
         """
         service = Service.TWITCH
-        user = self.get_data_from_line(line, 'display-name')
-        if 'PRIVMSG' in line or 'WHISPER' in line:
-            msg_info = self.get_data_from_line(line, 'user-type')
-            msg_info = msg_info.split(':{0}!{0}@{0}.tmi.twitch.tv'.format(user.lower()), 1)[1]
-            msg_info = msg_info.strip()
-            msg_info, content = msg_info.split(":", 1)
-            msg_info = msg_info.split(' ', 1)[0]
-
-            if msg_info == 'PRIVMSG':
-                message_type = MessageTypes.PUBLIC
-            elif msg_info == 'WHISPER':
-                message_type = MessageTypes.PRIVATE
-            else: message_type = None
+        user = None
+        display_name = None
+        content = None
+        message_type = None
+        if line == 'PING :tmi.twitch.tv':
+            message_type = MessageTypes.PING
+        elif 'PRIVMSG' in line:
+            user = self.get_user_id(line)
+            display_name = self.get_display_name(line)
+            message_type = MessageTypes.PUBLIC
+            content = line.split(f'#{self.channel} :')[1]
+        elif 'WHISPER' in line:
+            user = self.get_user_id(line)
+            display_name = self.get_display_name(line)
+            message_type = MessageTypes.PRIVATE
+            content = line.split(f'#{self.channel} :')[1]
+        elif 'NOTICE' in line:
+            message_type = MessageTypes.NOTICE
+            content = line
         else:
-            message_type = None
-            content = None
-        
-        return Message(service=service, message_type=message_type, user=user, content=content)
+            message_type = MessageTypes.SYSTEM_MESSAGE
+            content = line
+
+        return TwitchMessage(service=service,
+                             message_type=message_type,
+                             user=user,
+                             content=content,
+                             display_name=display_name)
 
     def run(self, bot):
         messages = []
-        lines = ""
+        lines = ''
 
         while True:
             try:
@@ -203,30 +232,25 @@ class TwitchService(object):
             lines = lines + read_buffer.decode('utf-8')
             line_list = lines.split('\r\n')
             for line in line_list:
-                print(line)
                 messages.append(self.line_to_message(line))
             lines = ''
 
-            if len(messages) >= 2:
-                last_message = messages[0]
-                if last_message.message_type == MessageTypes.NOTICE:
-                    print(last_message)
-                # elif self.get_username(last_message) in [bot.info['user'], 'system']:
-                #     pass
-                else:
-                    print("{} {}: {}".format(
-                        time.strftime("%Y-%m-%d %H:%M:%S"),
-                        self.get_username(last_message),
-                        self.get_human_readable_message(last_message)))
-                if last_message.message_type == MessageTypes.PING:
-                    resp = 'PONG :tmi.twitch.tv'
-                    self.sock.send(resp.encode('utf-8'))
-                else:
-                    try:
-                        bot._act_on(last_message)
-                    except Exception as e:
-                        print(e)
-                        logging.exception('Error occurred at {}'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
-                        self.send_message('Something went wrong. The error has been logged.')
+            last_message = messages[-2]
+            if last_message.message_type == MessageTypes.NOTICE:
+                print(last_message.content)
+            elif last_message.message_type == MessageTypes.PING:
+                resp = 'PONG :tmi.twitch.tv'
+                self.sock.send(resp.encode('utf-8'))
+            elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
+                try:
+                    # bot._act_on(last_message)
+                    print('{} {}: {}'.format(
+                        time.strftime('%Y-%m-%d %H:%M:%S'),
+                        last_message.display_name,
+                        last_message.content))
+                except Exception as e:
+                    print(e)
+                    logging.exception('Error occurred at {}'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
+                    self.send_message('Something went wrong. The error has been logged.')
 
             time.sleep(.02)
