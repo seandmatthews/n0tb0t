@@ -41,7 +41,7 @@ class DeathGuessingDisabled:
 
         !guess 50
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one().mv_value == 'True':
             msg_list = self.service.get_message_content(message).split(' ')
             if len(msg_list) > 1:
@@ -91,7 +91,7 @@ class DeathGuessingDisabled:
 
         !guesstotal 50
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
             msg_list = self.service.get_message_content(message).split(' ')
             if len(msg_list) > 1:
@@ -182,7 +182,7 @@ class DeathGuessingDisabled:
 
         !set_deaths 5
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
             deaths_num = msg_list[1]
@@ -206,7 +206,7 @@ class DeathGuessingDisabled:
 
         !set_total_deaths 5
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
             total_deaths_num = msg_list[1]
@@ -230,7 +230,7 @@ class DeathGuessingDisabled:
 
         !add_death
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         deaths = int(self._get_current_deaths(db_session))
         total_deaths = int(self._get_total_deaths(db_session))
         deaths += 1

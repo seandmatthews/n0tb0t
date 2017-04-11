@@ -339,7 +339,7 @@ class Bot(*mixin_classes):
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
-                self.service.send_message(chat_queue.pop())
+                self.service.send_public_message(chat_queue.pop())
             time.sleep(.5)
 
     def _process_whisper_queue(self, whisper_queue):
@@ -352,7 +352,7 @@ class Bot(*mixin_classes):
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
-                self.service.send_whisper(whisper_tuple[0], whisper_tuple[1])
+                self.service.send_private_message(whisper_tuple[0], whisper_tuple[1])
             time.sleep(1.5)
 
     def _process_command_queue(self, command_queue):
@@ -377,12 +377,12 @@ class Bot(*mixin_classes):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.service.get_message_content(message.replace('PING', 'PONG')))
+            self._add_to_chat_queue(self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.service.get_display_name(message)
+            user = self.service.get_message_display_name(message)
             user_is_mod = self.service.check_mod(message)
             if self._has_permission(user, user_is_mod, command, db_session):
                 self._run_command(command, message, db_session)
@@ -454,7 +454,7 @@ class Bot(*mixin_classes):
 
         !stop_speaking
         """
-        self.service.send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
     @Utils._mod_only

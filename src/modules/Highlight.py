@@ -13,7 +13,7 @@ class HighlightMixin:
         !highlight
         !highlight The caster screamed like a little girl!
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
             user_note = ' '.join(msg_list[1:])

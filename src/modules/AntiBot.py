@@ -12,7 +12,7 @@ class AntiBotMixin:
     
         !anti_bot testuser1
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
@@ -26,7 +26,7 @@ class AntiBotMixin:
         mod_str = ', '.join(mod_list)
         for viewer in viewers:
             if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
-                self.service.send_message('/ban {}'.format(viewer))
+                self.service.send_public_message('/ban {}'.format(viewer))
                 # TODO: Fix Whisper Stuff
                 # self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
         self._add_to_chat_queue(
@@ -41,7 +41,7 @@ class AntiBotMixin:
     
         !whitelist
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
@@ -71,7 +71,7 @@ class AntiBotMixin:
     
         !unwhitelist testuser1
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff

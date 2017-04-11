@@ -64,7 +64,7 @@ class CommandsMixin:
         !add_command !test_command This is a test.
         !add_command TestUser1 TestUser2 !test_command This is a test
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
             if word[0] == '!':
@@ -108,7 +108,7 @@ class CommandsMixin:
 
         !delete_command !test
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
         command_str = msg_list[1][1:].lower()
         db_commands = db_session.query(models.Command).all()
@@ -134,7 +134,7 @@ class CommandsMixin:
 
         !show_commands
         """
-        user = self.service.get_display_name(message)
+        user = self.service.get_message_display_name(message)
         web_view_link = self.spreadsheets['commands'][1]
         short_url = self.shortener.short(web_view_link)
         # TODO: Fix Whisper Stuff

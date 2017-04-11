@@ -16,7 +16,7 @@ class ChatterSelectionMixin:
         !enter_contest
         """
 
-        username = self.service.get_display_name(message)
+        username = self.service.get_message_display_name(message)
         user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
         if user:
             print('user found')
