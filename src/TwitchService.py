@@ -100,12 +100,12 @@ class TwitchService(object):
     def check_mod(self, line):
         line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            if ('user-type=mod' in line_list[0]) or (self.get_username(line) == self.channel):
+            if ('user-type=mod' in line_list[0]) or (self.get_username(line).lower() == self.channel.lower()):
                 return True
             else:
                 return False
         elif "WHISPER" in line:
-            if (self.get_username(line) in self.get_mods()) or (self.get_username(line) == self.channel):
+            if (self.get_username(line) in self.get_mods()) or (self.get_username(line).lower() == self.channel.lower()):
                 return True
             else:
                 return False
@@ -170,6 +170,7 @@ class TwitchService(object):
                 elif self.get_username(last_message) in [bot.info['user'], 'system']:
                     pass
                 else:
+                    pass
                     print("{} {}: {}".format(
                         time.strftime("%Y-%m-%d %H:%M:%S"),
                         self.get_username(last_message),
