@@ -65,7 +65,7 @@ class Bot(*mixin_classes):
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
         self.Session = self._initialize_db(data_dir)
-        session = self.Session()
+        db_session = self.Session()
 
         self.credentials = google_auth.get_credentials(credentials_parent_dir=current_dir, client_secret_dir=current_dir)
 
@@ -81,7 +81,7 @@ class Bot(*mixin_classes):
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
             # getattr(self, init_command)(sheet_name, session)
 
-        self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
+        self.guessing_enabled = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
         self.allowed_to_chat = True
 
@@ -102,11 +102,9 @@ class Bot(*mixin_classes):
 
         self._add_to_chat_queue('{} is online'.format(BOT_INFO['user']))
 
-        self.auto_quotes_timers = {}
-        for auto_quote in session.query(models.AutoQuote).all():
-            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
+        self.start_auto_quotes(db_session)
         self.player_queue_credentials = None
-        session.close()
+        db_session.close()
         self.strawpoll_id = ''
 
     def _sort_methods(self):

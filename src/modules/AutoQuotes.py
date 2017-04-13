@@ -62,10 +62,11 @@ class AutoQuoteMixin:
         """
         auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         self.auto_quotes_timers = {}
-        for index, auto_quote in enumerate(auto_quotes):
+        for auto_quote in auto_quotes:
             quote = auto_quote.quote
             period = auto_quote.period
-            self._auto_quote(index=index, quote=quote, period=period)
+            AQ_ID = auto_quote.id
+            self._auto_quote(index=AQ_ID, quote=quote, period=period)
 
     @Utils._mod_only
     def _start_auto_quote(self, auto_quote_id, db_session):
@@ -74,10 +75,9 @@ class AutoQuoteMixin:
         """
         auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).filter(
             models.AutoQuote.id == auto_quote_id).one()
-        index = 'AQ{}'.format(auto_quote_id)
         quote = auto_quote.quote
         period = auto_quote.period
-        self._auto_quote(index=index, quote=quote, period=period)
+        self._auto_quote(index=auto_quote_id, quote=quote, period=period)
 
     @Utils._mod_only
     def stop_auto_quotes(self):
@@ -162,7 +162,6 @@ class AutoQuoteMixin:
             auto_quote_id = int(msg_list[1])
             auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
             try:
-                index = int(msg_list[1]) - 1
                 db_session.delete(auto_quote)
                 db_session.flush()
                 my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,

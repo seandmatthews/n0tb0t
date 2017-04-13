@@ -181,6 +181,7 @@ class PlayerQueueMixin:
     #     short_url = self.shortener.short(web_view_link)
     #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
 
+    @Utils._private_message_allowed
     @Utils._mod_only
     def cycle(self, message):
         """
@@ -208,6 +209,7 @@ class PlayerQueueMixin:
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
             players_str, len(self.player_queue.queue)))
 
+    @Utils._private_message_allowed
     @Utils._mod_only
     def cycle_one(self, message):
         """
@@ -248,7 +250,7 @@ class PlayerQueueMixin:
         """
         for _ in self.player_queue.queue:
             self.command_queue.appendleft(('_delete_last_row', {}))
-        self.player_queue = PlayerQueue.PlayerQueue()
+        self.player_queue = PlayerQueue()
         try:
             os.remove(f"{self.info['channel']}_player_queue.json")
         except FileNotFoundError:
@@ -270,57 +272,57 @@ class PlayerQueueMixin:
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
             self.player_queue.cycle_num = cycle_num
-            self._add_to_whisper_queue(user, "The new room size is {}.".format(cycle_num))
-        else:
-            self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
+            self._add_to_chat_queue('The new room size is {}.'.format(cycle_num))
+        # else:
+        #     self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
 
-    @Utils._mod_only
-    def promote(self, message, db_session):
-        """
-        Promotes a player in the player queue.
-
-        !promote testuser
-
-        # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
-                move some of the logic
-        """
-        msg_list = self.service.get_message_content(message).split(' ')
-        user = self.service.get_message_display_name(message)
-        player = msg_list[1]
-        for index, tup in enumerate(self.player_queue.queue):
-            if tup[0] == player:
-                times_played = tup[1]
-                if times_played != 0:
-                    result = db_session.query(models.User).filter(models.User.name == player).one()
-                    result.times_played -= 1
-                    self.player_queue.queue.remove(tup)
-                    self.player_queue.push(player, times_played-1)
-                else:
-                    self._add_to_whisper_queue(user, '{} cannot be promoted in the queue.'.format(player))
-                break
-        else:
-            self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
-
-    @Utils._mod_only
-    def demote(self, message, db_session):
-        """
-        Demotes a player in the player queue.
-
-        !demote testuser
-
-        # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
-                move some of the logic
-        """
-        msg_list = self.service.get_message_content(message).split(' ')
-        user = self.service.get_message_display_name(message)
-        player = msg_list[1]
-        for index, tup in enumerate(self.player_queue.queue):
-            if tup[0] == player:
-                times_played = tup[1]
-                result = db_session.query(models.User).filter(models.User.name == player).one()
-                result.times_played += 1
-                self.player_queue.queue.remove(tup)
-                self.player_queue.push(player, times_played+1)
-                break
-        else:
-            self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+    # @Utils._mod_only
+    # def promote(self, message, db_session):
+    #     """
+    #     Promotes a player in the player queue.
+    #
+    #     !promote testuser
+    #
+    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
+    #             move some of the logic
+    #     """
+    #     msg_list = self.service.get_message_content(message).split(' ')
+    #     user = self.service.get_message_display_name(message)
+    #     player = msg_list[1]
+    #     for index, tup in enumerate(self.player_queue.queue):
+    #         if tup[0] == player:
+    #             times_played = tup[1]
+    #             if times_played != 0:
+    #                 result = db_session.query(models.User).filter(models.User.name == player).one()
+    #                 result.times_played -= 1
+    #                 self.player_queue.queue.remove(tup)
+    #                 self.player_queue.push(player, times_played-1)
+    #             else:
+    #                 self._add_to_whisper_queue(user, '{} cannot be promoted in the queue.'.format(player))
+    #             break
+    #     else:
+    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+    #
+    # @Utils._mod_only
+    # def demote(self, message, db_session):
+    #     """
+    #     Demotes a player in the player queue.
+    #
+    #     !demote testuser
+    #
+    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
+    #             move some of the logic
+    #     """
+    #     msg_list = self.service.get_message_content(message).split(' ')
+    #     user = self.service.get_message_display_name(message)
+    #     player = msg_list[1]
+    #     for index, tup in enumerate(self.player_queue.queue):
+    #         if tup[0] == player:
+    #             times_played = tup[1]
+    #             result = db_session.query(models.User).filter(models.User.name == player).one()
+    #             result.times_played += 1
+    #             self.player_queue.queue.remove(tup)
+    #             self.player_queue.push(player, times_played+1)
+    #             break
+    #     else:
+    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
