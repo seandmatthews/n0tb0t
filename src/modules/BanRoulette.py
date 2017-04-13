@@ -10,7 +10,7 @@ class BanRouletteMixin:
         !ban_roulette
         !ban_roulette testuser
         """
-        if self.service.check_mod(message):
+        if self.service.get_mod_status(message):
             if len(self.service.get_message_content(message).split(' ')) > 1:
                 user = self.service.get_message_content(message).split(' ')[1]
             else:

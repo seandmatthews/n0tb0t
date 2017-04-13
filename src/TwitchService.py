@@ -55,7 +55,7 @@ class TwitchService(object):
 
     @reconnect_on_error
     def send_public_message(self, message_content):
-        message_temp = 'PRIVMSG #' + self.channel + " :" + message_content
+        message_temp = f'PRIVMSG #{self.channel} :{message_content}'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
@@ -64,7 +64,7 @@ class TwitchService(object):
 
     @reconnect_on_error
     def send_private_message(self, user, whisper):
-        message_temp = 'PRIVMSG #jtv :/w ' + user + ' ' + whisper
+        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper}'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
@@ -97,16 +97,19 @@ class TwitchService(object):
         self.sock.send('CAP REQ :twitch.tv/commands\r\n'.encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
 
-
-
+    # Unpythonic Getters
+    # TODO: Consider removing and accessing methods directly
     def get_message_display_name(self, message):
         return message.display_name
 
     def get_message_content(self, message):
         return message.content
 
-    def check_mod(self, message):
+    def get_mod_status(self, message):
         return message.is_mod
+
+    def get_message_type(self, message):
+        return message.message_type.name
 
     def fetch_chatters_from_API(self):
         """
@@ -191,7 +194,6 @@ class TwitchService(object):
         @params:
             line is a twitch IRC line
         """
-        service = Service.TWITCH
         kwargs = {}
         if line == 'PING :tmi.twitch.tv':
             kwargs['message_type'] = MessageTypes.PING
@@ -199,13 +201,14 @@ class TwitchService(object):
             kwargs['user'] = self._get_user_id_from_line(line)
             kwargs['display_name'] = self._get_display_name_from_line(line)
             kwargs['message_type'] = MessageTypes.PUBLIC
-            kwargs['content'] = line.split(f'#{self.channel} :')[1]
+            kwargs['content'] = line.split(f'#{self.channel} :')[1]  # TODO: Make sure this works with odd capitalization
             kwargs['is_mod'] = self._check_mod_from_line(line)
         elif 'WHISPER' in line:
             kwargs['user'] = self._get_user_id_from_line(line)
             kwargs['display_name'] = self._get_display_name_from_line(line)
             kwargs['message_type'] = MessageTypes.PRIVATE
-            kwargs['content'] = line.split(f'#{self.channel} :')[1]
+            print(line)
+            kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
             kwargs['is_mod'] = self._check_mod_from_line(line)
         elif 'NOTICE' in line:
             kwargs['message_type'] = MessageTypes.NOTICE

@@ -53,7 +53,7 @@ class PlayerQueue:
         return return_list
 
 
-class PlayerQueueDisabled:
+class PlayerQueueMixin:
     def _delete_last_row(self):
         """
         Deletes the last row of the player_queue spreadsheet
@@ -95,6 +95,9 @@ class PlayerQueueDisabled:
         with open(f"{self.info['channel']}_player_queue.json", 'w', encoding="utf-8") as player_file:
             json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
+
+    @Utils._private_message_allowed
+    @Utils._public_message_disallowed
     def join(self, message, db_session):
         """
         Adds the user to the game queue.
@@ -157,26 +160,26 @@ class PlayerQueueDisabled:
         except UnboundLocalError:
             self._add_to_chat_queue("{0} not in the queue. Feel free to join it.".format(username))
 
-    def show_player_queue(self, message):
-        """
-        Sends the user a whisper with the current contents of the player queue
-
-        !show_player_queue
-        """
-        user = self.service.get_message_display_name(message)
-        queue_str = ', '.join([str(item) for item in self.player_queue.queue])
-        self._add_to_whisper_queue(user, queue_str)
-
-    def show_player_queue(self, message):
-        """
-        Links the google spreadsheet containing the queue list
-
-        !show_player_queue
-        """
-        user = self.service.get_message_display_name(message)
-        web_view_link = self.spreadsheets['player_queue'][1]
-        short_url = self.shortener.short(web_view_link)
-        self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
+    # def show_player_queue(self, message):
+    #     """
+    #     Sends the user a whisper with the current contents of the player queue
+    #
+    #     !show_player_queue
+    #     """
+    #     user = self.service.get_message_display_name(message)
+    #     queue_str = ', '.join([str(item) for item in self.player_queue.queue])
+    #     self._add_to_whisper_queue(user, queue_str)
+    #
+    # def show_player_queue(self, message):
+    #     """
+    #     Links the google spreadsheet containing the queue list
+    #
+    #     !show_player_queue
+    #     """
+    #     user = self.service.get_message_display_name(message)
+    #     web_view_link = self.spreadsheets['player_queue'][1]
+    #     short_url = self.shortener.short(web_view_link)
+    #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
 
     @Utils._mod_only
     def cycle(self, message):

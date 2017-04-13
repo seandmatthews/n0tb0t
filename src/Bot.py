@@ -5,6 +5,7 @@ import json
 import os
 import threading
 import time
+from enum import Enum, auto
 
 import gspread
 import sqlalchemy
@@ -36,6 +37,10 @@ for file in module_files:
                     mixin_classes.append(getattr(imported, item))
                     print(item)
 
+
+class CommandTypes(Enum):
+    HARDCODED = auto()
+    DYNAMIC = auto()
 
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
@@ -116,7 +121,9 @@ class Bot(*mixin_classes):
 
         my_methods = []
         methods_dict = {'for_mods': [],
-                        'for_all': []}
+                        'for_all': [],
+                        'private_message_allowed': [],
+                        'public_message_disallowed': []}
 
         # Look at all the items in self.my_dir
         # Check to see if they're callable.
@@ -128,13 +135,17 @@ class Bot(*mixin_classes):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            if hasattr(getattr(self, method), '_mods_only'):
+            if hasattr(getattr(self, method), '_mod_only'):
                 methods_dict['for_mods'].append(method)
             else:
                 methods_dict['for_all'].append(method)
+            if hasattr(getattr(self, method), '_private_message_allowed'):
+                methods_dict['private_message_allowed'].append(method)
+            if hasattr(getattr(self, method), '_public_message_disallowed'):
+                methods_dict['public_message_disallowed'].append(method)
 
-        methods_dict['for_all'].sort(key=lambda item: item.lower())
-        methods_dict['for_mods'].sort(key=lambda item: item.lower())
+        for method_list in methods_dict.values():
+            method_list.sort(key=lambda item: item.lower())
 
         return methods_dict
 
@@ -383,8 +394,8 @@ class Bot(*mixin_classes):
         command = self._get_command(message, db_session)
         if command is not None:
             user = self.service.get_message_display_name(message)
-            user_is_mod = self.service.check_mod(message)
-            if self._has_permission(user, user_is_mod, command, db_session):
+            user_is_mod = self.service.get_mod_status(message)
+            if self._has_permission(user, user_is_mod, command) and self._is_valid_message_type(command, message):
                 self._run_command(command, message, db_session)
         db_session.commit()
         db_session.close()
@@ -401,27 +412,24 @@ class Bot(*mixin_classes):
             potential_command = first_word[1:].lower()
         else:
             return None
-        if potential_command in self.sorted_methods['for_all']:
-            return [potential_command, 'for_all']
-        if potential_command in self.sorted_methods['for_mods']:
-            return [potential_command, 'for_mods']
+        if potential_command in self.sorted_methods['for_all'] or potential_command in self.sorted_methods['for_mods']:
+            return [CommandTypes.HARDCODED, potential_command]
         db_result = db_session.query(models.Command).filter(models.Command.call == potential_command).all()
         if db_result:
-            return [potential_command, db_result[0]]
+            return [CommandTypes.DYNAMIC, db_result[0]]
         return None
 
-    def _has_permission(self, user, user_is_mod, command, db_session):
+    def _has_permission(self, user, user_is_mod, command):
         """
         Takes a message from the user, and a list which contains the
         command and where it's found, and a database session.
         Returns True or False depending on whether the user that
         sent the command has the authority to use that command
         """
-        if command[1] == 'for_all':
-            return True
-        if command[1] == 'for_mods' and user_is_mod:
-            return True
-        if type(command[1]) == models.Command:
+        if command[0] == CommandTypes.HARDCODED:
+            if command[1] in self.sorted_methods['for_all'] or (command[1] in self.sorted_methods['for_mods'] and user_is_mod):
+                return True
+        else:
             db_command = command[1]
             if bool(db_command.permissions) is False:
                 return True
@@ -429,16 +437,23 @@ class Bot(*mixin_classes):
                 return True
         return False
 
+    def _is_valid_message_type(self, command, message):
+        if command[0] == CommandTypes.HARDCODED:
+            if self.service.get_message_type(message) == 'PUBLIC':
+                return command[1] not in self.sorted_methods['public_message_disallowed']
+            elif self.service.get_message_type(message) == 'PRIVATE':
+                return command[1] in self.sorted_methods['private_message_allowed']
+
     def _run_command(self, command, message, db_session):
         """
         If the command is a database command, send the response to the chat queue.
         Otherwise call the relevant function, supplying the message and db_session arguments as needed.
         """
-        if type(command[1]) == models.Command:
+        if command[0] == CommandTypes.DYNAMIC:
             db_command = command[1]
             self._add_to_chat_queue(db_command.response)
         else:
-            method_command = command[0]
+            method_command = command[1]
             kwargs = {}
             if 'message' in inspect.signature(getattr(self, method_command)).parameters:
                 kwargs['message'] = message

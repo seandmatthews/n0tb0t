@@ -29,9 +29,26 @@ def _mod_only(f):
     """
     Set's the method's _mods_only property to True
     """
-    f._mods_only = True
+    f._mod_only = True
     return f
-    # END DECORATORS #
+
+
+def _private_message_allowed(f):
+    """
+    Set's the method's _mods_only property to True
+    """
+    f._private_message_allowed = True
+    return f
+
+
+def _public_message_disallowed(f):
+    """
+    Set's the method's _mods_only property to True
+    """
+    f._public_message_disallowed = True
+    return f
+
+# END DECORATORS #
 
 
 class UtilsMixin:
