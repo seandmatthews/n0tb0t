@@ -441,6 +441,8 @@ class Bot(*mixin_classes):
                 return command[1] not in self.sorted_methods['public_message_disallowed']
             elif self.service.get_message_type(message) == 'PRIVATE':
                 return command[1] in self.sorted_methods['private_message_allowed']
+        else:
+            return self.service.get_message_type(message) == 'PUBLIC'
 
     def _run_command(self, command, message, db_session):
         """

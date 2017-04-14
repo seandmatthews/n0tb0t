@@ -145,6 +145,7 @@ class TwitchService(object):
         return chatters
 
     def _get_username_from_line(self, line):
+        print(line)
         exclam_index = None
         at_index = None
         for i, char in enumerate(line):
@@ -177,15 +178,9 @@ class TwitchService(object):
     def _check_mod_from_line(self, line):
         line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            if ('user-type=mod' in line_list[0]) or (self._get_username_from_line(line) == self.channel.lower()):
-                return True
-            else:
-                return False
+            return ('user-type=mod' in line_list[0]) or (self._get_username_from_line(line) == self.channel.lower())
         elif "WHISPER" in line:
-            if (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower()):
-                return True
-            else:
-                return False
+            return (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
 
     def _line_to_message(self, line):
         """
@@ -207,7 +202,6 @@ class TwitchService(object):
             kwargs['user'] = self._get_user_id_from_line(line)
             kwargs['display_name'] = self._get_display_name_from_line(line)
             kwargs['message_type'] = MessageTypes.PRIVATE
-            print(line)
             kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
             kwargs['is_mod'] = self._check_mod_from_line(line)
         elif 'NOTICE' in line:
