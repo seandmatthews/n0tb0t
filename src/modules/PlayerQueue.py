@@ -156,9 +156,9 @@ class PlayerQueueMixin:
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
             self._add_to_chat_queue(
-                "{0} is number {1} in the queue. This may change as other players join.".format(username, position))
+                '{0} is number {1} in the queue. This may change as other players join.'.format(username, position))
         except UnboundLocalError:
-            self._add_to_chat_queue("{0} not in the queue. Feel free to join it.".format(username))
+            self._add_to_chat_queue("{0}, you're not in the queue. Feel free to join it.".format(username))
 
     # def show_player_queue(self, message):
     #     """

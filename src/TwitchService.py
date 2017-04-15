@@ -5,9 +5,7 @@ import time
 from enum import Enum, auto
 
 import requests
-import sqlalchemy
 
-import src.models as models
 from src.Service import Service
 from src.Message import Message
 
@@ -60,7 +58,8 @@ class TwitchService(object):
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             message_content))
-        self.sock.send('{}\r\n'.format(message_temp).encode('utf-8'))
+        bytes_num = self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
+        print(f'Sent {bytes_num} bytes')
 
     @reconnect_on_error
     def send_private_message(self, user, whisper):
@@ -69,14 +68,14 @@ class TwitchService(object):
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             whisper))
-        self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
+        bytes_num = self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
+        print(f'Sent {bytes_num} bytes')
 
     @reconnect_on_error
     def _join_room(self):
         self.sock.connect((self.host, self.port))
         self.sock.send('PASS {PASS}\r\n'.format(PASS=self.pw).encode('utf-8'))
         self.sock.send('NICK {USER}\r\n'.format(USER=self.user).encode('utf-8'))
-        self.sock.send('CAP REQ: twitch.tv/membership\r\n'.encode('utf-8'))
         self.sock.send('JOIN #{CHANNEL}\r\n'.format(CHANNEL=self.channel).encode('utf-8'))
 
         messages = ''
@@ -94,8 +93,9 @@ class TwitchService(object):
             except:
                 continue
 
-        self.sock.send('CAP REQ :twitch.tv/commands\r\n'.encode('utf-8'))
         self.sock.send("CAP REQ :twitch.tv/tags\r\n".encode('utf-8'))
+        self.sock.send('CAP REQ :twitch.tv/commands\r\n'.encode('utf-8'))
+        # self.sock.send('CAP REQ :twitch.tv/membership\r\n'.encode('utf-8'))
 
     # Unpythonic Getters
     # TODO: Consider removing and accessing methods directly
@@ -145,7 +145,6 @@ class TwitchService(object):
         return chatters
 
     def _get_username_from_line(self, line):
-        print(line)
         exclam_index = None
         at_index = None
         for i, char in enumerate(line):
@@ -160,12 +159,12 @@ class TwitchService(object):
         if data_type in line:
             _, *rest_of_line = line.split("{}=".format(data_type), 1)
             for i, char in enumerate(rest_of_line[0]):
-                if char in [' ', ';']:
-                    return rest_of_line[0][:i]
+                if char in [':', ';']:
+                    return rest_of_line[0][:i].strip()
 
     def _get_display_name_from_line(self, line):
         display_name = self._get_data_from_line(line, 'display-name')
-        if display_name is not None:
+        if display_name not in [None, '']:
             return display_name
         else:
             username = self._get_username_from_line(line)
@@ -178,7 +177,7 @@ class TwitchService(object):
     def _check_mod_from_line(self, line):
         line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            return ('user-type=mod' in line_list[0]) or (self._get_username_from_line(line) == self.channel.lower())
+            return ('user-type=mod' in line_list[0]) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
         elif "WHISPER" in line:
             return (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
 
@@ -244,6 +243,8 @@ class TwitchService(object):
             elif last_message.message_type == MessageTypes.PING:
                 resp = 'PONG :tmi.twitch.tv'
                 self.sock.send(resp.encode('utf-8'))
+            # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
+            #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
                 try:
                     bot._act_on(last_message)

@@ -436,6 +436,8 @@ class Bot(*mixin_classes):
         return False
 
     def _is_valid_message_type(self, command, message):
+        if self.service.get_mod_status(message):
+            return True
         if command[0] == CommandTypes.HARDCODED:
             if self.service.get_message_type(message) == 'PUBLIC':
                 return command[1] not in self.sorted_methods['public_message_disallowed']
