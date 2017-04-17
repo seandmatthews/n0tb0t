@@ -16,7 +16,7 @@ def setup_logger(logger_name, log_file, level=logging.INFO):
     """
     logger = logging.getLogger(logger_name)
     formatter = logging.Formatter('%(asctime)s %(message)s')
-    fileHandler = logging.FileHandler(log_file, mode='w')
+    fileHandler = logging.FileHandler(log_file, mode='a')
     fileHandler.setFormatter(formatter)
     streamHandler = logging.StreamHandler()
     streamHandler.setFormatter(formatter)
@@ -34,7 +34,7 @@ error_log_path = os.path.join(config.data_dir, 'error-log.txt')
 event_log_path = os.path.join(config.data_dir, 'event-log.txt')
 
 error_logger = setup_logger('error_logger', error_log_path, level=logging.WARNING)
-event_logger = setup_logger('error_logger', event_log_path, level=logging.INFO)
+event_logger = setup_logger('event_logger', event_log_path, level=logging.INFO)
 
 
 bi = config.BOT_INFO
