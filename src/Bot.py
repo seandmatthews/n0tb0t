@@ -79,7 +79,7 @@ class Bot(*mixin_classes):
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name, session)
+            # getattr(self, init_command)(sheet_name, db_session)
 
         self.guessing_enabled = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 

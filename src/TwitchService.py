@@ -10,13 +10,27 @@ from src.Service import Service
 from src.Message import Message
 
 
+def log_on_error(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        try:
+            f(*args, **kwargs)
+        except Exception as e:
+            print(e)
+            arguments = ' '.join([arg for arg in args[1:]] + [kwarg for kwarg in kwargs])
+            print(arguments)
+            args[0].error_logger.exception(f'Arguments: {arguments}')
+    return wrapper
+
+
 def reconnect_on_error(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         try:
             f(*args, **kwargs)
         except Exception as e:
-            print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
+            print(f'{str(e)}: Attempting to reconnecting to the socket.')
+            args[0].event_logger.info(f'{str(e)}: Attempting to reconnecting to the socket.')
             args[0].sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             args[0]._join_room()
             f(*args, **kwargs)
@@ -39,7 +53,7 @@ class TwitchMessage(Message):
 
 
 class TwitchService(object):
-    def __init__(self, pw, user, channel):
+    def __init__(self, pw, user, channel, error_logger, event_logger):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
@@ -47,29 +61,31 @@ class TwitchService(object):
         self.display_user = user
         self.channel = channel.lower()
         self.display_channel = channel
+        self.error_logger = error_logger
+        self.event_logger = event_logger
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self._join_room()
 
     @reconnect_on_error
     def send_public_message(self, message_content):
-        message_temp = f'PRIVMSG #{self.channel} :{message_content}'
+        message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             message_content))
-        bytes_num = self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
-        print(f'Sent {bytes_num} bytes')
+        bytes_num = self.sock.send(message_temp.encode('utf-8'))
+        self.event_logger.info(message_temp.encode('utf-8'))
 
     @reconnect_on_error
     def send_private_message(self, user, whisper):
-        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper}'
+        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper}\r\n'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             whisper))
-        bytes_num = self.sock.send("{}\r\n".format(message_temp).encode('utf-8'))
-        print(f'Sent {bytes_num} bytes')
+        bytes_num = self.sock.send(message_temp.encode('utf-8'))
+        self.event_logger.info(message_temp.encode('utf-8'))
 
     @reconnect_on_error
     def _join_room(self):
@@ -97,8 +113,7 @@ class TwitchService(object):
         self.sock.send('CAP REQ :twitch.tv/commands\r\n'.encode('utf-8'))
         # self.sock.send('CAP REQ :twitch.tv/membership\r\n'.encode('utf-8'))
 
-    # Unpythonic Getters
-    # TODO: Consider removing and accessing methods directly
+    # Getter methods
     def get_message_display_name(self, message):
         return message.display_name
 
@@ -144,6 +159,7 @@ class TwitchService(object):
             [chatters.append(user) for user in v]
         return chatters
 
+    @log_on_error
     def _get_username_from_line(self, line):
         exclam_index = None
         at_index = None
@@ -162,6 +178,7 @@ class TwitchService(object):
                 if char in [':', ';']:
                     return rest_of_line[0][:i].strip()
 
+    @log_on_error
     def _get_display_name_from_line(self, line):
         display_name = self._get_data_from_line(line, 'display-name')
         if display_name not in [None, '']:
@@ -213,10 +230,9 @@ class TwitchService(object):
         return TwitchMessage(**kwargs)
 
     def run(self, bot):
-        messages = []
-        lines = ''
-
         while True:
+            messages = []
+            lines = ''
             try:
                 read_buffer = self.sock.recv(1024)
             except Exception as e:
@@ -227,15 +243,16 @@ class TwitchService(object):
 
             if len(read_buffer) == 0:
                 print('Disconnected: Attempting to reconnecting to the socket.')
+                self.event_logger.info('Disconnected: Attempting to reconnecting to the socket.')
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._join_room()
                 read_buffer = self.sock.recv(1024)
 
             lines = lines + read_buffer.decode('utf-8')
             line_list = lines.split('\r\n')
+            self.event_logger.info(line_list[-2])
             for line in line_list:
                 messages.append(self._line_to_message(line))
-            lines = ''
 
             last_message = messages[-2]
             if last_message.message_type == MessageTypes.NOTICE:
@@ -243,6 +260,7 @@ class TwitchService(object):
             elif last_message.message_type == MessageTypes.PING:
                 resp = 'PONG :tmi.twitch.tv'
                 self.sock.send(resp.encode('utf-8'))
+                self.event_logger.info(resp.encode('utf-8'))
             # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
             #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
@@ -254,7 +272,11 @@ class TwitchService(object):
                         last_message.content))
                 except Exception as e:
                     print(e)
-                    logging.exception('Error occurred at {}'.format(time.strftime('%Y-%m-%d %H:%M:%S')))
+                    self.error_logger.exception(
+                        f"""Message type: {last_message.message_type} 
+                        Message content: {last_message.content} 
+                        User: {last_message.display_name}"""
+                    )
                     self.send_public_message('Something went wrong. The error has been logged.')
 
             time.sleep(.02)
