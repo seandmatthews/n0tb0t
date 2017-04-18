@@ -1,5 +1,4 @@
 import functools
-import logging
 import socket
 import time
 from enum import Enum, auto
@@ -8,19 +7,6 @@ import requests
 
 from src.Service import Service
 from src.Message import Message
-
-
-def log_on_error(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            f(*args, **kwargs)
-        except Exception as e:
-            print(e)
-            arguments = ' '.join([arg for arg in args[1:]] + [kwarg for kwarg in kwargs])
-            print(arguments)
-            args[0].error_logger.exception(f'Arguments: {arguments}')
-    return wrapper
 
 
 def reconnect_on_error(f):
@@ -75,7 +61,7 @@ class TwitchService(object):
             self.display_user,
             message_content))
         bytes_num = self.sock.send(message_temp.encode('utf-8'))
-        self.event_logger.info(message_temp.encode('utf-8'))
+        self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
     def send_private_message(self, user, whisper):
@@ -85,8 +71,7 @@ class TwitchService(object):
             self.display_user,
             whisper))
         bytes_num = self.sock.send(message_temp.encode('utf-8'))
-        self.event_logger.info(message_temp.encode('utf-8'))
-
+        self.event_logger.info(f'sent: {message_temp}')
     @reconnect_on_error
     def _join_room(self):
         self.sock.connect((self.host, self.port))
@@ -159,7 +144,6 @@ class TwitchService(object):
             [chatters.append(user) for user in v]
         return chatters
 
-    @log_on_error
     def _get_username_from_line(self, line):
         exclam_index = None
         at_index = None
@@ -178,7 +162,6 @@ class TwitchService(object):
                 if char in [':', ';']:
                     return rest_of_line[0][:i].strip()
 
-    @log_on_error
     def _get_display_name_from_line(self, line):
         display_name = self._get_data_from_line(line, 'display-name')
         if display_name not in [None, '']:
@@ -250,7 +233,7 @@ class TwitchService(object):
 
             lines = lines + read_buffer.decode('utf-8')
             line_list = lines.split('\r\n')
-            self.event_logger.info(line_list[-2])
+            self.event_logger.info(f'received: {line_list[-2]}')
             for line in line_list:
                 messages.append(self._line_to_message(line))
 
@@ -258,9 +241,9 @@ class TwitchService(object):
             if last_message.message_type == MessageTypes.NOTICE:
                 print(last_message.content)
             elif last_message.message_type == MessageTypes.PING:
-                resp = 'PONG :tmi.twitch.tv'
+                resp = 'PONG :tmi.twitch.tv\r\n'
                 self.sock.send(resp.encode('utf-8'))
-                self.event_logger.info(resp.encode('utf-8'))
+                self.event_logger.info(f'sent: {resp}')
             # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
             #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
