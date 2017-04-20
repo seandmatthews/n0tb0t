@@ -30,8 +30,8 @@ def setup_logger(logger_name, log_file, level=logging.INFO):
 if not os.path.exists(config.data_dir):
     os.makedirs(config.data_dir)
 
-error_log_path = os.path.join(config.data_dir, 'error-log.txt')
-event_log_path = os.path.join(config.data_dir, 'event-log.txt')
+error_log_path = os.path.join(config.data_dir, f'{config.bot_info["channel"]}_error-log.txt')
+event_log_path = os.path.join(config.data_dir, f'{config.bot_info["channel"]}_event-log.txt')
 
 error_logger = setup_logger('error_logger', error_log_path, level=logging.WARNING)
 event_logger = setup_logger('event_logger', event_log_path, level=logging.INFO)

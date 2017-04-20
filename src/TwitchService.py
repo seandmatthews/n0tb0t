@@ -58,12 +58,12 @@ class TwitchService(object):
         """
         Sends a message to the twitch public chat
         """
-        message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'
+        message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'.encode('utf-8')
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             message_content))
-        self.sock.send(message_temp.encode('utf-8'))
+        self.sock.send(message_temp)
         self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
@@ -71,12 +71,12 @@ class TwitchService(object):
         """
         Sends a whisper with the specified content to the specified user 
         """
-        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper_content}\r\n'
+        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper_content}\r\n'.encode('utf-8')
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             whisper_content))
-        self.sock.send(message_temp.encode('utf-8'))
+        self.sock.send(message_temp)
         self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
@@ -118,7 +118,7 @@ class TwitchService(object):
     def get_message_type(self, message):
         return message.message_type.name
 
-    def get_all_users(self):
+    def _get_all_users(self):
         """
         Talks to twitch's unsupported TMI API to look at all chatters currently in the channel.
         Returns that json dictionary. It has 'moderators', 'global_mods',
@@ -139,14 +139,14 @@ class TwitchService(object):
             raise RuntimeError('Error talking to the twitch API')
 
     def get_mods(self):
-        return self.get_all_users()['moderators']
+        return self._get_all_users()['moderators']
         
     def get_viewers(self):
-        return self.get_all_users()['viewers']
+        return self._get_all_users()['viewers']
 
     def get_all_chatters(self):
         chatters = []
-        for k, v in self.get_all_users().items():
+        for k, v in self._get_all_users().items():
             [chatters.append(user) for user in v]
         return chatters
 
@@ -235,7 +235,7 @@ class TwitchService(object):
 
             if len(read_buffer) == 0:
                 print('Disconnected: Attempting to reconnecting to the socket.')
-                self.event_logger.info('Disconnected: Attempting to reconnecting to the socket.')
+                self.event_logger.info(r'Disconnected: Attempting to reconnecting to the socket.')
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._join_room()
                 read_buffer = self.sock.recv(1024)
@@ -250,8 +250,8 @@ class TwitchService(object):
             if last_message.message_type == MessageTypes.NOTICE:
                 print(last_message.content)
             elif last_message.message_type == MessageTypes.PING:
-                resp = 'PONG :tmi.twitch.tv\r\n'
-                self.sock.send(resp.encode('utf-8'))
+                resp = 'PONG :tmi.twitch.tv\r\n'.encode('utf-8')
+                self.sock.send(resp)
                 self.event_logger.info(f'sent: {resp}')
             # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
             #     print(last_message.content)

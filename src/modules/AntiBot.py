@@ -20,7 +20,7 @@ class AntiBotMixin:
             # self._add_to_whisper_queue(user, 'You need to type out a username.')
             return
         bot_creation_date = self._get_creation_date(msg_list[1])
-        viewers = self.service.get_all_users()['viewers']
+        viewers = self.service.get_viewers()
         mod_list = self.service.get_mods()
         whitelist = db_session.query(models.User.name).filter(models.User.whitelisted == True).all()
         mod_str = ', '.join(mod_list)
