@@ -4,7 +4,7 @@ import datetime
 import gspread
 import requests
 
-from config import BOT_INFO
+from config import bot_info
 
 
 # DECORATORS #
@@ -60,7 +60,7 @@ class UtilsMixin:
         Uses the kraken API to fetch the start time of the current stream.
         Computes how long the stream has been running, returns that value in a dictionary.
         """
-        channel = BOT_INFO['channel']
+        channel = bot_info['channel']
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
         for attempt in range(5):
             try:
@@ -86,7 +86,7 @@ class UtilsMixin:
             except requests.exceptions.HTTPError:
                 continue
             except TypeError:
-                self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
+                self._add_to_chat_queue("Sorry, the channel doesn't seem to be live at the moment.")
                 break
             except ValueError:
                 continue

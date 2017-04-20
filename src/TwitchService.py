@@ -55,23 +55,30 @@ class TwitchService(object):
 
     @reconnect_on_error
     def send_public_message(self, message_content):
+        """
+        Sends a message to the twitch public chat
+        """
         message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             message_content))
-        bytes_num = self.sock.send(message_temp.encode('utf-8'))
+        self.sock.send(message_temp.encode('utf-8'))
         self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
-    def send_private_message(self, user, whisper):
-        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper}\r\n'
+    def send_private_message(self, user, whisper_content):
+        """
+        Sends a whisper with the specified content to the specified user 
+        """
+        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper_content}\r\n'
         print('{} {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
-            whisper))
-        bytes_num = self.sock.send(message_temp.encode('utf-8'))
+            whisper_content))
+        self.sock.send(message_temp.encode('utf-8'))
         self.event_logger.info(f'sent: {message_temp}')
+
     @reconnect_on_error
     def _join_room(self):
         self.sock.connect((self.host, self.port))
@@ -111,7 +118,7 @@ class TwitchService(object):
     def get_message_type(self, message):
         return message.message_type.name
 
-    def fetch_chatters_from_API(self):
+    def get_all_users(self):
         """
         Talks to twitch's unsupported TMI API to look at all chatters currently in the channel.
         Returns that json dictionary. It has 'moderators', 'global_mods',
@@ -129,18 +136,17 @@ class TwitchService(object):
             else:
                 return chatters
         else:
-            self._add_to_chat_queue(
-                'Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?')
+            raise RuntimeError('Error talking to the twitch API')
 
     def get_mods(self):
-        return self.fetch_chatters_from_API()['moderators']
+        return self.get_all_users()['moderators']
         
     def get_viewers(self):
-        return self.fetch_chatters_from_API()['viewers']
+        return self.get_all_users()['viewers']
 
     def get_all_chatters(self):
         chatters = []
-        for k, v in self.fetch_chatters_from_API().items():
+        for k, v in self.get_all_users().items():
             [chatters.append(user) for user in v]
         return chatters
 
@@ -189,27 +195,30 @@ class TwitchService(object):
             line is a twitch IRC line
         """
         kwargs = {}
-        if line == 'PING :tmi.twitch.tv':
-            kwargs['message_type'] = MessageTypes.PING
-        elif 'PRIVMSG' in line:
-            kwargs['user'] = self._get_user_id_from_line(line)
-            kwargs['display_name'] = self._get_display_name_from_line(line)
-            kwargs['message_type'] = MessageTypes.PUBLIC
-            kwargs['content'] = line.split(f'#{self.channel} :')[1]  # TODO: Make sure this works with odd capitalization
-            kwargs['is_mod'] = self._check_mod_from_line(line)
-        elif 'WHISPER' in line:
-            kwargs['user'] = self._get_user_id_from_line(line)
-            kwargs['display_name'] = self._get_display_name_from_line(line)
-            kwargs['message_type'] = MessageTypes.PRIVATE
-            kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
-            kwargs['is_mod'] = self._check_mod_from_line(line)
-        elif 'NOTICE' in line:
-            kwargs['message_type'] = MessageTypes.NOTICE
-            kwargs['content'] = line
-        else:
-            kwargs['message_type'] = MessageTypes.SYSTEM_MESSAGE
-            kwargs['content'] = line
-
+        try:
+            if line == 'PING :tmi.twitch.tv':
+                kwargs['message_type'] = MessageTypes.PING
+            elif 'PRIVMSG' in line:
+                kwargs['user'] = self._get_user_id_from_line(line)
+                kwargs['display_name'] = self._get_display_name_from_line(line)
+                kwargs['message_type'] = MessageTypes.PUBLIC
+                kwargs['content'] = line.split(f'#{self.channel} :')[1]
+                kwargs['is_mod'] = self._check_mod_from_line(line)
+            elif 'WHISPER' in line:
+                kwargs['user'] = self._get_user_id_from_line(line)
+                kwargs['display_name'] = self._get_display_name_from_line(line)
+                kwargs['message_type'] = MessageTypes.PRIVATE
+                kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
+                kwargs['is_mod'] = self._check_mod_from_line(line)
+            elif 'NOTICE' in line:
+                kwargs['message_type'] = MessageTypes.NOTICE
+                kwargs['content'] = line
+            else:
+                kwargs['message_type'] = MessageTypes.SYSTEM_MESSAGE
+                kwargs['content'] = line
+        except Exception as e:
+            print(str(e))
+            print(line)
         return TwitchMessage(**kwargs)
 
     def run(self, bot):

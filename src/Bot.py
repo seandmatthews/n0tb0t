@@ -42,12 +42,13 @@ class CommandTypes(Enum):
     HARDCODED = auto()
     DYNAMIC = auto()
 
+
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
-    def __init__(self, service, BOT_INFO, bitly_access_token, current_dir, data_dir):
+    def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
 
         self.service = service
-        self.info = BOT_INFO
+        self.info = bot_info
 
         self.sorted_methods = self._sort_methods()
 
@@ -73,7 +74,7 @@ class Bot(*mixin_classes):
         starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses', 'player_queue']
         self.spreadsheets = {}
         for sheet in starting_spreadsheets_list:
-            sheet_name = '{}-{}-{}'.format(BOT_INFO['channel'], BOT_INFO['user'], sheet)
+            sheet_name = '{}-{}-{}'.format(bot_info['channel'], bot_info['user'], sheet)
             already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
             web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
             sheet_tuple = (sheet_name, web_view_link)
@@ -100,7 +101,7 @@ class Bot(*mixin_classes):
         self.command_thread.daemon = True
         self.command_thread.start()
 
-        self._add_to_chat_queue('{} is online'.format(BOT_INFO['user']))
+        self._add_to_chat_queue('{} is online'.format(bot_info['user']))
 
         self.start_auto_quotes(db_session)
         self.player_queue_credentials = None

@@ -37,16 +37,16 @@ error_logger = setup_logger('error_logger', error_log_path, level=logging.WARNIN
 event_logger = setup_logger('event_logger', event_log_path, level=logging.INFO)
 
 
-bi = config.BOT_INFO
+bot_info = config.bot_info
 
 if config.service == config.Service.TWITCH:
-    ts = TwitchService(pw=bi['pw'],
-                       user=bi['user'],
-                       channel=bi['channel'],
+    ts = TwitchService(pw=bot_info['pw'],
+                       user=bot_info['user'],
+                       channel=bot_info['channel'],
                        error_logger=error_logger,
                        event_logger=event_logger)
 
-    bot = Bot(BOT_INFO=bi,
+    bot = Bot(bot_info=bot_info,
               service=ts,
               bitly_access_token=config.bitly_access_token,
               current_dir=config.current_dir,
