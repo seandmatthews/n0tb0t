@@ -8,6 +8,8 @@ import sqlalchemy
 import src.models as models
 import src.modules.Utils as Utils
 
+from config import data_dir
+
 
 class PlayerQueue:
     def __init__(self, cycle_num=7, input_iterable=None):
@@ -92,7 +94,7 @@ class PlayerQueueMixin:
         Writes the player queue to a json file
         to be loaded on startup if needed.
         """
-        with open(f"{self.info['channel']}_player_queue.json", 'w', encoding="utf-8") as player_file:
+        with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'w', encoding="utf-8") as player_file:
             json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
 
@@ -252,7 +254,7 @@ class PlayerQueueMixin:
             self.command_queue.appendleft(('_delete_last_row', {}))
         self.player_queue = PlayerQueue()
         try:
-            os.remove(f"{self.info['channel']}_player_queue.json")
+            os.remove(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"))
         except FileNotFoundError:
             pass
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.times_played: 0}))
@@ -268,13 +270,12 @@ class PlayerQueueMixin:
         !set_cycle_number 5
         """
         msg_list = self.service.get_message_content(message).split(' ')
-        user = self.service.get_message_display_name(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
             self.player_queue.cycle_num = cycle_num
             self._add_to_chat_queue('The new room size is {}.'.format(cycle_num))
-        # else:
-        #     self._add_to_whisper_queue(user, "Make sure the command is followed by an integer greater than 0.")
+        else:
+            self._add_to_chat_queue('Make sure the command is followed by an integer greater than 0.')
 
     # @Utils._mod_only
     # def promote(self, message, db_session):
