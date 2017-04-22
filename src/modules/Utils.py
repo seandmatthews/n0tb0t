@@ -1,8 +1,14 @@
-import functools
 import datetime
+import functools
+import random
 
 import gspread
+import praw
 import requests
+
+from config import reddit_client_id
+from config import reddit_client_secret
+from config import reddit_user_agent
 
 from config import bot_info
 
@@ -115,3 +121,19 @@ class UtilsMixin:
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def _fetch_random_reddit_post_title(self, subreddit, time_filter='day', limit=10):
+        """
+        Fetches a random title from the specified subreddit
+        """
+        reddit_specific_words = ['reddit', 'karma', 'repost', 'vote', '/r/']
+        valid_thoughts = []
+        r = praw.Reddit(client_id=reddit_client_id,
+                        client_secret=reddit_client_secret,
+                        user_agent=reddit_user_agent)
+
+        submissions = r.subreddit(subreddit).top(time_filter=time_filter, limit=limit)
+        for entry in submissions:
+            if len([word for word in reddit_specific_words if word in entry.title.lower()]) == 0:
+                valid_thoughts.append(entry.title)
+        return random.choice(valid_thoughts)
