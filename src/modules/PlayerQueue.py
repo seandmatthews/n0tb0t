@@ -1,6 +1,7 @@
 import collections
 import json
 import os
+import random
 
 import gspread
 import sqlalchemy
@@ -183,6 +184,21 @@ class PlayerQueueMixin:
     #     short_url = self.shortener.short(web_view_link)
     #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
 
+    def _create_credentials_message(self, channel, player, credentials=None):
+        """
+        Takes a set of crednentials and combines them with some reddit factoid 
+        """
+        subreddit = random.choice(['todayilearned', 'showerthoughts'])
+        reddit_cleverness = self._fetch_random_reddit_post_title(subreddit, time_filter='week', limit=100)
+        if credentials is not None:
+            whisper_str = "{}, you may now join {} to play. The credentials you need are: {} Now here's something from Reddit. {}".format(
+                player, channel, credentials, reddit_cleverness)
+        else:
+            whisper_str = "{}, you may now join {} to play. Now here's something from Reddit. {}".format(
+                player, channel, reddit_cleverness)
+        return whisper_str
+
+
     @Utils._private_message_allowed
     @Utils._mod_only
     def cycle(self, message):
@@ -198,15 +214,13 @@ class PlayerQueueMixin:
         players_str = ' '.join(players)
         channel = self.info['channel']
         if len(msg_list) > 1:
-            credential_str = ' '.join(msg_list[1:])
-            whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
-                    channel, credential_str)
-            self.player_queue_credentials = credential_str
+            self.player_queue_credentials = ' '.join(msg_list[1:])
         else:
-            whisper_str = 'You may now join {} to play.'.format(channel)
             self.player_queue_credentials = None
+
         for player in players:
-            self._add_to_whisper_queue(player, whisper_str)
+            credentials_message = self._create_credentials_message(channel, player, self.player_queue_credentials)
+            self._add_to_whisper_queue(player, credentials_message)
             # self.command_queue.appendleft(('_delete_last_row', {}))
         self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
             players_str, len(self.player_queue.queue)))
@@ -216,7 +230,6 @@ class PlayerQueueMixin:
     def cycle_one(self, message):
         """
         Sends out a message to the next player.
-
         !cycle_one
         !cycle_one Password!1
         """
@@ -227,15 +240,13 @@ class PlayerQueueMixin:
             self._write_player_queue()
             if len(msg_list) > 1:
                 credential_str = ' '.join(msg_list[1:])
-                whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
-                        channel, credential_str)
             elif self.player_queue_credentials is not None:
                 credential_str = self.player_queue_credentials
-                whisper_str = 'You may now join {} to play. The credentials you need are: {}'.format(
-                        channel, credential_str)
             else:
-                whisper_str = 'You may now join {} to play.'.format(channel)
-            self._add_to_whisper_queue(player, whisper_str)
+                credential_str = None
+
+            credentials_message = self._create_credentials_message(channel, player, credential_str)
+            self._add_to_whisper_queue(player, credentials_message)
             self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(player, len(self.player_queue.queue)))
             # self.command_queue.appendleft(('_delete_last_row', {}))
         except IndexError:
