@@ -1,9 +1,4 @@
-import random
-
-
 class ShowerThoughtFetcherMixin:
-    def __init__(self):
-        super(ShowerThoughtFetcherMixin, self).__init__()
 
     def shower_thought(self):
         """

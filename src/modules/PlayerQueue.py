@@ -2,12 +2,14 @@ import collections
 import json
 import os
 import random
+import threading
 
 import gspread
 import sqlalchemy
 
 import src.models as models
 import src.modules.Utils as Utils
+from src.Message import Message
 
 from config import data_dir
 
@@ -57,6 +59,9 @@ class PlayerQueue:
 
 
 class PlayerQueueMixin:
+    def __init__(self):
+        self.ready_user_dict = dict()
+
     def _delete_last_row(self):
         """
         Deletes the last row of the player_queue spreadsheet
@@ -118,7 +123,10 @@ class PlayerQueueMixin:
             self.player_queue.push(username, user.times_played)
             self._write_player_queue()
             self._add_to_chat_queue("{0}, you've joined the queue.".format(username))
-            user.times_played += 1
+            try:
+                del self.ready_user_dict[username]
+            except KeyError:
+                pass
         except RuntimeError:
             self._add_to_chat_queue("{0}, you're already in the queue and can't join again.".format(username))
 
@@ -126,26 +134,27 @@ class PlayerQueueMixin:
             # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
             #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
 
-    def leave(self, message, db_session):
+    @Utils._private_message_allowed
+    def leave(self, message):
         """
         Leaves the player queue once you've joined it.
 
         !leave
         """
         username = self.service.get_message_display_name(message)
-        user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
-        if not user:
-            user = models.User(name=username)
-            db_session.add(user)
         for tup in self.player_queue.queue:
             if tup[0] == username:
                 self.player_queue.queue.remove(tup)
                 self._write_player_queue()
-                self._add_to_chat_queue("{0}, you've left the queue.".format(username))
-                user.times_played -= 1
+                self._add_to_chat_queue(f"{username}, you've left the queue.")
                 break
         else:
-            self._add_to_chat_queue("You're not in the queue and must join before leaving.")
+            self._add_to_chat_queue(f"{username}, you're not in the queue and must join before leaving.")
+
+    def confirm(self, message):
+        player = self.service.get_message_display_name(message)
+        self.ready_user_dict[player]['user_ready'] = True
+        self._add_to_whisper_queue(player, self.ready_user_dict[player]['credential_str'])
 
     def spot(self, message):
         """
@@ -158,21 +167,10 @@ class PlayerQueueMixin:
             for index, tup in enumerate(self.player_queue.queue):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
-            self._add_to_chat_queue(
-                '{0} is number {1} in the queue. This may change as other players join.'.format(username, position))
+            self._add_to_chat_queue(f'{username} is number {position} in the queue. This may change as other players join.')
         except UnboundLocalError:
-            self._add_to_chat_queue("{0}, you're not in the queue. Feel free to join it.".format(username))
+            self._add_to_chat_queue(f"{username}, you're not in the queue. Feel free to join it.")
 
-    # def show_player_queue(self, message):
-    #     """
-    #     Sends the user a whisper with the current contents of the player queue
-    #
-    #     !show_player_queue
-    #     """
-    #     user = self.service.get_message_display_name(message)
-    #     queue_str = ', '.join([str(item) for item in self.player_queue.queue])
-    #     self._add_to_whisper_queue(user, queue_str)
-    #
     # def show_player_queue(self, message):
     #     """
     #     Links the google spreadsheet containing the queue list
@@ -198,17 +196,27 @@ class PlayerQueueMixin:
                 player, channel, reddit_cleverness)
         return whisper_str
 
+    def _update_user_ready_dict(self, player):
+        if not self.ready_user_dict[player]['user_ready']:
+            # Jank up an object
+            msg_obj = Message(content=self.ready_user_dict[player]['msg_content'])
+            db_session = self.Session()
+            self.cycle_one(message=msg_obj, db_session=db_session)
+            db_session.commit()
+            db_session.close()
+        del self.ready_user_dict[player]
 
     @Utils._private_message_allowed
     @Utils._mod_only
-    def cycle(self, message):
+    def cycle(self, message, db_session):
         """
         Sends out a message to the next set of players.
 
         !cycle
         !cycle Password!1
         """
-        msg_list = self.service.get_message_content(message).split(' ')
+        msg_content = self.service.get_message_content(message)
+        msg_list = msg_content.split(' ')
         players = self.player_queue.pop_all()
         self._write_player_queue()
         players_str = ' '.join(players)
@@ -219,24 +227,34 @@ class PlayerQueueMixin:
             self.player_queue_credentials = None
 
         for player in players:
+            player_obj = db_session.query(models.User).filter(models.User.name == player).one()
+            player_obj.times_played += 1
             credentials_message = self._create_credentials_message(channel, player, self.player_queue_credentials)
-            self._add_to_whisper_queue(player, credentials_message)
+            self.ready_user_dict[player] = {'user_ready': False,
+                                            'channel': channel,
+                                            'msg_content': msg_content,
+                                            'credential_str': credentials_message}
+            t = threading.Timer(45.0, self._update_user_ready_dict, [player])
+            t.start()
             # self.command_queue.appendleft(('_delete_last_row', {}))
-        self._add_to_chat_queue("Invites sent to: {} and there are {} people left in the queue".format(
-            players_str, len(self.player_queue.queue)))
+        self._add_to_chat_queue(f"{players_str} it is your turn to play! Please whisper the bot !confirm to confirm that you're here.")
+        self._add_to_chat_queue(f'There are {len(self.player_queue.queue)} people left in the queue')
 
     @Utils._private_message_allowed
     @Utils._mod_only
-    def cycle_one(self, message):
+    def cycle_one(self, message, db_session):
         """
         Sends out a message to the next player.
         !cycle_one
         !cycle_one Password!1
         """
-        msg_list = self.service.get_message_content(message).split(' ')
+        msg_content = self.service.get_message_content(message)
+        msg_list = msg_content.split(' ')
         channel = self.info['channel']
         try:
             player = self.player_queue.pop()
+            player_obj = db_session.query(models.User).filter(models.User.name == player).one()
+            player_obj.times_played += 1
             self._write_player_queue()
             if len(msg_list) > 1:
                 credential_str = ' '.join(msg_list[1:])
@@ -246,8 +264,14 @@ class PlayerQueueMixin:
                 credential_str = None
 
             credentials_message = self._create_credentials_message(channel, player, credential_str)
-            self._add_to_whisper_queue(player, credentials_message)
-            self._add_to_chat_queue("Invite sent to: {} and there are {} people left in the queue".format(player, len(self.player_queue.queue)))
+            self.ready_user_dict[player] = {'user_ready': False,
+                                            'channel': channel,
+                                            'msg_content': msg_content,
+                                            'credential_str': credentials_message}
+            t = threading.Timer(45.0, self._update_user_ready_dict, [player])
+            t.start()
+            self._add_to_chat_queue(f'{player} it is your turn to play. Whisper !confirm to the bot')
+            self._add_to_chat_queue(f'There are {len(self.player_queue.queue)} people left in the queue.')
             # self.command_queue.appendleft(('_delete_last_row', {}))
         except IndexError:
             self._add_to_chat_queue('Sorry, there are no more players in the queue')
@@ -261,8 +285,8 @@ class PlayerQueueMixin:
 
         !reset_queue
         """
-        for _ in self.player_queue.queue:
-            self.command_queue.appendleft(('_delete_last_row', {}))
+        # for _ in self.player_queue.queue:
+        #     self.command_queue.appendleft(('_delete_last_row', {}))
         self.player_queue = PlayerQueue()
         try:
             os.remove(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"))
@@ -288,53 +312,47 @@ class PlayerQueueMixin:
         else:
             self._add_to_chat_queue('Make sure the command is followed by an integer greater than 0.')
 
-    # @Utils._mod_only
-    # def promote(self, message, db_session):
-    #     """
-    #     Promotes a player in the player queue.
-    #
-    #     !promote testuser
-    #
-    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
-    #             move some of the logic
-    #     """
-    #     msg_list = self.service.get_message_content(message).split(' ')
-    #     user = self.service.get_message_display_name(message)
-    #     player = msg_list[1]
-    #     for index, tup in enumerate(self.player_queue.queue):
-    #         if tup[0] == player:
-    #             times_played = tup[1]
-    #             if times_played != 0:
-    #                 result = db_session.query(models.User).filter(models.User.name == player).one()
-    #                 result.times_played -= 1
-    #                 self.player_queue.queue.remove(tup)
-    #                 self.player_queue.push(player, times_played-1)
-    #             else:
-    #                 self._add_to_whisper_queue(user, '{} cannot be promoted in the queue.'.format(player))
-    #             break
-    #     else:
-    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
-    #
-    # @Utils._mod_only
-    # def demote(self, message, db_session):
-    #     """
-    #     Demotes a player in the player queue.
-    #
-    #     !demote testuser
-    #
-    #     # TODO(n0t1337): fix the bug in here, maybe move it to player_queue
-    #             move some of the logic
-    #     """
-    #     msg_list = self.service.get_message_content(message).split(' ')
-    #     user = self.service.get_message_display_name(message)
-    #     player = msg_list[1]
-    #     for index, tup in enumerate(self.player_queue.queue):
-    #         if tup[0] == player:
-    #             times_played = tup[1]
-    #             result = db_session.query(models.User).filter(models.User.name == player).one()
-    #             result.times_played += 1
-    #             self.player_queue.queue.remove(tup)
-    #             self.player_queue.push(player, times_played+1)
-    #             break
-    #     else:
-    #         self._add_to_whisper_queue(user, '{} is not in the player queue.'.format(player))
+    @Utils._mod_only
+    def promote(self, message, db_session):
+        """
+        Promotes a player in the player queue.
+
+        !promote testuser
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        player = msg_list[1]
+        for index, tup in enumerate(self.player_queue.queue):
+            if tup[0] == player:
+                times_played = tup[1]
+                if times_played != 0:
+                    result = db_session.query(models.User).filter(models.User.name == player).one()
+                    result.times_played -= 1
+                    self.player_queue.queue.remove(tup)
+                    self.player_queue.push(player, times_played-1)
+                    self._write_player_queue()
+                else:
+                    self._add_to_chat_queue(f'{player} cannot be promoted in the queue.')
+                break
+        else:
+            self._add_to_chat_queue(f'{player} is not in the player queue.')
+
+    @Utils._mod_only
+    def demote(self, message, db_session):
+        """
+        Demotes a player in the player queue.
+
+        !demote testuser
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        player = msg_list[1]
+        for index, tup in enumerate(self.player_queue.queue):
+            if tup[0] == player:
+                times_played = tup[1]
+                result = db_session.query(models.User).filter(models.User.name == player).one()
+                result.times_played += 1
+                self.player_queue.queue.remove(tup)
+                self.player_queue.push(player, times_played+1)
+                self._write_player_queue()
+                break
+        else:
+            self._add_to_chat_queue(f'{player} is not in the player queue.')

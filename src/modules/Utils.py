@@ -58,8 +58,6 @@ def _public_message_disallowed(f):
 
 
 class UtilsMixin:
-    def __init__(self):
-        super(UtilsMixin, self).__init__()
 
     def _get_live_time(self):
         """

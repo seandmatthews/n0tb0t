@@ -64,7 +64,7 @@ class TwitchService(object):
             self.display_user,
             message_content))
         self.sock.send(message_temp)
-        self.event_logger.info(f'sent: {message_temp}')
+        self.event_logger.info(f'sent: {message_temp}'.encode('utf-8'))
 
     @reconnect_on_error
     def send_private_message(self, user, whisper_content):
@@ -72,12 +72,12 @@ class TwitchService(object):
         Sends a whisper with the specified content to the specified user 
         """
         message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper_content}\r\n'.encode('utf-8')
-        print('{} {}: {}'.format(
+        print('{} {} whispered to {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
-            whisper_content))
+            user, whisper_content))
         self.sock.send(message_temp)
-        self.event_logger.info(f'sent: {message_temp}')
+        self.event_logger.info(f'sent: {message_temp}'.encode('utf-8'))
 
     @reconnect_on_error
     def _join_room(self):
@@ -235,14 +235,14 @@ class TwitchService(object):
 
             if len(read_buffer) == 0:
                 print('Disconnected: Attempting to reconnecting to the socket.')
-                self.event_logger.info(r'Disconnected: Attempting to reconnecting to the socket.')
+                self.event_logger.info(r'Disconnected: Attempting to reconnecting to the socket.'.encode('utf-8'))
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._join_room()
                 read_buffer = self.sock.recv(1024)
 
             lines = lines + read_buffer.decode('utf-8')
             line_list = lines.split('\r\n')
-            self.event_logger.info(f'received: {line_list[-2]}')
+            self.event_logger.info(f'received: {line_list[-2]}'.encode('utf-8'))
             for line in line_list:
                 messages.append(self._line_to_message(line))
 
@@ -252,7 +252,7 @@ class TwitchService(object):
             elif last_message.message_type == MessageTypes.PING:
                 resp = 'PONG :tmi.twitch.tv\r\n'.encode('utf-8')
                 self.sock.send(resp)
-                self.event_logger.info(f'sent: {resp}')
+                self.event_logger.info(f'sent: {resp}'.encode('utf-8'))
             # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
             #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:

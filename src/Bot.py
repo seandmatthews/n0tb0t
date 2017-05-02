@@ -46,6 +46,10 @@ class CommandTypes(Enum):
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
     def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
+        for mixin_class in mixin_classes:
+            if getattr(mixin_class, '__init__', None):
+                if callable(getattr(mixin_class, '__init__')):
+                    mixin_class.__init__(self)
 
         self.service = service
         self.info = bot_info
