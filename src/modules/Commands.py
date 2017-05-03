@@ -65,14 +65,14 @@ class CommandsMixin:
         !add_command TestUser1 TestUser2 !test_command This is a test
         """
         msg_list = self.service.get_message_content(message).split(' ')
-        for index, word in enumerate(msg_list[1:]):  # exclude !add_user_command
+        for index, word in enumerate(msg_list[1:]):  # exclude !add_command
             if word[0] == '!':
                 command = word.lower()
                 users = msg_list[1:index + 1]
                 response = ' '.join(msg_list[index + 2:])
                 break
         else:
-            self._add_to_chat_queue('Sorry, the command needs ot have an ! in it.')
+            self._add_to_chat_queue('Sorry, the command needs to have an ! in it.')
             return
         db_commands = db_session.query(models.Command).all()
         if command[1:] in [db_command.call for db_command in db_commands]:
@@ -92,7 +92,28 @@ class CommandsMixin:
             my_thread.daemon = True
             my_thread.start()
 
-
+    @Utils._mod_only
+    def edit_command(self, message, db_session):
+        """
+        Edits existing commands.
+        
+        !edit_command !test_command New command message.
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        command = msg_list[1][1:].lower()
+        response = ' '.join(msg_list[2:])
+        
+        command_obj = db_session.query(models.Command).filter(models.Command.call == command).one_or_none()
+        if command_obj is None:
+            self._add_to_chat_queue('Sorry, that command does not exist.')
+        else:
+            command_obj.response = response
+            self._add_to_chat_queue('Command edited.')
+            my_thread = threading.Thread(target=self.update_command_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+        
     @Utils._mod_only
     def delete_command(self, message, db_session):
         """

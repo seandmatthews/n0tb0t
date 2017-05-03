@@ -80,6 +80,31 @@ class QuotesMixin:
         my_thread.start()
 
     @Utils._mod_only
+    def edit_quote(self, message, db_session):
+        """
+        Edits a user created quote. 
+        Takes a 1 indexed quote index. 
+        
+        !edit_quote 1 New quote words
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
+            index = int(msg_list[1])
+            quote = db_session.query(models.Quote).filter(models.Quote.id == index).one_or_none()
+            if quote is not None:
+                quote.quote = ' '.join(msg_list[2:])
+                self._add_to_chat_queue('Quote has been edited.')
+                my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                     kwargs={'db_session': db_session})
+                my_thread.daemon = True
+                my_thread.start()
+            else:
+                self._add_to_chat_queue('Quote does not exist.')
+        else:
+            self._add_to_chat_queue('You must use a digit to specify a quote.')
+        
+
+    @Utils._mod_only
     def delete_quote(self, message, db_session):
         """
         Removes a user created quote.
@@ -94,16 +119,12 @@ class QuotesMixin:
             if int(msg_list[1]) <= len(quotes):
                 index = int(msg_list[1]) - 1
                 db_session.delete(quotes[index])
-                # TODO: Fix Whisper Stuff
-                # self._add_to_whisper_queue(user, 'Quote deleted.')
                 self._add_to_chat_queue('Quote deleted.')
                 my_thread = threading.Thread(target=self.update_quote_spreadsheet,
                                              kwargs={'db_session': db_session})
                 my_thread.daemon = True
                 my_thread.start()
             else:
-                # TODO: Fix Whisper Stuff
-                # self._add_to_whisper_queue(user, 'Sorry, that\'s not a quote that can be deleted.')
                 self._add_to_chat_queue('Sorry, that\'s not a quote that can be deleted.')
 
     def show_quotes(self, message):
@@ -115,15 +136,15 @@ class QuotesMixin:
         user = self.service.get_message_display_name(message)
         web_view_link = self.spreadsheets['quotes'][1]
         short_url = self.shortener.short(web_view_link)
-        # TODO: Fix Whisper Stuff
-        # self._add_to_whisper_queue(user, 'View the quotes at: {}'.format(short_url))
         self._add_to_chat_queue('View the quotes at: {}'.format(short_url))
 
     def quote(self, message, db_session):
         """
         Displays a quote in chat. Takes a 1 indexed quote index.
         If no index is specified, displays a random quote.
-
+        
+        
+        !quote add This is a quote
         !quote 5
         !quote
         """

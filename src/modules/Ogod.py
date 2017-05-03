@@ -14,9 +14,9 @@ class OgodMixin:
             # TODO: Use NLP magic to figure out whether offender_str is plural or not
             plural = False  # We are lazy right now
             if plural:
-                ogod_str = "{} have offended {}'s delicate sensibilities!".format(offender_str, user)
+                ogod_str = f"{offender_str} have offended {user}'s delicate sensibilities!"
             else:
-                ogod_str = "{} has offended {}'s delicate sensibilities!".format(offender_str, user)
+                ogod_str = f"{offender_str} has offended {user}'s delicate sensibilities!"
         else:
-            ogod_str = "{}'s delicate sensibilities have been offended!".format(user)
+            ogod_str = f"{user}'s delicate sensibilities have been offended!"
         self._add_to_chat_queue(ogod_str)
