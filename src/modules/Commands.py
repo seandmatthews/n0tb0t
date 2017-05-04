@@ -137,7 +137,7 @@ class CommandsMixin:
         else:
             self._add_to_chat_queue('Sorry, that command doesn\'t exist.')
 
-    def show_commands(self, message):
+    def show_commands(self):
         """
         Links the google spreadsheet containing all commands in chat
 

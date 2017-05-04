@@ -68,16 +68,10 @@ class QuotesMixin:
 
         !add_quote Oh look, the caster has uttered an innuendo!
         """
-        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
-        quote = ' '.join(msg_list[1:])
-        quote_obj = models.Quote(quote=quote)
-        db_session.add(quote_obj)
-        self._add_to_chat_queue('Quote added as quote #{}.'.format(db_session.query(models.Quote).count()))
-        my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                     kwargs={'db_session': db_session})
-        my_thread.daemon = True
-        my_thread.start()
+        quote_str = ' '.join(msg_list[1:])
+        response_str = self._add_quote(db_session, quote_str)
+        self._add_to_chat_queue(response_str)
 
     @Utils._mod_only
     def edit_quote(self, message, db_session):
@@ -85,24 +79,16 @@ class QuotesMixin:
         Edits a user created quote. 
         Takes a 1 indexed quote index. 
         
-        !edit_quote 1 New quote words
+        !edit_quote 5 This quote is now different
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
-            index = int(msg_list[1])
-            quote = db_session.query(models.Quote).filter(models.Quote.id == index).one_or_none()
-            if quote is not None:
-                quote.quote = ' '.join(msg_list[2:])
-                self._add_to_chat_queue('Quote has been edited.')
-                my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                     kwargs={'db_session': db_session})
-                my_thread.daemon = True
-                my_thread.start()
-            else:
-                self._add_to_chat_queue('Quote does not exist.')
+            quote_id = int(msg_list[1])
+            quote_str = ' '.join(msg_list[2:])
+            response_str = self._edit_quote(db_session, quote_id, quote_str)
+            self._add_to_chat_queue(response_str)
         else:
             self._add_to_chat_queue('You must use a digit to specify a quote.')
-        
 
     @Utils._mod_only
     def delete_quote(self, message, db_session):
@@ -110,30 +96,20 @@ class QuotesMixin:
         Removes a user created quote.
         Takes a 1 indexed quote index.
 
-        !delete_quote 1
+        !delete_quote 5
         """
         msg_list = self.service.get_message_content(message).split(' ')
-        user = self.service.get_message_display_name(message)
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
-            quotes = db_session.query(models.Quote).all()
-            if int(msg_list[1]) <= len(quotes):
-                index = int(msg_list[1]) - 1
-                db_session.delete(quotes[index])
-                self._add_to_chat_queue('Quote deleted.')
-                my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                             kwargs={'db_session': db_session})
-                my_thread.daemon = True
-                my_thread.start()
-            else:
-                self._add_to_chat_queue('Sorry, that\'s not a quote that can be deleted.')
+            quote_id = int(msg_list[1])
+            response_str = self._delete_quote(db_session, quote_id)
+            self._add_to_chat_queue(response_str)
 
-    def show_quotes(self, message):
+    def show_quotes(self):
         """
         Links to the google spreadsheet containing all the quotes.
 
         !show_quotes
         """
-        user = self.service.get_message_display_name(message)
         web_view_link = self.spreadsheets['quotes'][1]
         short_url = self.shortener.short(web_view_link)
         self._add_to_chat_queue('View the quotes at: {}'.format(short_url))
@@ -143,23 +119,93 @@ class QuotesMixin:
         Displays a quote in chat. Takes a 1 indexed quote index.
         If no index is specified, displays a random quote.
         
-        
-        !quote add This is a quote
-        !quote 5
         !quote
+        !quote 5
+        !quote add Oh look, the caster has uttered an innuendo!
+        !quote edit 5 This quote is now different
+        !quote delete 5
         """
         msg_list = self.service.get_message_content(message).split(' ')
-        if len(msg_list) > 1 and msg_list[1].isdigit():
-            if int(msg_list[1]) > 0:
-                index = int(msg_list[1]) - 1
-                quotes = db_session.query(models.Quote).all()
-                if index <= len(quotes) - 1:
-                    self._add_to_chat_queue('#{} {}'.format(str(index + 1), quotes[index].quote))
-                else:
-                    self._add_to_chat_queue('Sorry, there are only {} quotes.'.format(len(quotes)))
-            else:
-                self._add_to_chat_queue('Sorry, a quote index must be greater than or equal to 1.')
+        if len(msg_list) == 1:  # !quote
+            quote_str = self._get_random_quote(db_session)
+            self._add_to_chat_queue(quote_str)
+        elif msg_list[1].isdigit():  # !quote 50
+            quote_id = msg_list[1]
+            quote_str = self._get_quote(db_session, quote_id)
+            self._add_to_chat_queue(quote_str)
+        else:  # !quote add/edit/delete
+            action = msg_list[1].lower()
+            if action == 'add':  # !quote add Oh look, the caster has uttered an innuendo!
+                quote_str = ' '.join(msg_list[2:])
+                response_str = self._add_quote(db_session, quote_str)
+                self._add_to_chat_queue(response_str)
+            elif action == 'edit':  # !quote edit 5 This quote is now different
+                if self.service.get_mod_status(message):
+                    quote_id = int(msg_list[2])
+                    quote_str = ' '.join(msg_list[3:])
+                    response_str = self._edit_quote(db_session, quote_id, quote_str)
+                    self._add_to_chat_queue(response_str)
+            elif action == 'delete':  # !quote delete 5
+                if self.service.get_mod_status(message):
+                    quote_id = int(msg_list[2])
+                    response_str = self._delete_quote(db_session, quote_id)
+                    self._add_to_chat_queue(response_str)
+
+    def _get_quote(self, db_session, quote_id):
+        quote_objs = db_session.query(models.Quote).all()
+        if quote_id <= len(quote_objs):
+            quote_obj = quote_objs[quote_id-1]
+            response_str = f'#{quote_obj.id} {quote_obj.quote}'
         else:
-            quotes = db_session.query(models.Quote).all()
-            random_quote_index = random.randrange(len(quotes))
-            self._add_to_chat_queue('#{} {}'.format(str(random_quote_index + 1), quotes[random_quote_index].quote))
+            response_str = f'Invalid quote id - there are only {len(quote_objs)} quotes'
+        return response_str
+
+    def _get_random_quote(self, db_session):
+        quote_ob_list = db_session.query(models.Quote).all()
+        if len(quote_ob_list) > 0:
+            quote_obj = random.choice(quote_ob_list)
+            response_str = f'#{quote_obj.id} {quote_obj.quote}'
+        else:
+            response_str = 'No quotes currently exist'
+        return response_str
+
+    def _add_quote(self, db_session, quote_str):
+        quote_obj = models.Quote(quote=quote_str)
+        db_session.add(quote_obj)
+        response_str = f'Quote added as quote #{db_session.query(models.Quote).count()}.'
+
+        # Replace this bit using the command queue
+        my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                     kwargs={'db_session': db_session})
+        my_thread.daemon = True
+        my_thread.start()
+
+        return response_str
+
+    def _edit_quote(self, db_session, quote_id, quote_str):
+        quote_objs = db_session.query(models.Quote).all()
+        if quote_id <= len(quote_objs):
+            quote_obj = quote_objs[quote_id - 1]
+            quote_obj.quote = quote_str
+            response_str = 'Quote has been edited.'
+            my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+        else:
+            response_str = 'That quote does not exist'
+        return response_str
+
+    def _delete_quote(self, db_session, quote_id):
+        quote_objs = db_session.query(models.Quote).all()
+        if quote_id <= len(quote_objs):
+            quote_obj = quote_objs[quote_id - 1]
+            db_session.delete(quote_obj)
+            response_str = 'Quote deleted'
+            my_thread = threading.Thread(target=self.update_quote_spreadsheet,
+                                         kwargs={'db_session': db_session})
+            my_thread.daemon = True
+            my_thread.start()
+        else:
+            response_str = 'That quote does not exist'
+        return response_str
