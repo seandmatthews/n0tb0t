@@ -258,8 +258,9 @@ class TwitchService(object):
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
                 try:
                     bot._act_on(last_message)
-                    print('{} {}: {}'.format(
+                    print('{} {} {}: {}'.format(
                         time.strftime('%Y-%m-%d %H:%M:%S'),
+                        last_message.message_type.name,
                         last_message.display_name,
                         last_message.content))
                 except Exception as e:

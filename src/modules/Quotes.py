@@ -152,6 +152,8 @@ class QuotesMixin:
                     self._add_to_chat_queue(response_str)
 
     def _get_quote(self, db_session, quote_id):
+        # We grab all the quotes because we can't just use the quote ID
+        # Quotes may get deleted, and so we need to set all quotes after that one back by one
         quote_objs = db_session.query(models.Quote).all()
         if quote_id <= len(quote_objs):
             quote_obj = quote_objs[quote_id-1]
@@ -183,6 +185,8 @@ class QuotesMixin:
         return response_str
 
     def _edit_quote(self, db_session, quote_id, quote_str):
+        # We grab all the quotes because we can't just use the quote ID
+        # Quotes may get deleted, and so we need to set all quotes after that one back by one
         quote_objs = db_session.query(models.Quote).all()
         if quote_id <= len(quote_objs):
             quote_obj = quote_objs[quote_id - 1]
@@ -197,6 +201,8 @@ class QuotesMixin:
         return response_str
 
     def _delete_quote(self, db_session, quote_id):
+        # We grab all the quotes because we can't just use the quote ID
+        # Quotes may get deleted, and so we need to set all quotes after that one back by one
         quote_objs = db_session.query(models.Quote).all()
         if quote_id <= len(quote_objs):
             quote_obj = quote_objs[quote_id - 1]
