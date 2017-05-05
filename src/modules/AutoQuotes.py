@@ -62,10 +62,11 @@ class AutoQuoteMixin:
         """
         auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         self.auto_quotes_timers = {}
-        for index, auto_quote in enumerate(auto_quotes):
+        for auto_quote in auto_quotes:
             quote = auto_quote.quote
             period = auto_quote.period
-            self._auto_quote(index=index, quote=quote, period=period)
+            AQ_ID = auto_quote.id
+            self._auto_quote(index=AQ_ID, quote=quote, period=period)
 
     @Utils._mod_only
     def _start_auto_quote(self, auto_quote_id, db_session):
@@ -74,10 +75,9 @@ class AutoQuoteMixin:
         """
         auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).filter(
             models.AutoQuote.id == auto_quote_id).one()
-        index = 'AQ{}'.format(auto_quote_id)
         quote = auto_quote.quote
         period = auto_quote.period
-        self._auto_quote(index=index, quote=quote, period=period)
+        self._auto_quote(index=auto_quote_id, quote=quote, period=period)
 
     @Utils._mod_only
     def stop_auto_quotes(self):
@@ -101,18 +101,15 @@ class AutoQuoteMixin:
         time.sleep(1)
         self.auto_quotes_timers[fullid].cancel()
 
-    def show_auto_quotes(self, message):
+    def show_auto_quotes(self):
         """
         Links to a google spreadsheet containing all auto quotes
 
         !show_auto_quotes
         """
-        user = self.ts.get_username(message)
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
-        # TODO: Fix Whisper Stuff
         self._add_to_chat_queue('View the auto quotes at: {}'.format(short_url))
-        # self._add_to_whisper_queue(user, 'View the auto quotes at: {}'.format(short_url))
 
     @Utils._mod_only
     def add_auto_quote(self, message, db_session):
@@ -123,8 +120,7 @@ class AutoQuoteMixin:
 
         !add_auto_quote 600 This is a rudimentary twitch bot.
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             delay = int(msg_list[1])
             quote = ' '.join(msg_list[2:])
@@ -137,15 +133,11 @@ class AutoQuoteMixin:
             my_thread.daemon = True
             my_thread.start()
 
-            # # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, 'Auto quote added.')
             displayed_feedback_message = "Auto quote added (ID #{}).".format(last_autoquote_id)
             self._add_to_chat_queue(displayed_feedback_message)
             self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, 'Sorry, the command isn\'t formatted properly.')
             self._add_to_chat_queue('Sorry, the command isn\'t formatted properly.')
 
     @Utils._mod_only
@@ -156,30 +148,24 @@ class AutoQuoteMixin:
 
         !delete_auto_quote 1
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
             auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
             try:
-                index = int(msg_list[1]) - 1
                 db_session.delete(auto_quote)
                 db_session.flush()
                 my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
                                              kwargs={'db_session': db_session})
                 my_thread.daemon = True
                 my_thread.start()
-                # TODO: Fix Whisper Stuff
-                # self._add_to_whisper_queue(user, 'Auto quote deleted.')
                 self._add_to_chat_queue('Auto quote deleted')
                 self.stop_auto_quotes()
                 self.start_auto_quotes(db_session)
             except sqlalchemy.orm.exc.NoResultFound:
                 self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
-                # self._add_to_whisper_queue(user, 'Sorry, there aren\'t that many auto quotes.')
         else:
-            pass
-            # self._add_to_whisper_queue(user, 'Sorry, your command isn\'t formatted properly.')
+            self._add_to_chat_queue("Sorry, you must provide the number of the auto quote to delete.")
 
     @Utils._mod_only
     def activate_auto_quote(self, message, db_session):
@@ -189,8 +175,7 @@ class AutoQuoteMixin:
 
         !deactivate_auto_quote 1
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
 
@@ -213,8 +198,7 @@ class AutoQuoteMixin:
         
         !deactivate_auto_quote 1
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).split(' ')
+        msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
             auto_auote_id = int(msg_list[1])
 

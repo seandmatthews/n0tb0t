@@ -12,21 +12,21 @@ class AntiBotMixin:
     
         !anti_bot testuser1
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        user = self.service.get_message_display_name(message)
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             self._add_to_chat_queue('You need to type out a username.')
             # self._add_to_whisper_queue(user, 'You need to type out a username.')
             return
         bot_creation_date = self._get_creation_date(msg_list[1])
-        viewers = self.ts.fetch_chatters_from_API()['viewers']
-        mod_list = self.ts.get_mods()
+        viewers = self.service.get_viewers()
+        mod_list = self.service.get_mods()
         whitelist = db_session.query(models.User.name).filter(models.User.whitelisted == True).all()
         mod_str = ', '.join(mod_list)
         for viewer in viewers:
             if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
-                self.ts.send_message('/ban {}'.format(viewer))
+                self.service.send_public_message('/ban {}'.format(viewer))
                 # TODO: Fix Whisper Stuff
                 # self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
         self._add_to_chat_queue(
@@ -41,8 +41,8 @@ class AntiBotMixin:
     
         !whitelist
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        user = self.service.get_message_display_name(message)
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'You need to type out a username.')
@@ -71,8 +71,8 @@ class AntiBotMixin:
     
         !unwhitelist testuser1
         """
-        user = self.ts.get_username(message)
-        msg_list = self.ts.get_human_readable_message(message).lower().split(' ')
+        user = self.service.get_message_display_name(message)
+        msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
             # TODO: Fix Whisper Stuff
             # self._add_to_whisper_queue(user, 'You need to type out a username.')

@@ -1,10 +1,16 @@
-import functools
 import datetime
+import functools
+import random
 
 import gspread
+import praw
 import requests
 
-from config import BOT_INFO
+from config import reddit_client_id
+from config import reddit_client_secret
+from config import reddit_user_agent
+
+from config import bot_info
 
 
 # DECORATORS #
@@ -29,21 +35,36 @@ def _mod_only(f):
     """
     Set's the method's _mods_only property to True
     """
-    f._mods_only = True
+    f._mod_only = True
     return f
-    # END DECORATORS #
+
+
+def _private_message_allowed(f):
+    """
+    Set's the method's _mods_only property to True
+    """
+    f._private_message_allowed = True
+    return f
+
+
+def _public_message_disallowed(f):
+    """
+    Set's the method's _mods_only property to True
+    """
+    f._public_message_disallowed = True
+    return f
+
+# END DECORATORS #
 
 
 class UtilsMixin:
-    def __init__(self):
-        super(UtilsMixin, self).__init__()
 
     def _get_live_time(self):
         """
         Uses the kraken API to fetch the start time of the current stream.
         Computes how long the stream has been running, returns that value in a dictionary.
         """
-        channel = BOT_INFO['channel']
+        channel = bot_info['channel']
         url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel.lower())
         for attempt in range(5):
             try:
@@ -69,7 +90,7 @@ class UtilsMixin:
             except requests.exceptions.HTTPError:
                 continue
             except TypeError:
-                self._add_to_chat_queue('Sorry, the channel doesn\'t seem to be live at the moment.')
+                self._add_to_chat_queue("Sorry, the channel doesn't seem to be live at the moment.")
                 break
             except ValueError:
                 continue
@@ -98,3 +119,19 @@ class UtilsMixin:
         else:
             self._add_to_chat_queue(
                 "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def _fetch_random_reddit_post_title(self, subreddit, time_filter='day', limit=10):
+        """
+        Fetches a random title from the specified subreddit
+        """
+        reddit_specific_words = ['reddit', 'karma', 'repost', 'vote', '/r/']
+        valid_thoughts = []
+        r = praw.Reddit(client_id=reddit_client_id,
+                        client_secret=reddit_client_secret,
+                        user_agent=reddit_user_agent)
+
+        submissions = r.subreddit(subreddit).top(time_filter=time_filter, limit=limit)
+        for entry in submissions:
+            if len([word for word in reddit_specific_words if word in entry.title.lower()]) == 0:
+                valid_thoughts.append(entry.title)
+        return random.choice(valid_thoughts)

@@ -7,7 +7,7 @@ import src.modules.Utils as Utils
 
 
 class ChatterSelectionMixin:
-    def enter_contest(self, message, db_session):
+    def giveaway(self, message, db_session):
         """
         Adds the user to the contest entrants
         or informs them that they're already entered if they've already
@@ -16,10 +16,9 @@ class ChatterSelectionMixin:
         !enter_contest
         """
 
-        username = self.ts.get_username(message)
+        username = self.service.get_message_display_name(message)
         user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
         if user:
-            print('user found')
             if user.entered_in_contest:
                 # TODO: Fix Whisper Stuff
                 # self._add_to_whisper_queue(user.name, 'You\'re already entered into the contest, you can\'t enter again.')
@@ -33,22 +32,22 @@ class ChatterSelectionMixin:
             # self._add_to_whisper_queue(username, 'You\'re entered into the contest!')
 
     @Utils._mod_only
-    def show_contest_winner(self, db_session):
+    def choose_giveaway(self, db_session):
         """
         Selects a contest entrant at random.
         Sends their name to the chat.
 
         !show_contest_winner
         """
-        users_contest_list = db_session.query(models.User).filter(models.User.entered_in_contest.isnot(False)).all()
+        users_contest_list = db_session.query(models.User).filter(models.User.entered_in_contest == True).all()
         if len(users_contest_list) > 0:
             winner = random.choice(users_contest_list)
             self._add_to_chat_queue('The winner is {}!'.format(winner.name))
         else:
-            self._add_to_chat_queue('There are currently no entrants for the contest.')
+            self._add_to_chat_queue('There are currently no entrants for the giveaway.')
 
     @Utils._mod_only
-    def clear_contest_entrants(self, db_session):
+    def reset_giveaway(self, db_session):
         """
         Sets the entrants list to be an empty list and then writes
         that to the entrants file.
@@ -56,4 +55,4 @@ class ChatterSelectionMixin:
         !clear_contest_entrants
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.entered_in_contest: False}))
-        self._add_to_chat_queue("Contest entrants cleared.")
+        self._add_to_chat_queue("Giveaway entrants cleared.")

@@ -1,11 +1,11 @@
 import collections
-import functools
 import importlib
 import inspect
 import json
 import os
 import threading
 import time
+from enum import Enum, auto
 
 import gspread
 import sqlalchemy
@@ -14,10 +14,13 @@ from sqlalchemy.orm import sessionmaker
 
 import src.models as models
 import src.google_auth as google_auth
+import src.modules.Utils as Utils
 from config import time_zone_choice
 from src.modules.PlayerQueue import PlayerQueue
 
- 
+
+# Collect all the Mixin classes from all the modules in the src/modules directory
+# Store these class objects in a mixin_classes list so that Bot can inherit from them
 print('Loading Modules')
 cur_dir = os.path.dirname(os.path.realpath(__file__))
 modules_dir = os.path.join(cur_dir, 'modules')
@@ -26,6 +29,7 @@ mixin_classes = []
 
 for file in module_files:
     if file != '__init__.py' and file[-3:] == '.py':
+        # Take these .py files and import them, turning them into module objects
         imported = importlib.import_module(f'src.modules.{file[:-3]}')
         for item in dir(imported):
             if item[0] != '_':
@@ -34,12 +38,21 @@ for file in module_files:
                     print(item)
 
 
+class CommandTypes(Enum):
+    HARDCODED = auto()
+    DYNAMIC = auto()
+
+
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
-    def __init__(self, twitch_socket, BOT_INFO, bitly_access_token, current_dir, data_dir):
+    def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
+        for mixin_class in mixin_classes:
+            if getattr(mixin_class, '__init__', None):
+                if callable(getattr(mixin_class, '__init__')):
+                    mixin_class.__init__(self)
 
-        self.ts = twitch_socket
-        self.info = BOT_INFO
+        self.service = service
+        self.info = bot_info
 
         self.sorted_methods = self._sort_methods()
 
@@ -57,7 +70,7 @@ class Bot(*mixin_classes):
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
         self.Session = self._initialize_db(data_dir)
-        session = self.Session()
+        db_session = self.Session()
 
         self.credentials = google_auth.get_credentials(credentials_parent_dir=current_dir, client_secret_dir=current_dir)
 
@@ -65,15 +78,15 @@ class Bot(*mixin_classes):
         starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses', 'player_queue']
         self.spreadsheets = {}
         for sheet in starting_spreadsheets_list:
-            sheet_name = '{}-{}-{}'.format(BOT_INFO['channel'], BOT_INFO['user'], sheet)
+            sheet_name = '{}-{}-{}'.format(bot_info['channel'], bot_info['user'], sheet)
             already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
             web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
             init_command = '_initialize_{}_spreadsheet'.format(sheet)
-            # getattr(self, init_command)(sheet_name, session)
+            # getattr(self, init_command)(sheet_name, db_session)
 
-        self.guessing_enabled = session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
+        self.guessing_enabled = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
         self.allowed_to_chat = True
 
@@ -92,39 +105,12 @@ class Bot(*mixin_classes):
         self.command_thread.daemon = True
         self.command_thread.start()
 
-        self._add_to_chat_queue('{} is online'.format(BOT_INFO['user']))
+        self._add_to_chat_queue('{} is online'.format(bot_info['user']))
 
-        self.auto_quotes_timers = {}
-        for auto_quote in session.query(models.AutoQuote).all():
-            self._auto_quote(index=auto_quote.id, quote=auto_quote.quote, period=auto_quote.period)
+        self.start_auto_quotes(db_session)
         self.player_queue_credentials = None
-        session.close()
+        db_session.close()
         self.strawpoll_id = ''
-
-    # DECORATORS #
-    def _retry_gspread_func(f):
-        """
-        Retries the function that uses gspread until it completes without throwing an HTTPError
-        """
-
-        @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            while True:
-                try:
-                    f(*args, **kwargs)
-                except gspread.exceptions.GSpreadException:
-                    continue
-                break
-
-        return wrapper
-
-    def _mod_only(f):
-        """
-        Set's the method's _mods_only property to True
-        """
-        f._mods_only = True
-        return f
-        # END DECORATORS #
 
     def _sort_methods(self):
         """
@@ -138,7 +124,9 @@ class Bot(*mixin_classes):
 
         my_methods = []
         methods_dict = {'for_mods': [],
-                        'for_all': []}
+                        'for_all': [],
+                        'private_message_allowed': [],
+                        'public_message_disallowed': []}
 
         # Look at all the items in self.my_dir
         # Check to see if they're callable.
@@ -150,13 +138,17 @@ class Bot(*mixin_classes):
         # Sort all methods in self.my_methods into either the for_mods list
         # or the for_all list based on the function's _mods_only property
         for method in my_methods:
-            if hasattr(getattr(self, method), '_mods_only'):
+            if hasattr(getattr(self, method), '_mod_only'):
                 methods_dict['for_mods'].append(method)
             else:
                 methods_dict['for_all'].append(method)
+            if hasattr(getattr(self, method), '_private_message_allowed'):
+                methods_dict['private_message_allowed'].append(method)
+            if hasattr(getattr(self, method), '_public_message_disallowed'):
+                methods_dict['public_message_disallowed'].append(method)
 
-        methods_dict['for_all'].sort(key=lambda item: item.lower())
-        methods_dict['for_mods'].sort(key=lambda item: item.lower())
+        for method_list in methods_dict.values():
+            method_list.sort(key=lambda item: item.lower())
 
         return methods_dict
 
@@ -182,7 +174,7 @@ class Bot(*mixin_classes):
         db_session.close()
         return session_factory
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the quotes google sheet with its initial data.
@@ -203,7 +195,7 @@ class Bot(*mixin_classes):
 
         self.update_quote_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the auto_quotes google sheet with its initial data.
@@ -226,7 +218,7 @@ class Bot(*mixin_classes):
 
         self.update_auto_quote_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the commands google sheet with its initial data.
@@ -246,8 +238,8 @@ class Bot(*mixin_classes):
         cs.update_acell('B1', 'Command\nDescription')
         cs.update_acell('D1', 'Commands\nfor\nMods')
         cs.update_acell('E1', 'Command\nDescription')
-        cs.update_acell('G1', 'User\nCreated\nCommands')
-        cs.update_acell('H1', 'Bot Response')
+        # cs.update_acell('G1', 'User\nCreated\nCommands')
+        # cs.update_acell('H1', 'Bot Response')
         cs.update_acell('J1', 'User\nSpecific\nCommands')
         cs.update_acell('K1', 'Bot Response')
         cs.update_acell('L1', 'User List')
@@ -270,7 +262,7 @@ class Bot(*mixin_classes):
 
         self.update_command_spreadsheet(db_session)
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the highlights google sheet with its initial data.
@@ -291,7 +283,7 @@ class Bot(*mixin_classes):
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_guesses google sheet with its initial data.
@@ -311,7 +303,7 @@ class Bot(*mixin_classes):
         pgs.update_acell('B1', 'Current Guess')
         pgs.update_acell('C1', 'Total Guess')
 
-    @_retry_gspread_func
+    @Utils._retry_gspread_func
     def _initialize_player_queue_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_queue google sheet with its initial data.
@@ -361,7 +353,7 @@ class Bot(*mixin_classes):
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
-                self.ts.send_message(chat_queue.pop())
+                self.service.send_public_message(chat_queue.pop())
             time.sleep(.5)
 
     def _process_whisper_queue(self, whisper_queue):
@@ -374,7 +366,7 @@ class Bot(*mixin_classes):
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
-                self.ts.send_whisper(whisper_tuple[0], whisper_tuple[1])
+                self.service.send_private_message(whisper_tuple[0], whisper_tuple[1])
             time.sleep(1.5)
 
     def _process_command_queue(self, command_queue):
@@ -398,15 +390,15 @@ class Bot(*mixin_classes):
         Checks permissions for that command.
         Runs the command if the permissions check out.
         """
-        if 'PING' in self.ts.get_human_readable_message(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.ts.get_human_readable_message(message.replace('PING', 'PONG')))
+        if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
+            self._add_to_chat_queue(self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.ts.get_username(message)
-            user_is_mod = self.ts.check_mod(message)
-            if self._has_permission(user, user_is_mod, command, db_session):
+            user = self.service.get_message_display_name(message)
+            user_is_mod = self.service.get_mod_status(message)
+            if self._has_permission(user, user_is_mod, command) and self._is_valid_message_type(command, message):
                 self._run_command(command, message, db_session)
         db_session.commit()
         db_session.close()
@@ -418,32 +410,29 @@ class Bot(*mixin_classes):
         If it's a method, that place will be the key in the sorted_methods dictionary which
         has the corresponding list containing the command. Otherwise it will be the word 'Database'.
         """
-        first_word = self.ts.get_human_readable_message(message).split(' ')[0]
+        first_word = self.service.get_message_content(message).split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
             potential_command = first_word[1:].lower()
         else:
             return None
-        if potential_command in self.sorted_methods['for_all']:
-            return [potential_command, 'for_all']
-        if potential_command in self.sorted_methods['for_mods']:
-            return [potential_command, 'for_mods']
+        if potential_command in self.sorted_methods['for_all'] or potential_command in self.sorted_methods['for_mods']:
+            return [CommandTypes.HARDCODED, potential_command]
         db_result = db_session.query(models.Command).filter(models.Command.call == potential_command).all()
         if db_result:
-            return [potential_command, db_result[0]]
+            return [CommandTypes.DYNAMIC, db_result[0]]
         return None
 
-    def _has_permission(self, user, user_is_mod, command, db_session):
+    def _has_permission(self, user, user_is_mod, command):
         """
         Takes a message from the user, and a list which contains the
         command and where it's found, and a database session.
         Returns True or False depending on whether the user that
         sent the command has the authority to use that command
         """
-        if command[1] == 'for_all':
-            return True
-        if command[1] == 'for_mods' and user_is_mod:
-            return True
-        if type(command[1]) == models.Command:
+        if command[0] == CommandTypes.HARDCODED:
+            if command[1] in self.sorted_methods['for_all'] or (command[1] in self.sorted_methods['for_mods'] and user_is_mod):
+                return True
+        else:
             db_command = command[1]
             if bool(db_command.permissions) is False:
                 return True
@@ -451,16 +440,27 @@ class Bot(*mixin_classes):
                 return True
         return False
 
+    def _is_valid_message_type(self, command, message):
+        if self.service.get_mod_status(message):
+            return True
+        if command[0] == CommandTypes.HARDCODED:
+            if self.service.get_message_type(message) == 'PUBLIC':
+                return command[1] not in self.sorted_methods['public_message_disallowed']
+            elif self.service.get_message_type(message) == 'PRIVATE':
+                return command[1] in self.sorted_methods['private_message_allowed']
+        else:
+            return self.service.get_message_type(message) == 'PUBLIC'
+
     def _run_command(self, command, message, db_session):
         """
         If the command is a database command, send the response to the chat queue.
         Otherwise call the relevant function, supplying the message and db_session arguments as needed.
         """
-        if type(command[1]) == models.Command:
+        if command[0] == CommandTypes.DYNAMIC:
             db_command = command[1]
             self._add_to_chat_queue(db_command.response)
         else:
-            method_command = command[0]
+            method_command = command[1]
             kwargs = {}
             if 'message' in inspect.signature(getattr(self, method_command)).parameters:
                 kwargs['message'] = message
@@ -468,7 +468,7 @@ class Bot(*mixin_classes):
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
 
-    @_mod_only
+    @Utils._mod_only
     def stop_speaking(self):
         """
         Stops the bot from putting stuff in chat to cut down on bot spam.
@@ -476,10 +476,10 @@ class Bot(*mixin_classes):
 
         !stop_speaking
         """
-        self.ts.send_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
-    @_mod_only
+    @Utils._mod_only
     def start_speaking(self):
         """
         Allows the bot to start speaking again.

@@ -10,16 +10,16 @@ class BanRouletteMixin:
         !ban_roulette
         !ban_roulette testuser
         """
-        if self.ts.check_mod(message):
-            if len(self.ts.get_human_readable_message(message).split(' ')) > 1:
-                user = self.ts.get_human_readable_message(message).split(' ')[1]
+        if self.service.get_mod_status(message):
+            if len(self.service.get_message_content(message).split(' ')) > 1:
+                user = self.service.get_message_content(message).split(' ')[1]
             else:
                 user = None
-        elif len(self.ts.get_human_readable_message(message).split(' ')) == 1:
-            user = self.ts.get_username(message)
+        elif len(self.service.get_message_content(message).split(' ')) == 1:
+            user = self.service.get_message_display_name(message)
         else:
             # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(self.ts.get_user(message), 'Sorry, this command is only one word')
+            # self._add_to_whisper_queue(self.service.get_user(message), 'Sorry, this command is only one word')
             user = None
         if user is not None:
             if random.randint(1, 6) == 6:

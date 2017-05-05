@@ -8,3 +8,5 @@ src/config.py
 sublime_project.*
 *~
 venv/*
+n0tb0tVenv/*
+getpip.py
