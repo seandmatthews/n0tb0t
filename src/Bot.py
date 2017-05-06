@@ -46,6 +46,9 @@ class CommandTypes(Enum):
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
     def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
+        # Run all the init methods of all the mixins that have them.
+        # This currently doesn't use super because not all mixins have an init method that calls super
+        # That would almost certainly break the method resolution order and cause things to fail.
         for mixin_class in mixin_classes:
             if getattr(mixin_class, '__init__', None):
                 if callable(getattr(mixin_class, '__init__')):

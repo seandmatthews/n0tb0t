@@ -59,25 +59,26 @@ class TwitchService(object):
         Sends a message to the twitch public chat
         """
         message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'.encode('utf-8')
-        print('{} {}: {}'.format(
+        print('{} PUBLIC {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
             message_content))
         self.sock.send(message_temp)
-        self.event_logger.info(f'sent: {message_temp}'.encode('utf-8'))
+        self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
-    def send_private_message(self, user, whisper_content):
+    def send_private_message(self, recipient, whisper_content):
         """
         Sends a whisper with the specified content to the specified user 
         """
-        message_temp = f'PRIVMSG #{self.channel} :/w {user} {whisper_content}\r\n'.encode('utf-8')
-        print('{} {} whispered to {}: {}'.format(
+        message_temp = f'PRIVMSG #{self.channel} :/w {recipient} {whisper_content}\r\n'.encode('utf-8')
+        print('{} PRIVATE {} to {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
             self.display_user,
-            user, whisper_content))
+            recipient,
+            whisper_content))
         self.sock.send(message_temp)
-        self.event_logger.info(f'sent: {message_temp}'.encode('utf-8'))
+        self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
     def _join_room(self):
@@ -252,7 +253,7 @@ class TwitchService(object):
             elif last_message.message_type == MessageTypes.PING:
                 resp = 'PONG :tmi.twitch.tv\r\n'.encode('utf-8')
                 self.sock.send(resp)
-                self.event_logger.info(f'sent: {resp}'.encode('utf-8'))
+                self.event_logger.info(f'sent: {resp}')
             # elif last_message.message_type == MessageTypes.SYSTEM_MESSAGE:
             #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:

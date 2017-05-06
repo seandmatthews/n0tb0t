@@ -3,7 +3,6 @@ import src.modules.Utils as Utils
 
 
 class AntiBotMixin:
-
     @Utils._mod_only
     def anti_bot(self, message, db_session):
         """
@@ -12,12 +11,9 @@ class AntiBotMixin:
     
         !anti_bot testuser1
         """
-        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            # TODO: Fix Whisper Stuff
             self._add_to_chat_queue('You need to type out a username.')
-            # self._add_to_whisper_queue(user, 'You need to type out a username.')
             return
         bot_creation_date = self._get_creation_date(msg_list[1])
         viewers = self.service.get_viewers()
@@ -27,12 +23,7 @@ class AntiBotMixin:
         for viewer in viewers:
             if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
                 self.service.send_public_message('/ban {}'.format(viewer))
-                # TODO: Fix Whisper Stuff
-                # self._add_to_whisper_queue(viewer, 'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(mod_str))
-        self._add_to_chat_queue(
-            'We\'re currently experiencing a bot attack. If you\'re a human and were accidentally banned, please whisper a mod: {}'.format(
-                mod_str))
-
+        self._add_to_chat_queue(f"We're currently experiencing a bot attack. If you're a human and were accidentally banned, please whisper a mod: {mod_str}")
 
     @Utils._mod_only
     def whitelist(self, message, db_session):
@@ -41,11 +32,8 @@ class AntiBotMixin:
     
         !whitelist
         """
-        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, 'You need to type out a username.')
             self._add_to_chat_queue('You need to type out a username.')
             return
 
@@ -54,15 +42,10 @@ class AntiBotMixin:
             user_db_obj = models.User(name=msg_list[1])
             db_session.add(user_db_obj)
         if bool(user_db_obj.whitelisted) is True:
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, '{} is already in the whitelist!'.format(msg_list[1]))
-            self._add_to_chat_queue('{} is already in the whitelist!'.format(msg_list[1]))
+            self._add_to_chat_queue(f'{msg_list[1]} is already in the whitelist!')
         else:
             user_db_obj.whitelisted = True
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, '{} has been added to the whitelist.'.format(msg_list[1]))
-            self._add_to_chat_queue('{} has been added to the whitelist.'.format(msg_list[1]))
-
+            self._add_to_chat_queue(f'{msg_list[1]} has been added to the whitelist.')
 
     @Utils._mod_only
     def unwhitelist(self, message, db_session):
@@ -71,20 +54,13 @@ class AntiBotMixin:
     
         !unwhitelist testuser1
         """
-        user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, 'You need to type out a username.')
             self._add_to_chat_queue('You need to type out a username.')
             return
         user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
         if bool(user_db_obj.whitelisted) is False:
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, '{} is already off the whitelist.'.format(msg_list[1]))
             self._add_to_chat_queue('{} is already off the whitelist.'.format(msg_list[1]))
         if bool(user_db_obj.whitelisted) is True:
             user_db_obj.whitelisted = False
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, '{} has been removed from the whitelist.'.format(msg_list[1]))
             self._add_to_chat_queue('{} has been removed from the whitelist.'.format(msg_list[1]))

@@ -3,6 +3,7 @@ import pytz
 
 from config import time_zone_choice
 
+
 class HighlightMixin:
     def highlight(self, message):
         """
@@ -37,5 +38,3 @@ class HighlightMixin:
             ws.update_cell(next_row, 2, str(start_time_est)[:-6])
             ws.update_cell(next_row, 3, time_str)
             ws.update_cell(next_row, 4, user_note)
-            # TODO: Fix Whisper Stuff
-            # self._add_to_whisper_queue(user, 'The highlight has been added to the spreadsheet for review.')
