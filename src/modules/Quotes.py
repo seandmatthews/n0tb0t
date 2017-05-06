@@ -130,7 +130,7 @@ class QuotesMixin:
             quote_str = self._get_random_quote(db_session)
             self._add_to_chat_queue(quote_str)
         elif msg_list[1].isdigit():  # !quote 50
-            quote_id = msg_list[1]
+            quote_id = int(msg_list[1])
             quote_str = self._get_quote(db_session, quote_id)
             self._add_to_chat_queue(quote_str)
         else:  # !quote add/edit/delete
