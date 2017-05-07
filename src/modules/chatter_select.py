@@ -3,7 +3,7 @@ import random
 import sqlalchemy
 
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class ChatterSelectionMixin:
@@ -20,18 +20,14 @@ class ChatterSelectionMixin:
         user = db_session.query(models.User).filter(models.User.name == username).one_or_none()
         if user:
             if user.entered_in_contest:
-                # TODO: Fix Whisper Stuff
-                # self._add_to_whisper_queue(user.name, 'You\'re already entered into the contest, you can\'t enter again.')
                 pass
             else:
                 user.entered_in_contest = True
-                # self._add_to_whisper_queue(user.name, 'You\'re entered into the contest!')
         else:
             user = models.User(entered_in_contest=True, name=username)
             db_session.add(user)
-            # self._add_to_whisper_queue(username, 'You\'re entered into the contest!')
 
-    @Utils._mod_only
+    @utils.mod_only
     def choose_giveaway(self, db_session):
         """
         Selects a contest entrant at random.
@@ -46,7 +42,7 @@ class ChatterSelectionMixin:
         else:
             self._add_to_chat_queue('There are currently no entrants for the giveaway.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def reset_giveaway(self, db_session):
         """
         Sets the entrants list to be an empty list and then writes

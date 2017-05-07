@@ -2,11 +2,11 @@ import gspread
 import sqlalchemy
 
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class DeathGuessingDisabled:
-    @Utils._mod_only
+    @utils.mod_only
     def enable_guessing(self, db_session):
         """
         Allows users to guess about the number of deaths
@@ -19,7 +19,7 @@ class DeathGuessingDisabled:
         mv_obj.mv_value = "True"
         self._add_to_chat_queue("Guessing is now enabled.")
 
-    @Utils._mod_only
+    @utils.mod_only
     def disable_guessing(self, db_session):
         """
         Stops users from guess about the number of deaths
@@ -57,7 +57,7 @@ class DeathGuessingDisabled:
         else:
             self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
 
-    @Utils._mod_only
+    @utils.mod_only
     def enable_guesstotal(self, db_session):
         """
         Enables guessing for the total number of deaths for the run.
@@ -70,7 +70,7 @@ class DeathGuessingDisabled:
         mv_obj.mv_value = "True"
         self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
-    @Utils._mod_only
+    @utils.mod_only
     def disable_guesstotal(self, db_session):
         """
         Disables guessing for the total number of deaths for the run.
@@ -108,7 +108,7 @@ class DeathGuessingDisabled:
             self._add_to_whisper_queue(user,
                                        "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
 
-    @Utils._mod_only
+    @utils.mod_only
     def clear_guesses(self, db_session):
         """
         Clear all guesses so that users
@@ -120,7 +120,7 @@ class DeathGuessingDisabled:
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.current_guess: None}))
         self._add_to_chat_queue("Guesses have been cleared.")
 
-    @Utils._mod_only
+    @utils.mod_only
     def clear_total_guesses(self, db_session):
         """
         Clear all total guesses so that users
@@ -132,7 +132,7 @@ class DeathGuessingDisabled:
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.total_guess: None}))
         self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _update_player_guesses_spreadsheet(self):
         """
         Updates the player guesses spreadsheet from the database.
@@ -155,7 +155,7 @@ class DeathGuessingDisabled:
             ws.update_cell(row_num, 3, user.total_guess)
         return web_view_link
 
-    @Utils._mod_only
+    @utils.mod_only
     def show_guesses(self, db_session):
         """
         Clears all guesses out of the google
@@ -174,7 +174,7 @@ class DeathGuessingDisabled:
             "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
             "Here's a link. {}".format(short_url))
 
-    @Utils._mod_only
+    @utils.mod_only
     def set_deaths(self, message, db_session):
         """
         Sets the number of deaths for the current
@@ -198,7 +198,7 @@ class DeathGuessingDisabled:
                                        'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(
                                            user))
 
-    @Utils._mod_only
+    @utils.mod_only
     def set_total_deaths(self, message, db_session):
         """
         Sets the total number of deaths for the run.
@@ -222,7 +222,7 @@ class DeathGuessingDisabled:
                                        'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(
                                            user))
 
-    @Utils._mod_only
+    @utils.mod_only
     def add_death(self, message, db_session):
         """
         Adds one to both the current sequence
@@ -240,7 +240,7 @@ class DeathGuessingDisabled:
         whisper_msg = 'Current Deaths: {}, Total Deaths: {}'.format(deaths, total_deaths)
         self._add_to_whisper_queue(user, whisper_msg)
 
-    @Utils._mod_only
+    @utils.mod_only
     def clear_deaths(self, db_session):
         """
         Sets the number of deaths for the current

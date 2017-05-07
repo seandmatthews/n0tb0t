@@ -3,13 +3,12 @@ import threading
 import gspread
 
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class CommandsMixin:
-
-    @Utils._mod_only
-    @Utils._retry_gspread_func
+    @utils.mod_only
+    @utils.retry_gspread_func
     def update_command_spreadsheet(self, db_session):
         """
         Updates the commands google sheet with all available user commands.
@@ -52,7 +51,7 @@ class CommandsMixin:
             cs.update_cell(index + 2, 11, command.response)
             cs.update_cell(index + 2, 12, users_str)
 
-    @Utils._mod_only
+    @utils.mod_only
     def add_command(self, message, db_session):
         """
         Adds a new command.
@@ -92,7 +91,7 @@ class CommandsMixin:
             my_thread.daemon = True
             my_thread.start()
 
-    @Utils._mod_only
+    @utils.mod_only
     def edit_command(self, message, db_session):
         """
         Edits existing commands.
@@ -114,7 +113,7 @@ class CommandsMixin:
             my_thread.daemon = True
             my_thread.start()
         
-    @Utils._mod_only
+    @utils.mod_only
     def delete_command(self, message, db_session):
         """
         Removes a user created command.

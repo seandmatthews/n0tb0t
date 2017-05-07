@@ -1,11 +1,10 @@
 import requests
 
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class ShoutOutMixin:
-
-    @Utils._mod_only
+    @utils.mod_only
     def so(self, message):
         """
         Shouts out a twitch caster in chat. Uses the twitch API to confirm

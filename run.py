@@ -1,8 +1,8 @@
 import logging
 import os
 
-from src.Bot import Bot
-from src.TwitchService import TwitchService
+from src.bot import Bot
+from src.twitch_service import TwitchService
 import config
 
 

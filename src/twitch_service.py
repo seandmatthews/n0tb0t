@@ -5,8 +5,8 @@ from enum import Enum, auto
 
 import requests
 
-from src.Service import Service
-from src.Message import Message
+from src.service import Service
+from src.message import Message
 
 
 def reconnect_on_error(f):

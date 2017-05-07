@@ -12,12 +12,11 @@ import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
-import src.models as models
 import src.google_auth as google_auth
-import src.modules.Utils as Utils
+import src.models as models
+import src.utils as utils
 from config import time_zone_choice
-from src.modules.PlayerQueue import PlayerQueue
-
+from src.modules.player_queue import PlayerQueue
 
 # Collect all the Mixin classes from all the modules in the src/modules directory
 # Store these class objects in a mixin_classes list so that Bot can inherit from them
@@ -86,7 +85,7 @@ class Bot(*mixin_classes):
             web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
             sheet_tuple = (sheet_name, web_view_link)
             self.spreadsheets[sheet] = sheet_tuple
-            if already_existed == False:
+            if not already_existed:
                 init_command = '_initialize_{}_spreadsheet'.format(sheet)
                 getattr(self, init_command)(sheet_name, db_session)
 
@@ -178,7 +177,7 @@ class Bot(*mixin_classes):
         db_session.close()
         return session_factory
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the quotes google sheet with its initial data.
@@ -199,7 +198,7 @@ class Bot(*mixin_classes):
 
         self.update_quote_spreadsheet(db_session)
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the auto_quotes google sheet with its initial data.
@@ -222,7 +221,7 @@ class Bot(*mixin_classes):
 
         self.update_auto_quote_spreadsheet(db_session)
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the commands google sheet with its initial data.
@@ -266,7 +265,7 @@ class Bot(*mixin_classes):
 
         self.update_command_spreadsheet(db_session)
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the highlights google sheet with its initial data.
@@ -287,7 +286,7 @@ class Bot(*mixin_classes):
         hls.update_acell('C1', 'Highlight Time')
         hls.update_acell('D1', 'User Note')
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_guesses google sheet with its initial data.
@@ -307,7 +306,7 @@ class Bot(*mixin_classes):
         pgs.update_acell('B1', 'Current Guess')
         pgs.update_acell('C1', 'Total Guess')
 
-    @Utils._retry_gspread_func
+    @utils.retry_gspread_func
     def _initialize_player_queue_spreadsheet(self, spreadsheet_name, db_session):
         """
         Populate the player_queue google sheet with its initial data.
@@ -472,7 +471,7 @@ class Bot(*mixin_classes):
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
 
-    @Utils._mod_only
+    @utils.mod_only
     def stop_speaking(self):
         """
         Stops the bot from putting stuff in chat to cut down on bot spam.
@@ -483,7 +482,7 @@ class Bot(*mixin_classes):
         self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
-    @Utils._mod_only
+    @utils.mod_only
     def start_speaking(self):
         """
         Allows the bot to start speaking again.

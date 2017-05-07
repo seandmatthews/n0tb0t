@@ -4,12 +4,12 @@ import threading
 import gspread
 
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class QuotesMixin:
-    @Utils._retry_gspread_func
-    @Utils._mod_only
+    @utils.retry_gspread_func
+    @utils.mod_only
     def update_quote_spreadsheet(self, db_session):
         """
         Updates the quote spreadsheet from the database.
@@ -33,7 +33,7 @@ class QuotesMixin:
             qs.update_cell(index + 2, 1, index + 1)
             qs.update_cell(index + 2, 2, quote_obj.quote)
 
-    @Utils._mod_only
+    @utils.mod_only
     def update_quote_db_from_spreadsheet(self, db_session):
         """
         Updates the database from the quote spreadsheet.
@@ -73,7 +73,7 @@ class QuotesMixin:
         response_str = self._add_quote(db_session, quote_str)
         self._add_to_chat_queue(response_str)
 
-    @Utils._mod_only
+    @utils.mod_only
     def edit_quote(self, message, db_session):
         """
         Edits a user created quote. 
@@ -90,7 +90,7 @@ class QuotesMixin:
         else:
             self._add_to_chat_queue('You must use a digit to specify a quote.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def delete_quote(self, message, db_session):
         """
         Removes a user created quote.

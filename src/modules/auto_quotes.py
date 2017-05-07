@@ -5,7 +5,7 @@ import gspread
 import sqlalchemy
 
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class AutoQuoteMixin:
@@ -23,8 +23,8 @@ class AutoQuoteMixin:
         self.auto_quotes_timers[key].start()
         self._add_to_chat_queue(quote)
 
-    @Utils._mod_only
-    @Utils._retry_gspread_func
+    @utils.mod_only
+    @utils.retry_gspread_func
     def update_auto_quote_spreadsheet(self, db_session):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
@@ -52,7 +52,7 @@ class AutoQuoteMixin:
             aqs.update_cell(index+2, 3, aq.period)
             aqs.update_cell(index+2, 4, aq.active)
 
-    @Utils._mod_only
+    @utils.mod_only
     def start_auto_quotes(self, db_session):
         """
         Starts the bot spitting out auto quotes by calling the
@@ -68,7 +68,7 @@ class AutoQuoteMixin:
             AQ_ID = auto_quote.id
             self._auto_quote(index=AQ_ID, quote=quote, period=period)
 
-    @Utils._mod_only
+    @utils.mod_only
     def _start_auto_quote(self, auto_quote_id, db_session):
         """
         Starts the bot spitting out a specific auto quote again, depending from its index.
@@ -79,7 +79,7 @@ class AutoQuoteMixin:
         period = auto_quote.period
         self._auto_quote(index=auto_quote_id, quote=quote, period=period)
 
-    @Utils._mod_only
+    @utils.mod_only
     def stop_auto_quotes(self):
         """
         Stops the bot from spitting out quotes by cancelling all auto quote threads.
@@ -91,7 +91,7 @@ class AutoQuoteMixin:
             time.sleep(1)
             self.auto_quotes_timers[AQ].cancel()
 
-    @Utils._mod_only
+    @utils.mod_only
     def _stop_auto_quote(self, auto_quote_id):
         """
         Stops the bot from spitting out a specific quote by cancelling the quote thread, depending from its index.
@@ -111,7 +111,7 @@ class AutoQuoteMixin:
         short_url = self.shortener.short(web_view_link)
         self._add_to_chat_queue('View the auto quotes at: {}'.format(short_url))
 
-    @Utils._mod_only
+    @utils.mod_only
     def add_auto_quote(self, message, db_session):
         """
         Makes a new sentence that the bot periodically says.
@@ -140,7 +140,7 @@ class AutoQuoteMixin:
         else:
             self._add_to_chat_queue('Sorry, the command isn\'t formatted properly.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def delete_auto_quote(self, message, db_session):
         """
         Deletes a sentence that the bot periodically says.
@@ -167,7 +167,7 @@ class AutoQuoteMixin:
         else:
             self._add_to_chat_queue("Sorry, you must provide the number of the auto quote to delete.")
 
-    @Utils._mod_only
+    @utils.mod_only
     def activate_auto_quote(self, message, db_session):
         """
         Starts an auto_quote after it has been deactivated
@@ -190,7 +190,7 @@ class AutoQuoteMixin:
             my_thread.daemon = True
             my_thread.start()
 
-    @Utils._mod_only
+    @utils.mod_only
     def deactivate_auto_quote(self, message, db_session):
         """
         Stops an auto_quote from being posted to chat, but leaves it intact to be easily activated later

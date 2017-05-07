@@ -8,10 +8,9 @@ import gspread
 import sqlalchemy
 
 import src.models as models
-import src.modules.Utils as Utils
-from src.Message import Message
-
+import src.utils as utils
 from config import data_dir
+from src.message import Message
 
 
 class PlayerQueue:
@@ -104,8 +103,8 @@ class PlayerQueueMixin:
             json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
 
-    @Utils._private_message_allowed
-    @Utils._public_message_disallowed
+    @utils.private_message_allowed
+    @utils.public_message_disallowed
     def join(self, message, db_session):
         """
         Adds the user to the game queue.
@@ -134,7 +133,7 @@ class PlayerQueueMixin:
             # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
             #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
 
-    @Utils._private_message_allowed
+    @utils.private_message_allowed
     def leave(self, message):
         """
         Leaves the player queue once you've joined it.
@@ -187,7 +186,7 @@ class PlayerQueueMixin:
         Takes a set of crednentials and combines them with some reddit factoid 
         """
         subreddit = random.choice(['todayilearned', 'showerthoughts'])
-        reddit_cleverness = self._fetch_random_reddit_post_title(subreddit, time_filter='week', limit=100)
+        reddit_cleverness = utils.fetch_random_reddit_post_title(subreddit, time_filter='week', limit=100)
         if credentials is not None:
             whisper_str = "{}, you may now join {} to play. The credentials you need are: {} Now here's something from Reddit. {}".format(
                 player, channel, credentials, reddit_cleverness)
@@ -198,7 +197,6 @@ class PlayerQueueMixin:
 
     def _update_user_ready_dict(self, player):
         if not self.ready_user_dict[player]['user_ready']:
-            # Jank up an object
             msg_obj = Message(content=self.ready_user_dict[player]['msg_content'])
             db_session = self.Session()
             self.cycle_one(message=msg_obj, db_session=db_session)
@@ -206,8 +204,8 @@ class PlayerQueueMixin:
             db_session.close()
         del self.ready_user_dict[player]
 
-    @Utils._private_message_allowed
-    @Utils._mod_only
+    @utils.private_message_allowed
+    @utils.mod_only
     def cycle(self, message, db_session):
         """
         Sends out a message to the next set of players.
@@ -240,8 +238,8 @@ class PlayerQueueMixin:
         self._add_to_chat_queue(f"{players_str} it is your turn to play! Please whisper the bot !confirm to confirm that you're here.")
         self._add_to_chat_queue(f'There are {len(self.player_queue.queue)} people left in the queue')
 
-    @Utils._private_message_allowed
-    @Utils._mod_only
+    @utils.private_message_allowed
+    @utils.mod_only
     def cycle_one(self, message, db_session):
         """
         Sends out a message to the next player.
@@ -276,7 +274,7 @@ class PlayerQueueMixin:
         except IndexError:
             self._add_to_chat_queue('Sorry, there are no more players in the queue')
 
-    @Utils._mod_only
+    @utils.mod_only
     def reset_queue(self, db_session):
         """
         Creates a new queue with the default room size
@@ -295,7 +293,7 @@ class PlayerQueueMixin:
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.times_played: 0}))
         self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def set_cycle_number(self, message):
         """
         Sets the number of players to cycle
@@ -312,7 +310,7 @@ class PlayerQueueMixin:
         else:
             self._add_to_chat_queue('Make sure the command is followed by an integer greater than 0.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def promote(self, message, db_session):
         """
         Promotes a player in the player queue.
@@ -336,7 +334,7 @@ class PlayerQueueMixin:
         else:
             self._add_to_chat_queue(f'{player} is not in the player queue.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def demote(self, message, db_session):
         """
         Demotes a player in the player queue.

@@ -1,9 +1,9 @@
 import src.models as models
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class AntiBotMixin:
-    @Utils._mod_only
+    @utils.mod_only
     def anti_bot(self, message, db_session):
         """
         Ban that user all other users who have the same creation date.
@@ -15,17 +15,25 @@ class AntiBotMixin:
         if len(msg_list) == 1:
             self._add_to_chat_queue('You need to type out a username.')
             return
-        bot_creation_date = self._get_creation_date(msg_list[1])
+        try:
+            bot_creation_date = self._get_creation_date(msg_list[1])
+        except RuntimeError as e:
+            self._add_to_chat_queue(str(e))
+            return
         viewers = self.service.get_viewers()
         mod_list = self.service.get_mods()
         whitelist = db_session.query(models.User.name).filter(models.User.whitelisted == True).all()
         mod_str = ', '.join(mod_list)
         for viewer in viewers:
-            if self._get_creation_date(viewer) == bot_creation_date and viewer not in whitelist:
+            try:
+                viewer_creation_date = self._get_creation_date(viewer)
+            except RuntimeError:
+                continue
+            if viewer_creation_date == bot_creation_date and viewer not in whitelist:
                 self.service.send_public_message('/ban {}'.format(viewer))
         self._add_to_chat_queue(f"We're currently experiencing a bot attack. If you're a human and were accidentally banned, please whisper a mod: {mod_str}")
 
-    @Utils._mod_only
+    @utils.mod_only
     def whitelist(self, message, db_session):
         """
         Puts username on whitelist so they will NOT be banned by !anti_bot
@@ -47,7 +55,7 @@ class AntiBotMixin:
             user_db_obj.whitelisted = True
             self._add_to_chat_queue(f'{msg_list[1]} has been added to the whitelist.')
 
-    @Utils._mod_only
+    @utils.mod_only
     def unwhitelist(self, message, db_session):
         """
         Removes user from whitelist designation so they can be banned by anti_bot.

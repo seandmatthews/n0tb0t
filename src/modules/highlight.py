@@ -1,6 +1,7 @@
 import gspread
 import pytz
 
+import src.utils as utils
 from config import time_zone_choice
 
 
@@ -20,7 +21,12 @@ class HighlightMixin:
             user_note = ' '.join(msg_list[1:])
         else:
             user_note = ''
-        time_dict = self._get_live_time()
+        try:
+            time_dict = utils.get_live_time()
+        except RuntimeError as e:
+            time_dict = None
+            self._add_to_chat_queue(str(e))
+
         if time_dict is not None:
             user_tz = pytz.timezone(time_zone_choice)
             start_time_utc = time_dict['stream_start']

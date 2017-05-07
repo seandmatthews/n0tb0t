@@ -3,7 +3,7 @@ import random
 
 import requests
 
-import src.modules.Utils as Utils
+import src.utils as utils
 
 
 class StrawPollMixin:
@@ -27,7 +27,7 @@ class StrawPollMixin:
             self._add_to_chat_queue("Sorry, there was a problem talking to the strawpoll api. "
                                     "Maybe wait a bit and retry your command?")
 
-    @Utils._mod_only
+    @utils.mod_only
     def create_poll(self, message):
         """
         Generates strawpoll and fetches ID for later use with !end_poll.
@@ -64,7 +64,7 @@ class StrawPollMixin:
                 self._add_to_chat_queue('Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
 
 
-    @Utils._mod_only
+    @utils.mod_only
     def end_poll(self, message):
         """
         Ends the poll that was started with the !create_poll
