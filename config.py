@@ -1,7 +1,7 @@
 from inspect import getsourcefile
 import os.path
 
-from src.Service import Service
+from src.service import Service
 
 
 current_path = os.path.abspath(getsourcefile(lambda: 0))
@@ -11,7 +11,7 @@ data_dir = os.path.join(current_dir, 'DataAndLogs')
 service = Service.TWITCH  # Pick an available option from the Service enum.
 service_name = service.name
 
-BOT_INFO = {
+bot_info = {
     'pw': '',  # Oauth token from twitch - get it here: https://twitchapps.com/tmi/
     'user': '',  # Twitch username of the bot account
     'channel': '',  # Twitch chat channel to join
