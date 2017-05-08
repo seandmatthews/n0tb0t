@@ -91,7 +91,7 @@ class TwitchService(object):
         loading = True
         while loading:
             try:
-                read_buffer = self.sock.recv(1024)
+                read_buffer = self.sock.recv(2048)
                 messages = messages + read_buffer.decode('utf-8')
                 last_message = messages.split('\r\n')[-2]
                 messages = ""
@@ -227,23 +227,27 @@ class TwitchService(object):
             messages = []
             lines = ''
             try:
-                read_buffer = self.sock.recv(1024)
+                read_buffer = self.sock.recv(2048)
             except Exception as e:
                 print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._join_room()
-                read_buffer = self.sock.recv(1024)
+                read_buffer = self.sock.recv(2048)
 
             if len(read_buffer) == 0:
                 print('Disconnected: Attempting to reconnecting to the socket.')
                 self.event_logger.info(r'Disconnected: Attempting to reconnecting to the socket.'.encode('utf-8'))
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._join_room()
-                read_buffer = self.sock.recv(1024)
-
-            lines = lines + read_buffer.decode('utf-8')
-            line_list = lines.split('\r\n')
-            self.event_logger.info(f'received: {line_list[-2]}'.encode('utf-8'))
+                read_buffer = self.sock.recv(2048)
+            try:
+                lines = lines + read_buffer.decode(encoding='utf-8', errors='strict')
+                line_list = lines.split('\r\n')
+                self.event_logger.info(f'received: {line_list[-2]}'.encode('utf-8'))
+            except Exception as e:
+                print(e)
+                self.error_logger.exception("Error Decoding the buffer")
+                continue
             for line in line_list:
                 messages.append(self._line_to_message(line))
 
