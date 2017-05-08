@@ -51,4 +51,4 @@ class ChatterSelectionMixin:
         !clear_contest_entrants
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.entered_in_contest: False}))
-        self._add_to_chat_queue("Giveaway entrants cleared.")
+        self._add_to_chat_queue('Giveaway entrants cleared.')

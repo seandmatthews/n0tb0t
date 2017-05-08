@@ -13,9 +13,9 @@ class NordMixin:
             # TODO: Use NLP magic to figure out whether offender_str is plural or not
             plural = False  # We are lazy right now
             if plural:
-                nord_str = f"{belongs_str} belong to the Nords!"
+                nord_str = f'{belongs_str} belong to the Nords!'
             else:
-                nord_str = f"{belongs_str} belongs to the Nords!"
+                nord_str = f'{belongs_str} belongs to the Nords!'
         else:
-            nord_str = f"Skyrim belongs to the Nords!"
+            nord_str = f'Skyrim belongs to the Nords!'
         self._add_to_chat_queue(nord_str)

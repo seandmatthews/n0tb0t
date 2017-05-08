@@ -16,7 +16,7 @@ class AntiBotMixin:
             self._add_to_chat_queue('You need to type out a username.')
             return
         try:
-            bot_creation_date = self._get_creation_date(msg_list[1])
+            bot_creation_date = utils.get_creation_date(msg_list[1])
         except RuntimeError as e:
             self._add_to_chat_queue(str(e))
             return
@@ -26,7 +26,7 @@ class AntiBotMixin:
         mod_str = ', '.join(mod_list)
         for viewer in viewers:
             try:
-                viewer_creation_date = self._get_creation_date(viewer)
+                viewer_creation_date = utils.get_creation_date(viewer)
             except RuntimeError:
                 continue
             if viewer_creation_date == bot_creation_date and viewer not in whitelist:
@@ -49,7 +49,7 @@ class AntiBotMixin:
         if not user_db_obj:
             user_db_obj = models.User(name=msg_list[1])
             db_session.add(user_db_obj)
-        if bool(user_db_obj.whitelisted) is True:
+        if bool(user_db_obj.whitelisted):
             self._add_to_chat_queue(f'{msg_list[1]} is already in the whitelist!')
         else:
             user_db_obj.whitelisted = True
@@ -68,7 +68,7 @@ class AntiBotMixin:
             return
         user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
         if bool(user_db_obj.whitelisted) is False:
-            self._add_to_chat_queue('{} is already off the whitelist.'.format(msg_list[1]))
+            self._add_to_chat_queue(f'{msg_list[1]} is already off the whitelist.')
         if bool(user_db_obj.whitelisted) is True:
             user_db_obj.whitelisted = False
-            self._add_to_chat_queue('{} has been removed from the whitelist.'.format(msg_list[1]))
+            self._add_to_chat_queue(f'{msg_list[1]} has been removed from the whitelist.')

@@ -9,7 +9,6 @@ import src.utils as utils
 
 
 class AutoQuoteMixin:
-
     def _auto_quote(self, index, quote, period):
         """
         Takes an index, quote and time in seconds.
@@ -133,12 +132,12 @@ class AutoQuoteMixin:
             my_thread.daemon = True
             my_thread.start()
 
-            displayed_feedback_message = "Auto quote added (ID #{}).".format(last_autoquote_id)
+            displayed_feedback_message = 'Auto quote added (ID #{}).'.format(last_autoquote_id)
             self._add_to_chat_queue(displayed_feedback_message)
             self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
-            self._add_to_chat_queue('Sorry, the command isn\'t formatted properly.')
+            self._add_to_chat_queue("Sorry, the command isn't formatted properly.")
 
     @utils.mod_only
     def delete_auto_quote(self, message, db_session):
@@ -165,7 +164,7 @@ class AutoQuoteMixin:
             except sqlalchemy.orm.exc.NoResultFound:
                 self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
         else:
-            self._add_to_chat_queue("Sorry, you must provide the number of the auto quote to delete.")
+            self._add_to_chat_queue('Sorry, you must provide the number of the auto quote to delete.')
 
     @utils.mod_only
     def activate_auto_quote(self, message, db_session):

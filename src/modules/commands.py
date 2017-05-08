@@ -134,7 +134,7 @@ class CommandsMixin:
                 my_thread.start()
                 break
         else:
-            self._add_to_chat_queue('Sorry, that command doesn\'t exist.')
+            self._add_to_chat_queue("Sorry, that command doesn't exist.")
 
     def show_commands(self):
         """

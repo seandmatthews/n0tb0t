@@ -40,13 +40,11 @@ class StrawPollMixin:
         title_index = -1
         options_index = -1
         for index, word in enumerate(msg_list):
-            print(word.lower())
             if word.lower() == 'title:':
                 title_index = index
             elif word.lower() == 'options:':
                 options_index = index
                 break
-        print(title_index, options_index)
         if title_index == -1 or options_index == -1:
             self._add_to_chat_queue('Please form the command correctly')
         else:
@@ -58,7 +56,7 @@ class StrawPollMixin:
             r = requests.post(url, data=json.dumps(payload))
             try:
                 self.strawpoll_id = r.json()['id']
-                self._add_to_chat_queue('New strawpoll is up at https://www.strawpoll.me/{}'.format(self.strawpoll_id))
+                self._add_to_chat_queue(f'New strawpoll is up at https://www.strawpoll.me/{self.strawpoll_id}')
             except KeyError:
                 # Strawpoll got angry at us, possibly due to not enough options
                 self._add_to_chat_queue('Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
@@ -98,6 +96,5 @@ class StrawPollMixin:
             for index, probability in enumerate(probability_list):
                 if die_roll <= sum(probability_list[0:index+1]):
                     winning_chance = round(probability*100)
-                    self._add_to_chat_queue(
-                        '{} won the poll choice with {} votes and had a {}% chance to win!'.format(holder_options[index], holder_votes[index], winning_chance))
+                    self._add_to_chat_queue(f'{holder_options[index]} won the poll choice with {holder_votes[index]} votes and had a {winning_chance}% chance to win!')
                     break

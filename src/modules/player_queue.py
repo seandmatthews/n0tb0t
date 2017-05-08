@@ -102,7 +102,6 @@ class PlayerQueueMixin:
         with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'w', encoding="utf-8") as player_file:
             json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
-
     @utils.private_message_allowed
     @utils.public_message_disallowed
     def join(self, message, db_session):
@@ -122,13 +121,13 @@ class PlayerQueueMixin:
         try:
             self.player_queue.push(username, user.times_played)
             self._write_player_queue()
-            self._add_to_chat_queue("{0}, you've joined the queue.".format(username))
+            self._add_to_chat_queue(f"{username}, you've joined the queue.")
             try:
                 del self.ready_user_dict[username]
             except KeyError:
                 pass
         except RuntimeError:
-            self._add_to_chat_queue("{0}, you're already in the queue and can't join again.".format(username))
+            self._add_to_chat_queue(f"{username}, you're already in the queue and can't join again.")
 
             # queue_snapshot = copy.deepcopy(self.player_queue.queue)
             # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
@@ -187,7 +186,7 @@ class PlayerQueueMixin:
     #     user = self.service.get_message_display_name(message)
     #     web_view_link = self.spreadsheets['player_queue'][1]
     #     short_url = self.shortener.short(web_view_link)
-    #     self._add_to_whisper_queue(user, 'View the the queue at: {}'.format(short_url))
+    #     self._add_to_whisper_queue(user, f'View the the queue at: {short_url}')
 
     def _create_credentials_message(self, channel, player, credentials=None):
         """
@@ -196,14 +195,18 @@ class PlayerQueueMixin:
         subreddit = random.choice(['todayilearned', 'showerthoughts'])
         reddit_cleverness = utils.fetch_random_reddit_post_title(subreddit, time_filter='week', limit=100)
         if credentials is not None:
-            whisper_str = "{}, you may now join {} to play. The credentials you need are: {} Now here's something from Reddit. {}".format(
-                player, channel, credentials, reddit_cleverness)
+            whisper_str = f"{player}, you may now join {channel} to play. The credentials you need are: {credentials} Now here's something from Reddit. {reddit_cleverness}"
         else:
-            whisper_str = "{}, you may now join {} to play. Now here's something from Reddit. {}".format(
-                player, channel, reddit_cleverness)
+            whisper_str = f"{player}, you may now join {channel} to play. Now here's something from Reddit. {reddit_cleverness}"
         return whisper_str
 
     def _update_user_ready_dict(self, player):
+        """
+        Takes a player and checks if they've used the !confirm command to set their ready attribute to true
+        If not, create a message object with the content that _create_credentials message will use to 
+        generate a credentials string and pass it to cycle_one, along with a db_session.
+        Either way, delete the player's entry in the ready_user_dict
+        """
         if not self.ready_user_dict[player]['user_ready']:
             msg_obj = Message(content=self.ready_user_dict[player]['msg_content'])
             db_session = self.Session()
@@ -314,7 +317,7 @@ class PlayerQueueMixin:
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
             self.player_queue.cycle_num = cycle_num
-            self._add_to_chat_queue('The new room size is {}.'.format(cycle_num))
+            self._add_to_chat_queue(f'The new room size is {cycle_num}.')
         else:
             self._add_to_chat_queue('Make sure the command is followed by an integer greater than 0.')
 
