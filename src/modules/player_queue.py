@@ -110,6 +110,7 @@ class PlayerQueueMixin:
         Adds the user to the game queue.
         The players who've played the fewest
         times with the caster get priority.
+        Must be whispered to the bot.
 
         !join
         """
@@ -150,7 +151,14 @@ class PlayerQueueMixin:
         else:
             self._add_to_chat_queue(f"{username}, you're not in the queue and must join before leaving.")
 
+    @utils.private_message_allowed
     def confirm(self, message):
+        """
+        Confirms that you're present. 
+        This is so the bot can send you your invite to play with the streamer.
+        
+        !confirm
+        """
         player = self.service.get_message_display_name(message)
         self.ready_user_dict[player]['user_ready'] = True
         self._add_to_whisper_queue(player, self.ready_user_dict[player]['credential_str'])
