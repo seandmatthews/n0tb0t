@@ -347,6 +347,17 @@ class Bot(*mixin_classes):
         whisper_tuple = (user, message)
         self.whisper_message_queue.appendleft(whisper_tuple)
 
+    def _add_to_command_queue(self, function, kwargs=None):
+        """
+        Creates a tuple of the function and key word arguments.
+        Appends that to the left side of the command queue.
+        """
+        if kwargs is not None:
+            command_tuple = (function, kwargs)
+        else:
+            command_tuple = (function, {})
+        self.command_queue.appendleft(command_tuple)
+
     def _process_chat_queue(self, chat_queue):
         """
         If there are messages in the chat queue that need

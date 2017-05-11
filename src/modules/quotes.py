@@ -1,5 +1,4 @@
 import random
-import threading
 
 import gspread
 
@@ -10,7 +9,7 @@ import src.utils as utils
 class QuotesMixin:
     @utils.retry_gspread_func
     @utils.mod_only
-    def update_quote_spreadsheet(self, db_session):
+    def update_quote_spreadsheet(self):
         """
         Updates the quote spreadsheet from the database.
         Only call directly if you really need to as the bot
@@ -18,6 +17,7 @@ class QuotesMixin:
 
         !update_quote_spreadsheet
         """
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -32,6 +32,9 @@ class QuotesMixin:
         for index, quote_obj in enumerate(quotes):
             qs.update_cell(index + 2, 1, index + 1)
             qs.update_cell(index + 2, 2, quote_obj.quote)
+
+        db_session.commit()
+        db_session.close()
 
     @utils.mod_only
     def update_quote_db_from_spreadsheet(self, db_session):
@@ -141,15 +144,17 @@ class QuotesMixin:
                 self._add_to_chat_queue(response_str)
             elif action == 'edit':  # !quote edit 5 This quote is now different
                 if self.service.get_mod_status(message):
-                    quote_id = int(msg_list[2])
-                    quote_str = ' '.join(msg_list[3:])
-                    response_str = self._edit_quote(db_session, quote_id, quote_str)
+                    if msg_list[2].isdigit():
+                        quote_id = int(msg_list[2])
+                        quote_str = ' '.join(msg_list[3:])
+                        response_str = self._edit_quote(db_session, quote_id, quote_str)
                     self._add_to_chat_queue(response_str)
             elif action == 'delete':  # !quote delete 5
                 if self.service.get_mod_status(message):
-                    quote_id = int(msg_list[2])
-                    response_str = self._delete_quote(db_session, quote_id)
-                    self._add_to_chat_queue(response_str)
+                    if msg_list[2].isdigit():
+                        quote_id = int(msg_list[2])
+                        response_str = self._delete_quote(db_session, quote_id)
+                        self._add_to_chat_queue(response_str)
 
     def _get_quote(self, db_session, quote_id):
         # We grab all the quotes because we can't just use the quote ID
@@ -157,16 +162,17 @@ class QuotesMixin:
         quote_objs = db_session.query(models.Quote).all()
         if quote_id <= len(quote_objs):
             quote_obj = quote_objs[quote_id-1]
-            response_str = f'#{quote_obj.id} {quote_obj.quote}'
+            response_str = f'#{quote_id} {quote_obj.quote}'
         else:
             response_str = f'Invalid quote id - there are only {len(quote_objs)} quotes'
         return response_str
 
     def _get_random_quote(self, db_session):
-        quote_ob_list = db_session.query(models.Quote).all()
-        if len(quote_ob_list) > 0:
-            quote_obj = random.choice(quote_ob_list)
-            response_str = f'#{quote_obj.id} {quote_obj.quote}'
+        quote_obj_list = db_session.query(models.Quote).all()
+        if len(quote_obj_list) > 0:
+            index = random.randrange(len(quote_obj_list))
+            quote_obj = quote_obj_list[index]
+            response_str = f'#{index+1} {quote_obj.quote}'
         else:
             response_str = 'No quotes currently exist'
         return response_str
@@ -175,27 +181,18 @@ class QuotesMixin:
         quote_obj = models.Quote(quote=quote_str)
         db_session.add(quote_obj)
         response_str = f'Quote added as quote #{db_session.query(models.Quote).count()}.'
-
-        # Replace this bit using the command queue
-        my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                     kwargs={'db_session': db_session})
-        my_thread.daemon = True
-        my_thread.start()
-
+        self._add_to_command_queue('update_quote_spreadsheet')
         return response_str
 
-    def _edit_quote(self, db_session, quote_id, quote_str):
+    def _edit_quote(self, db_session, quote_index, quote_str):
         # We grab all the quotes because we can't just use the quote ID
         # Quotes may get deleted, and so we need to set all quotes after that one back by one
         quote_objs = db_session.query(models.Quote).all()
-        if quote_id <= len(quote_objs):
-            quote_obj = quote_objs[quote_id - 1]
+        if quote_index <= len(quote_objs):
+            quote_obj = quote_objs[quote_index - 1]
             quote_obj.quote = quote_str
             response_str = 'Quote has been edited.'
-            my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
+            self._add_to_command_queue('update_quote_spreadsheet')
         else:
             response_str = 'That quote does not exist'
         return response_str
@@ -208,10 +205,7 @@ class QuotesMixin:
             quote_obj = quote_objs[quote_id - 1]
             db_session.delete(quote_obj)
             response_str = 'Quote deleted'
-            my_thread = threading.Thread(target=self.update_quote_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
+            self._add_to_command_queue('update_quote_spreadsheet')
         else:
             response_str = 'That quote does not exist'
         return response_str
