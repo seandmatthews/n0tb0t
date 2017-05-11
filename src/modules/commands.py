@@ -102,7 +102,7 @@ class CommandsMixin:
         command = msg_list[1][1:].lower()
         response = ' '.join(msg_list[2:])
         
-        command_obj = db_session.query(models.Command).filter(models.Command.call == command).one_or_none()
+        command_obj = db_session.query(models.Command).filter(models.Command.name == command).one_or_none()
         if command_obj is None:
             self._add_to_chat_queue('Sorry, that command does not exist.')
         else:

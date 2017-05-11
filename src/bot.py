@@ -420,7 +420,7 @@ class Bot(*mixin_classes):
             return None
         if potential_command in self.sorted_methods['for_all'] or potential_command in self.sorted_methods['for_mods']:
             return [CommandTypes.HARDCODED, potential_command]
-        db_result = db_session.query(models.Command).filter(models.Command.call == potential_command).all()
+        db_result = db_session.query(models.Command).filter(models.Command.name == potential_command).all()
         if db_result:
             return [CommandTypes.DYNAMIC, db_result[0]]
         return None
