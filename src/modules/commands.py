@@ -7,9 +7,19 @@ import src.utils as utils
 
 
 class CommandsMixin:
+    def show_commands(self):
+        """
+        Links the google spreadsheet containing all commands in chat
+
+        !show_commands
+        """
+        web_view_link = self.spreadsheets['commands'][1]
+        short_url = self.shortener.short(web_view_link)
+        self._add_to_chat_queue('View the commands at: {}'.format(short_url))
+
     @utils.mod_only
     @utils.retry_gspread_func
-    def update_command_spreadsheet(self, db_session):
+    def update_command_spreadsheet(self):
         """
         Updates the commands google sheet with all available user commands.
         Only call directly if you really need to as the bot
@@ -17,6 +27,7 @@ class CommandsMixin:
 
         !update_command_spreadsheet
         """
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['commands']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -51,6 +62,9 @@ class CommandsMixin:
             cs.update_cell(index + 2, 11, command.response)
             cs.update_cell(index + 2, 12, users_str)
 
+        db_session.commit()
+        db_session.close()
+
     @utils.mod_only
     def add_command(self, message, db_session):
         """
@@ -66,30 +80,14 @@ class CommandsMixin:
         msg_list = self.service.get_message_content(message).split(' ')
         for index, word in enumerate(msg_list[1:]):  # exclude !add_command
             if word[0] == '!':
-                command = word.lower()
+                command_str = word.lower()
                 users = msg_list[1:index + 1]
                 response = ' '.join(msg_list[index + 2:])
+                response_str = self._add_command(db_session, command_str, users, response)
+                self._add_to_chat_queue(response_str)
                 break
         else:
             self._add_to_chat_queue('Sorry, the command needs to have an ! in it.')
-            return
-        db_commands = db_session.query(models.Command).all()
-        if command[1:] in [db_command.call for db_command in db_commands]:
-            self._add_to_chat_queue('Sorry, that command already exists. Please delete it first.')
-        else:
-            db_command = models.Command(call=command[1:], response=response)
-            if len(users) != 0:
-                users = [user.lower() for user in users]
-                permissions = []
-                for user in users:
-                    permissions.append(models.Permission(user_entity=user))
-                db_command.permissions = permissions
-            db_session.add(db_command)
-            self._add_to_chat_queue('Command added.')
-            my_thread = threading.Thread(target=self.update_command_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
 
     @utils.mod_only
     def edit_command(self, message, db_session):
@@ -99,19 +97,10 @@ class CommandsMixin:
         !edit_command !test_command New command message.
         """
         msg_list = self.service.get_message_content(message).split(' ')
-        command = msg_list[1][1:].lower()
+        command_str = msg_list[1][1:].lower()
         response = ' '.join(msg_list[2:])
-        
-        command_obj = db_session.query(models.Command).filter(models.Command.call == command).one_or_none()
-        if command_obj is None:
-            self._add_to_chat_queue('Sorry, that command does not exist.')
-        else:
-            command_obj.response = response
-            self._add_to_chat_queue('Command edited.')
-            my_thread = threading.Thread(target=self.update_command_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
+        response_str = self._edit_command(db_session, command_str, response)
+        self._add_to_chat_queue(response_str)
         
     @utils.mod_only
     def delete_command(self, message, db_session):
@@ -123,25 +112,67 @@ class CommandsMixin:
         """
         msg_list = self.service.get_message_content(message).split(' ')
         command_str = msg_list[1][1:].lower()
+        response_str = self._delete_command(db_session, command_str)
+        self._add_to_chat_queue(response_str)
+
+    @utils.mod_only
+    def command(self, message, db_session):
+        msg_list = self.service.get_message_content(message).split(' ')
+        action = msg_list[1].lower()
+        if action == 'add':
+            for index, word in enumerate(msg_list[2:]):  # exclude !command add
+                if word[0] == '!':
+                    command_str = word.lower()
+                    users = msg_list[2:index + 1]
+                    response = ' '.join(msg_list[index + 3:])
+                    response_str = self._add_command(db_session, command_str, users, response)
+                    break
+                else:
+                    response_str = 'Sorry, the command needs to have an ! in it.'
+
+        elif action == 'edit':
+            command_str = msg_list[2][1:].lower()
+            response = ' '.join(msg_list[3:])
+            response_str = self._edit_command(db_session, command_str, response)
+        elif action == 'delete':
+            command_str = msg_list[2][1:].lower()
+            response_str = self._delete_command(db_session, command_str)
+        self._add_to_chat_queue(response_str)
+
+    def _add_command(self, db_session, command_str, users, response):
+        db_commands = db_session.query(models.Command).all()
+        if command_str[1:] in [db_command.call for db_command in db_commands]:
+            return 'Sorry, that command already exists. Please delete it first.'
+        else:
+            db_command = models.Command(call=command_str[1:], response=response)
+            if len(users) != 0:
+                users = [user.lower() for user in users]
+                permissions = []
+                for user in users:
+                    permissions.append(models.Permission(user_entity=user))
+                db_command.permissions = permissions
+            db_session.add(db_command)
+            self._add_to_command_queue('update_command_spreadsheet')
+            return 'Command added.'
+
+    def _edit_command(self, db_session, command_str, response):
+        command_obj = db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none()
+        if command_obj is None:
+            response_str = 'Sorry, that command does not exist.'
+        else:
+            command_obj.response = response
+            self._add_to_command_queue('update_command_spreadsheet')
+            response_str = 'Command edited.'
+        return response_str
+
+    def _delete_command(self, db_session, command_str):
         db_commands = db_session.query(models.Command).all()
         for db_command in db_commands:
             if command_str == db_command.call:
                 db_session.delete(db_command)
-                self._add_to_chat_queue('Command deleted.')
-                my_thread = threading.Thread(target=self.update_command_spreadsheet,
-                                             kwargs={'db_session': db_session})
-                my_thread.daemon = True
-                my_thread.start()
+                response_str = 'Command deleted.'
+                self._add_to_command_queue('update_command_spreadsheet')
                 break
         else:
-            self._add_to_chat_queue("Sorry, that command doesn't exist.")
-
-    def show_commands(self):
-        """
-        Links the google spreadsheet containing all commands in chat
-
-        !show_commands
-        """
-        web_view_link = self.spreadsheets['commands'][1]
-        short_url = self.shortener.short(web_view_link)
-        self._add_to_chat_queue('View the commands at: {}'.format(short_url))
+            response_str = "Sorry, that command doesn't exist."
+        return response_str

@@ -156,7 +156,8 @@ class QuotesMixin:
                         response_str = self._delete_quote(db_session, quote_id)
                         self._add_to_chat_queue(response_str)
 
-    def _get_quote(self, db_session, quote_id):
+    @staticmethod
+    def _get_quote(db_session, quote_id):
         # We grab all the quotes because we can't just use the quote ID
         # Quotes may get deleted, and so we need to set all quotes after that one back by one
         quote_objs = db_session.query(models.Quote).all()
@@ -167,7 +168,8 @@ class QuotesMixin:
             response_str = f'Invalid quote id - there are only {len(quote_objs)} quotes'
         return response_str
 
-    def _get_random_quote(self, db_session):
+    @staticmethod
+    def _get_random_quote(db_session):
         quote_obj_list = db_session.query(models.Quote).all()
         if len(quote_obj_list) > 0:
             index = random.randrange(len(quote_obj_list))

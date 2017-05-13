@@ -1,6 +1,3 @@
-# Hacky fuckery to get the paths correct
-# There should definitely be a better way to import from a sibling directory
-
 from inspect import getsourcefile
 import os
 import sys
