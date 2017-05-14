@@ -28,12 +28,17 @@ def _add_to_chat_queue(self, chat_str):
     self.chat_queue.appendleft(chat_str)
 
 
-def _add_to_command_queue(self, function, kwargs=None):
+def _add_to_command_queue(self, func_name, kwargs=None):
     if kwargs is not None:
-        command_tuple = (function, kwargs)
+        command_tuple = (func_name, kwargs)
     else:
-        command_tuple = (function, {})
+        command_tuple = (func_name, {})
     self.command_queue.appendleft(command_tuple)
+
+
+@pytest.fixture
+def mock_db_session():
+    return Mock()
 
 
 @pytest.fixture
@@ -45,10 +50,6 @@ def quote_mixin_obj():
     quote_mixin_obj._add_to_command_queue = _add_to_command_queue.__get__(quote_mixin_obj, quotes.QuotesMixin)
     quote_mixin_obj.service = Service()
     return quote_mixin_obj
-
-@pytest.fixture
-def mock_db_session():
-    return Mock()
 
 
 def test_add_quote(quote_mixin_obj, mock_db_session):
