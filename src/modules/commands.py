@@ -80,7 +80,7 @@ class CommandsMixin:
         msg_list = self.service.get_message_content(message).split(' ')
         for index, word in enumerate(msg_list[1:]):  # exclude !add_command
             if word[0] == '!':
-                command_str = word.lower()
+                command_str = word[1:].lower()
                 users = msg_list[1:index + 1]
                 response = ' '.join(msg_list[index + 2:])
                 response_str = self._add_command(db_session, command_str, users, response)
@@ -122,14 +122,13 @@ class CommandsMixin:
         if action == 'add':
             for index, word in enumerate(msg_list[2:]):  # exclude !command add
                 if word[0] == '!':
-                    command_str = word.lower()
+                    command_str = word[1:].lower()
                     users = msg_list[2:index + 1]
                     response = ' '.join(msg_list[index + 3:])
                     response_str = self._add_command(db_session, command_str, users, response)
                     break
                 else:
                     response_str = 'Sorry, the command needs to have an ! in it.'
-
         elif action == 'edit':
             command_str = msg_list[2][1:].lower()
             response = ' '.join(msg_list[3:])
@@ -140,11 +139,10 @@ class CommandsMixin:
         self._add_to_chat_queue(response_str)
 
     def _add_command(self, db_session, command_str, users, response):
-        db_commands = db_session.query(models.Command).all()
-        if command_str[1:] in [db_command.call for db_command in db_commands]:
+        if db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none():
             return 'Sorry, that command already exists. Please delete it first.'
         else:
-            db_command = models.Command(call=command_str[1:], response=response)
+            db_command = models.Command(call=command_str, response=response)
             if len(users) != 0:
                 users = [user.lower() for user in users]
                 permissions = []
@@ -166,13 +164,11 @@ class CommandsMixin:
         return response_str
 
     def _delete_command(self, db_session, command_str):
-        db_commands = db_session.query(models.Command).all()
-        for db_command in db_commands:
-            if command_str == db_command.call:
-                db_session.delete(db_command)
-                response_str = 'Command deleted.'
-                self._add_to_command_queue('update_command_spreadsheet')
-                break
+        command_obj = db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none()
+        if command_obj is not None:
+            db_session.delete(command_obj)
+            response_str = 'Command deleted.'
+            self._add_to_command_queue('update_command_spreadsheet')
         else:
             response_str = "Sorry, that command doesn't exist."
         return response_str
