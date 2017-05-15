@@ -82,8 +82,8 @@ class CommandsMixin:
             if word[0] == '!':
                 command_str = word[1:].lower()
                 users = msg_list[1:index + 1]
-                response = ' '.join(msg_list[index + 2:])
-                response_str = self._add_command(db_session, command_str, users, response)
+                command_response = ' '.join(msg_list[index + 2:])
+                response_str = self._add_command(db_session, command_str, users, command_response)
                 self._add_to_chat_queue(response_str)
                 break
         else:

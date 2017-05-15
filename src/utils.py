@@ -9,8 +9,8 @@ import requests
 from config import reddit_client_id
 from config import reddit_client_secret
 from config import reddit_user_agent
-
 from config import bot_info
+from src.loggers import error_logger
 
 
 # DECORATORS #
@@ -29,7 +29,9 @@ def retry_gspread_func(f):
             # Sometimes it tries to index an error object, which it can't, which causes a type error.
             # I'd submit a patch, but the last time I tried to do that I had to harangue the author for literally
             # months to get my well tested, documented, all tests passing PR accepted. So I'm not doing that again.
-            except (gspread.exceptions.GSpreadException, TypeError):
+            except (gspread.exceptions.GSpreadException, TypeError) as e:
+                print('Gspread failure; retrying')
+                error_logger.exception('Gspread failure')
                 continue
             break
 
