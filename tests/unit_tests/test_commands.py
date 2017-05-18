@@ -115,6 +115,13 @@ def test_delete_nonexistent_command(command_mixin_obj, mock_db_session):
     assert len(command_mixin_obj.command_queue) == 0
 
 
+'''
+These next three are functionally similar to preexisting test functions but do subylt different things
+There is a function called "command" with the ability to do nearly everything.
+These test that functionality.
+
+Perhaps in the future we add more test functions for delete nobang, etc.
+'''
 def test_command_add(command_mixin_obj, mock_db_session):
     query_val = mock_db_session.query.return_value
     filter_val = query_val.filter.return_value

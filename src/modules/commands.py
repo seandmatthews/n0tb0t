@@ -138,6 +138,10 @@ class CommandsMixin:
             response_str = self._delete_command(db_session, command_str)
         self._add_to_chat_queue(response_str)
 
+
+    """
+    These functions do most of the heavy lifting.
+    """
     def _add_command(self, db_session, command_str, users, response):
         if db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none():
             return 'Sorry, that command already exists. Please delete it first.'
