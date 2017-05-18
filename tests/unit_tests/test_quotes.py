@@ -8,8 +8,8 @@ from collections import deque
 
 current_path = os.path.abspath(getsourcefile(lambda: 0))
 current_dir = os.path.dirname(current_path)
-parent_dir = os.path.join(current_dir, os.pardir)
-sys.path.append(parent_dir)
+root_dir = os.path.join(current_dir, os.pardir, os.pardir)
+sys.path.append(root_dir)
 
 import src.modules.quotes as quotes
 from src.message import Message
