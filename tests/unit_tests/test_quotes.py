@@ -17,10 +17,12 @@ from src.models import Quote
 
 
 class Service:
-    def get_message_content(self, message):
+    @staticmethod
+    def get_message_content(message):
         return message.content
 
-    def get_mod_status(self, message):
+    @staticmethod
+    def get_mod_status(message):
         return message.is_mod
 
 
