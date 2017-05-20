@@ -23,9 +23,8 @@ class PlayerQueue:
 
     def push(self, player, priority):
         """
-        @params:
-            player is the twitch username of a prospective player
-            priority is the number of times they've played with the caster
+        player is the twitch username of a prospective player
+        priority is the number of times they've played with the caster
         """
         index = None
         for i, tup in enumerate(self.queue):
