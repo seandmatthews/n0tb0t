@@ -33,9 +33,11 @@ class MessageTypes(Enum):
 
 class TwitchMessage(Message):
     def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False):
-        Message.__init__(self, service=Service.TWITCH, message_type=message_type, user=user, content=content)
-        self.display_name = display_name
-        self.is_mod = is_mod
+        Message.__init__(self, service=Service.TWITCH,
+                         message_type=message_type,
+                         user=user, content=content,
+                         display_name=display_name,
+                         is_mod=is_mod)
 
 
 class TwitchService(object):
@@ -107,16 +109,20 @@ class TwitchService(object):
         # self.sock.send('CAP REQ :twitch.tv/membership\r\n'.encode('utf-8'))
 
     # Getter methods
-    def get_message_display_name(self, message):
+    @staticmethod
+    def get_message_display_name(message):
         return message.display_name
 
-    def get_message_content(self, message):
+    @staticmethod
+    def get_message_content(message):
         return message.content
 
-    def get_mod_status(self, message):
+    @staticmethod
+    def get_mod_status(message):
         return message.is_mod
 
-    def get_message_type(self, message):
+    @staticmethod
+    def get_message_type(message):
         return message.message_type.name
 
     def _get_all_users(self):
@@ -151,7 +157,8 @@ class TwitchService(object):
             [chatters.append(user) for user in v]
         return chatters
 
-    def _get_username_from_line(self, line):
+    @staticmethod
+    def _get_username_from_line(line):
         exclam_index = None
         at_index = None
         for i, char in enumerate(line):
@@ -162,7 +169,8 @@ class TwitchService(object):
                 break
         return line[exclam_index+1:at_index]
 
-    def _get_data_from_line(self, line, data_type):
+    @staticmethod
+    def _get_data_from_line(line, data_type):
         if data_type in line:
             _, *rest_of_line = line.split("{}=".format(data_type), 1)
             for i, char in enumerate(rest_of_line[0]):
@@ -182,9 +190,8 @@ class TwitchService(object):
         return self._get_data_from_line(line, 'user-id')
 
     def _check_mod_from_line(self, line):
-        line_list = line.split(':', 2)
         if "PRIVMSG" in line:
-            return ('user-type=mod' in line_list[0]) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
+            return ('user-type=mod' in line) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
         elif "WHISPER" in line:
             return (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
 

@@ -23,9 +23,8 @@ class PlayerQueue:
 
     def push(self, player, priority):
         """
-        @params:
-            player is the twitch username of a prospective player
-            priority is the number of times they've played with the caster
+        player is the twitch username of a prospective player
+        priority is the number of times they've played with the caster
         """
         index = None
         for i, tup in enumerate(self.queue):
@@ -103,7 +102,6 @@ class PlayerQueueMixin:
             json.dump(list(self.player_queue.queue), player_file, ensure_ascii=False)
 
     @utils.private_message_allowed
-    @utils.public_message_disallowed
     def join(self, message, db_session):
         """
         Adds the user to the game queue.
@@ -121,13 +119,13 @@ class PlayerQueueMixin:
         try:
             self.player_queue.push(username, user.times_played)
             self._write_player_queue()
-            self._add_to_chat_queue(f"{username}, you've joined the queue.")
+            utils.add_to_appropriate_chat_queue(self, message, f"{username}, you've joined the queue.")
             try:
                 del self.ready_user_dict[username]
             except KeyError:
                 pass
         except RuntimeError:
-            self._add_to_chat_queue(f"{username}, you're already in the queue and can't join again.")
+            utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're already in the queue and can't join again.")
 
             # queue_snapshot = copy.deepcopy(self.player_queue.queue)
             # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
@@ -145,12 +143,13 @@ class PlayerQueueMixin:
             if tup[0] == username:
                 self.player_queue.queue.remove(tup)
                 self._write_player_queue()
-                self._add_to_chat_queue(f"{username}, you've left the queue.")
+                utils.add_to_appropriate_chat_queue(self, message, f"{username}, you've left the queue.")
                 break
         else:
-            self._add_to_chat_queue(f"{username}, you're not in the queue and must join before leaving.")
+            utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're not in the queue and must join before leaving.")
 
     @utils.private_message_allowed
+    @utils.public_message_disallowed
     def confirm(self, message):
         """
         Confirms that you're present. 
@@ -160,7 +159,7 @@ class PlayerQueueMixin:
         """
         player = self.service.get_message_display_name(message)
         self.ready_user_dict[player]['user_ready'] = True
-        self._add_to_whisper_queue(player, self.ready_user_dict[player]['credential_str'])
+        utils.add_to_private_chat_queue(self, player, self.ready_user_dict[player]['credential_str'])
 
     def spot(self, message):
         """
@@ -173,9 +172,9 @@ class PlayerQueueMixin:
             for index, tup in enumerate(self.player_queue.queue):
                 if tup[0] == username:
                     position = len(self.player_queue.queue) - index
-            self._add_to_chat_queue(f'{username} is number {position} in the queue. This may change as other players join.')
+                    utils.add_to_appropriate_chat_queue(self, message, f'{username} is number {position} in the queue. This may change as other players join.')
         except UnboundLocalError:
-            self._add_to_chat_queue(f"{username}, you're not in the queue. Feel free to join it.")
+            utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're not in the queue. Feel free to join it.")
 
     # def show_player_queue(self, message):
     #     """
@@ -246,8 +245,8 @@ class PlayerQueueMixin:
             t = threading.Timer(45.0, self._update_user_ready_dict, [player])
             t.start()
             # self.command_queue.appendleft(('_delete_last_row', {}))
-        self._add_to_chat_queue(f"{players_str} it is your turn to play! Please whisper the bot !confirm to confirm that you're here.")
-        self._add_to_chat_queue(f'There are {len(self.player_queue.queue)} people left in the queue')
+        utils.add_to_public_chat_queue(self, f"{players_str} it is your turn to play! Please whisper the bot !confirm to confirm that you're here.")
+        utils.add_to_public_chat_queue(self, 'There are {len(self.player_queue.queue)} people left in the queue')
 
     @utils.private_message_allowed
     @utils.mod_only
@@ -279,14 +278,14 @@ class PlayerQueueMixin:
                                             'credential_str': credentials_message}
             t = threading.Timer(45.0, self._update_user_ready_dict, [player])
             t.start()
-            self._add_to_chat_queue(f'{player} it is your turn to play. Whisper !confirm to the bot')
-            self._add_to_chat_queue(f'There are {len(self.player_queue.queue)} people left in the queue.')
+            utils.add_to_public_chat_queue(self, f'{player} it is your turn to play. Whisper !confirm to the bot')
+            utils.add_to_public_chat_queue(self, f'There are {len(self.player_queue.queue)} people left in the queue.')
             # self.command_queue.appendleft(('_delete_last_row', {}))
         except IndexError:
-            self._add_to_chat_queue('Sorry, there are no more players in the queue')
+            utils.add_to_public_chat_queue(self, 'Sorry, there are no more players in the queue')
 
     @utils.mod_only
-    def reset_queue(self, db_session):
+    def reset_queue(self, message, db_session):
         """
         Creates a new queue with the default room size
         and resets all players stats for how many
@@ -302,7 +301,7 @@ class PlayerQueueMixin:
         except FileNotFoundError:
             pass
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.times_played: 0}))
-        self._add_to_chat_queue('The queue has been emptied and all players start fresh.')
+        utils.add_to_appropriate_chat_queue(self, message, 'The queue has been emptied and all players start fresh.')
 
     @utils.mod_only
     def set_cycle_number(self, message):
@@ -317,9 +316,9 @@ class PlayerQueueMixin:
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             cycle_num = int(msg_list[1])
             self.player_queue.cycle_num = cycle_num
-            self._add_to_chat_queue(f'The new room size is {cycle_num}.')
+            utils.add_to_appropriate_chat_queue(self, message, f'The new room size is {cycle_num}.')
         else:
-            self._add_to_chat_queue('Make sure the command is followed by an integer greater than 0.')
+            utils.add_to_appropriate_chat_queue(self, message, 'Make sure the command is followed by an integer greater than 0.')
 
     @utils.mod_only
     def promote(self, message, db_session):
@@ -340,10 +339,10 @@ class PlayerQueueMixin:
                     self.player_queue.push(player, times_played-1)
                     self._write_player_queue()
                 else:
-                    self._add_to_chat_queue(f'{player} cannot be promoted in the queue.')
+                    utils.add_to_appropriate_chat_queue(self, message, f'{player} cannot be promoted in the queue.')
                 break
         else:
-            self._add_to_chat_queue(f'{player} is not in the player queue.')
+            utils.add_to_appropriate_chat_queue(self, message, f'{player} is not in the player queue.')
 
     @utils.mod_only
     def demote(self, message, db_session):
@@ -364,4 +363,4 @@ class PlayerQueueMixin:
                 self._write_player_queue()
                 break
         else:
-            self._add_to_chat_queue(f'{player} is not in the player queue.')
+            utils.add_to_appropriate_chat_queue(self, message, f'{player} is not in the player queue.')

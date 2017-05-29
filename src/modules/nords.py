@@ -1,3 +1,6 @@
+import src.utils as utils
+
+
 class NordMixin:
     def nord(self, message):
         """
@@ -18,4 +21,4 @@ class NordMixin:
                 nord_str = f'{belongs_str} belongs to the Nords!'
         else:
             nord_str = f'Skyrim belongs to the Nords!'
-        self._add_to_chat_queue(nord_str)
+        utils.add_to_appropriate_chat_queue(self, message, nord_str)

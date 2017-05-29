@@ -18,6 +18,7 @@ import src.utils as utils
 from config import time_zone_choice
 from src.modules.player_queue import PlayerQueue
 
+
 # Collect all the Mixin classes from all the modules in the src/modules directory
 # Store these class objects in a mixin_classes list so that Bot can inherit from them
 print('Loading Modules')
@@ -61,8 +62,8 @@ class Bot(*mixin_classes):
         # Most functions run in the main thread, but we can put slow ones here
         self.command_queue = collections.deque()
 
-        self.chat_message_queue = collections.deque()
-        self.whisper_message_queue = collections.deque()
+        self.public_message_queue = collections.deque()
+        self.private_message_queue = collections.deque()
         try:
             with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
                 self.player_queue = PlayerQueue(input_iterable=json.loads(player_file.read()))
@@ -87,19 +88,19 @@ class Bot(*mixin_classes):
             self.spreadsheets[sheet] = sheet_tuple
             if not already_existed:
                 init_command = '_initialize_{}_spreadsheet'.format(sheet)
-                getattr(self, init_command)(sheet_name, db_session)
+                getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
         self.allowed_to_chat = True
 
         self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.chat_message_queue})
+                                            kwargs={'chat_queue': self.public_message_queue})
         self.chat_thread.daemon = True
         self.chat_thread.start()
 
         self.whisper_thread = threading.Thread(target=self._process_whisper_queue,
-                                               kwargs={'whisper_queue': self.whisper_message_queue})
+                                               kwargs={'whisper_queue': self.private_message_queue})
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
 
@@ -108,7 +109,7 @@ class Bot(*mixin_classes):
         self.command_thread.daemon = True
         self.command_thread.start()
 
-        self._add_to_chat_queue('{} is online'.format(bot_info['user']))
+        utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
 
         self.start_auto_quotes(db_session)
         self.player_queue_credentials = None
@@ -160,8 +161,8 @@ class Bot(*mixin_classes):
         Creates the database and domain model and Session Class
         """
         channel = self.info['channel']
-        self.db_path = os.path.join(db_location, '{}.db'.format(channel))
-        engine = sqlalchemy.create_engine('sqlite:///{}'.format(self.db_path), connect_args={'check_same_thread': False})
+        self.db_path = os.path.join(db_location, f'{channel}.db')
+        engine = sqlalchemy.create_engine(f'sqlite:///{self.db_path}', connect_args={'check_same_thread': False})
         # noinspection PyPep8Naming
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         models.Base.metadata.create_all(engine)
@@ -178,7 +179,7 @@ class Bot(*mixin_classes):
         return session_factory
 
     @utils.retry_gspread_func
-    def _initialize_quotes_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
         """
         Populate the quotes google sheet with its initial data.
         """
@@ -196,10 +197,10 @@ class Bot(*mixin_classes):
         qs.update_acell('A1', 'Quote Index')
         qs.update_acell('B1', 'Quote')
 
-        self.update_quote_spreadsheet(db_session)
+        self.update_quote_spreadsheet()
 
     @utils.retry_gspread_func
-    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
         """
         Populate the auto_quotes google sheet with its initial data.
         """
@@ -219,10 +220,10 @@ class Bot(*mixin_classes):
         aqs.update_acell('C1', 'Period\n(In seconds)')
         aqs.update_acell('D1', 'Active')
 
-        self.update_auto_quote_spreadsheet(db_session)
+        self.update_auto_quote_spreadsheet()
 
     @utils.retry_gspread_func
-    def _initialize_commands_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_commands_spreadsheet(self, spreadsheet_name):
         """
         Populate the commands google sheet with its initial data.
         """
@@ -263,10 +264,10 @@ class Bot(*mixin_classes):
             cs.update_cell(index+2, 4, '!{}'.format(method))
             cs.update_cell(index+2, 5, getattr(self, method).__doc__)
 
-        self.update_command_spreadsheet(db_session)
+        self.update_command_spreadsheet()
 
     @utils.retry_gspread_func
-    def _initialize_highlights_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_highlights_spreadsheet(self, spreadsheet_name):
         """
         Populate the highlights google sheet with its initial data.
         """
@@ -287,7 +288,7 @@ class Bot(*mixin_classes):
         hls.update_acell('D1', 'User Note')
 
     @utils.retry_gspread_func
-    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
         """
         Populate the player_guesses google sheet with its initial data.
         """
@@ -307,7 +308,7 @@ class Bot(*mixin_classes):
         pgs.update_acell('C1', 'Total Guess')
 
     @utils.retry_gspread_func
-    def _initialize_player_queue_spreadsheet(self, spreadsheet_name, db_session):
+    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
         """
         Populate the player_queue google sheet with its initial data.
         """
@@ -332,20 +333,6 @@ class Bot(*mixin_classes):
         pqs.update_acell('B1', 'Times played')
         pqs.update_acell('C1', 'Info:')
         pqs.update_acell('C2', info)
-
-    def _add_to_chat_queue(self, message):
-        """
-        Adds the message to the left side of the chat queue.
-        """
-        self.chat_message_queue.appendleft(message)
-
-    def _add_to_whisper_queue(self, user, message):
-        """
-        Creates a tuple of the user and message.
-        Appends that to the left side of the whisper queue.
-        """
-        whisper_tuple = (user, message)
-        self.whisper_message_queue.appendleft(whisper_tuple)
 
     def _process_chat_queue(self, chat_queue):
         """
@@ -394,7 +381,7 @@ class Bot(*mixin_classes):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.service.get_message_content(message).replace('PING', 'PONG'))
+            utils.add_to_appropriate_chat_queue(self, message, self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
@@ -461,7 +448,7 @@ class Bot(*mixin_classes):
         """
         if command[0] == CommandTypes.DYNAMIC:
             db_command = command[1]
-            self._add_to_chat_queue(db_command.response)
+            utils.add_to_appropriate_chat_queue(self, message, db_command.response)
         else:
             method_command = command[1]
             kwargs = {}
@@ -490,8 +477,8 @@ class Bot(*mixin_classes):
         !start_speaking
         """
         self.allowed_to_chat = True
-        self.chat_message_queue.clear()
+        self.public_message_queue.clear()
         self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.chat_message_queue})
+                                            kwargs={'chat_queue': self.public_message_queue})
         self.chat_thread.daemon = True
         self.chat_thread.start()

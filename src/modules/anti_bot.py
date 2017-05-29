@@ -13,12 +13,12 @@ class AntiBotMixin:
         """
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            self._add_to_chat_queue('You need to type out a username.')
+            utils.add_to_appropriate_chat_queue(self, message, 'You need to type out a username.')
             return
         try:
             bot_creation_date = utils.get_creation_date(msg_list[1])
         except RuntimeError as e:
-            self._add_to_chat_queue(str(e))
+            utils.add_to_appropriate_chat_queue(self, message, str(e))
             return
         viewers = self.service.get_viewers()
         mod_list = self.service.get_mods()
@@ -31,7 +31,7 @@ class AntiBotMixin:
                 continue
             if viewer_creation_date == bot_creation_date and viewer not in whitelist:
                 self.service.send_public_message('/ban {}'.format(viewer))
-        self._add_to_chat_queue(f"We're currently experiencing a bot attack. If you're a human and were accidentally banned, please whisper a mod: {mod_str}")
+        utils.add_to_public_chat_queue(self, f"We're currently experiencing a bot attack. If you're a human and were accidentally banned, please whisper a mod: {mod_str}")
 
     @utils.mod_only
     def whitelist(self, message, db_session):
@@ -42,7 +42,7 @@ class AntiBotMixin:
         """
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            self._add_to_chat_queue('You need to type out a username.')
+            utils.add_to_appropriate_chat_queue(self, message, 'You need to type out a username.')
             return
 
         user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
@@ -50,10 +50,10 @@ class AntiBotMixin:
             user_db_obj = models.User(name=msg_list[1])
             db_session.add(user_db_obj)
         if bool(user_db_obj.whitelisted):
-            self._add_to_chat_queue(f'{msg_list[1]} is already in the whitelist!')
+            utils.add_to_appropriate_chat_queue(self, message, f'{msg_list[1]} is already in the whitelist!')
         else:
             user_db_obj.whitelisted = True
-            self._add_to_chat_queue(f'{msg_list[1]} has been added to the whitelist.')
+            utils.add_to_appropriate_chat_queue(self, message, f'{msg_list[1]} has been added to the whitelist.')
 
     @utils.mod_only
     def unwhitelist(self, message, db_session):
@@ -64,11 +64,11 @@ class AntiBotMixin:
         """
         msg_list = self.service.get_message_content(message).lower().split(' ')
         if len(msg_list) == 1:
-            self._add_to_chat_queue('You need to type out a username.')
+            utils.add_to_appropriate_chat_queue(self, message, 'You need to type out a username.')
             return
         user_db_obj = db_session.query(models.User).filter(models.User.name == msg_list[1]).one_or_none()
         if bool(user_db_obj.whitelisted) is False:
-            self._add_to_chat_queue(f'{msg_list[1]} is already off the whitelist.')
+            utils.add_to_appropriate_chat_queue(self, message, f'{msg_list[1]} is already off the whitelist.')
         if bool(user_db_obj.whitelisted) is True:
             user_db_obj.whitelisted = False
-            self._add_to_chat_queue(f'{msg_list[1]} has been removed from the whitelist.')
+            utils.add_to_appropriate_chat_queue(self, message, f'{msg_list[1]} has been removed from the whitelist.')

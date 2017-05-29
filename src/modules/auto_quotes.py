@@ -20,11 +20,11 @@ class AutoQuoteMixin:
         self.auto_quotes_timers[key] = threading.Timer(period, self._auto_quote,
                                                        kwargs={'index': index, 'quote': quote, 'period': period})
         self.auto_quotes_timers[key].start()
-        self._add_to_chat_queue(quote)
+        utils.add_to_public_chat_queue(self, quote)
 
     @utils.mod_only
     @utils.retry_gspread_func
-    def update_auto_quote_spreadsheet(self, db_session):
+    def update_auto_quote_spreadsheet(self):
         """
         Updates the auto_quote spreadsheet with all current auto quotes
         Only call directly if you really need to as the bot
@@ -32,6 +32,7 @@ class AutoQuoteMixin:
 
         !update_auto_quote_spreadsheet
         """
+        db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
@@ -50,6 +51,7 @@ class AutoQuoteMixin:
             aqs.update_cell(index+2, 2, aq.quote)
             aqs.update_cell(index+2, 3, aq.period)
             aqs.update_cell(index+2, 4, aq.active)
+        db_session.close()
 
     @utils.mod_only
     def start_auto_quotes(self, db_session):
@@ -100,7 +102,7 @@ class AutoQuoteMixin:
         time.sleep(1)
         self.auto_quotes_timers[fullid].cancel()
 
-    def show_auto_quotes(self):
+    def show_auto_quotes(self, message):
         """
         Links to a google spreadsheet containing all auto quotes
 
@@ -108,7 +110,7 @@ class AutoQuoteMixin:
         """
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
-        self._add_to_chat_queue('View the auto quotes at: {}'.format(short_url))
+        utils.add_to_appropriate_chat_queue(self, message, 'View the auto quotes at: {}'.format(short_url))
 
     @utils.mod_only
     def add_auto_quote(self, message, db_session):
@@ -127,17 +129,15 @@ class AutoQuoteMixin:
             db_session.add(autoquote)
             db_session.flush()
             last_autoquote_id = autoquote.id
-            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
 
-            displayed_feedback_message = 'Auto quote added (ID #{}).'.format(last_autoquote_id)
-            self._add_to_chat_queue(displayed_feedback_message)
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+
+            displayed_feedback_message = f'Auto quote added (ID #{last_autoquote_id}).'
+            utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
             self.stop_auto_quotes()
             self.start_auto_quotes(db_session)
         else:
-            self._add_to_chat_queue("Sorry, the command isn't formatted properly.")
+            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
 
     @utils.mod_only
     def delete_auto_quote(self, message, db_session):
@@ -154,17 +154,16 @@ class AutoQuoteMixin:
             try:
                 db_session.delete(auto_quote)
                 db_session.flush()
-                my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
-                                             kwargs={'db_session': db_session})
-                my_thread.daemon = True
-                my_thread.start()
-                self._add_to_chat_queue('Auto quote deleted')
+
+                utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+
+                utils.add_to_appropriate_chat_queue(self, message, 'Auto quote deleted')
                 self.stop_auto_quotes()
                 self.start_auto_quotes(db_session)
             except sqlalchemy.orm.exc.NoResultFound:
-                self._add_to_chat_queue("Sorry, there aren't that many auto quotes.")
+                utils.add_to_appropriate_chat_queue(self, message, "Sorry, there aren't that many auto quotes.")
         else:
-            self._add_to_chat_queue('Sorry, you must provide the number of the auto quote to delete.')
+            utils.add_to_appropriate_chat_queue(self, message, 'Sorry, you must provide the number of the auto quote to delete.')
 
     @utils.mod_only
     def activate_auto_quote(self, message, db_session):
@@ -184,10 +183,7 @@ class AutoQuoteMixin:
             db_session.flush()
 
             self._start_auto_quote(autoquote.id, db_session)
-            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
 
     @utils.mod_only
     def deactivate_auto_quote(self, message, db_session):
@@ -207,7 +203,4 @@ class AutoQuoteMixin:
             db_session.flush()
 
             self._stop_auto_quote(auto_auote_id)
-            my_thread = threading.Thread(target=self.update_auto_quote_spreadsheet,
-                                         kwargs={'db_session': db_session})
-            my_thread.daemon = True
-            my_thread.start()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')

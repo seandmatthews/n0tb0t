@@ -19,4 +19,4 @@ class OgodMixin:
                 ogod_str = f"{offender_str} has offended {user}'s delicate sensibilities!"
         else:
             ogod_str = f"{user}'s delicate sensibilities have been offended!"
-        self._add_to_chat_queue(ogod_str)
+        self._add_to_public_chat_queue(ogod_str)
