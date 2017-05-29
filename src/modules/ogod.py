@@ -22,4 +22,4 @@ class OgodMixin:
                 ogod_str = f"{offender_str} has offended {user}'s delicate sensibilities!"
         else:
             ogod_str = f"{user}'s delicate sensibilities have been offended!"
-            utils.add_to_appropriate_chat_queue(self, message, ogod_str)
+        utils.add_to_appropriate_chat_queue(self, message, ogod_str)
