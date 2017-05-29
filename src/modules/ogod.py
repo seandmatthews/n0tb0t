@@ -1,3 +1,6 @@
+import src.utils as utils
+
+
 class OgodMixin:
     def ogod(self, message):
         """
@@ -19,4 +22,4 @@ class OgodMixin:
                 ogod_str = f"{offender_str} has offended {user}'s delicate sensibilities!"
         else:
             ogod_str = f"{user}'s delicate sensibilities have been offended!"
-        self._add_to_public_chat_queue(ogod_str)
+            utils.add_to_appropriate_chat_queue(self, message, ogod_str)

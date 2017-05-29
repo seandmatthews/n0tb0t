@@ -185,7 +185,7 @@ class PlayerQueueMixin:
     #     user = self.service.get_message_display_name(message)
     #     web_view_link = self.spreadsheets['player_queue'][1]
     #     short_url = self.shortener.short(web_view_link)
-    #     self._add_to_whisper_queue(user, f'View the the queue at: {short_url}')
+    #     utils.add_to_appropriate_chat_queue(self, message, f'View the the queue at: {short_url}')
 
     def _create_credentials_message(self, channel, player, credentials=None):
         """
