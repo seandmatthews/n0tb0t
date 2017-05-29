@@ -25,7 +25,7 @@ class HighlightMixin:
             time_dict = utils.get_live_time()
         except RuntimeError as e:
             time_dict = None
-            self._add_to_chat_queue(str(e))
+            utils.add_to_appropriate_chat_queue(self, message, str(e))
 
         if time_dict is not None:
             user_tz = pytz.timezone(time_zone_choice)

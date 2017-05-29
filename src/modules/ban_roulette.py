@@ -1,4 +1,5 @@
 import random
+import src.utils as utils
 
 
 class BanRouletteMixin:
@@ -21,7 +22,7 @@ class BanRouletteMixin:
         if user is not None:
             if random.randint(1, 6) == 6:
                 timeout_time = 30
-                self._add_to_chat_queue('/timeout {} {}'.format(user, timeout_time))
-                self._add_to_chat_queue('Bang! {} was timed out.'.format(user))
+                utils.add_to_public_chat_queue(self, f'/timeout {user} {timeout_time}')
+                utils.add_to_public_chat_queue(self, f'Bang! {user} was timed out.')
             else:
-                self._add_to_chat_queue('{} is safe for now.'.format(user))
+                utils.add_to_public_chat_queue(self, f'{user} is safe for now.')

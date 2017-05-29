@@ -28,7 +28,7 @@ class ChatterSelectionMixin:
             db_session.add(user)
 
     @utils.mod_only
-    def choose_giveaway(self, db_session):
+    def choose_giveaway(self, message, db_session):
         """
         Selects a contest entrant at random.
         Sends their name to the chat.
@@ -38,17 +38,16 @@ class ChatterSelectionMixin:
         users_contest_list = db_session.query(models.User).filter(models.User.entered_in_contest == True).all()
         if len(users_contest_list) > 0:
             winner = random.choice(users_contest_list)
-            self._add_to_chat_queue('The winner is {}!'.format(winner.name))
+            utils.add_to_public_chat_queue(self, f'The winner is {winner.name}!')
         else:
-            self._add_to_chat_queue('There are currently no entrants for the giveaway.')
+            utils.add_to_appropriate_chat_queue(self, message, 'There are currently no entrants for the giveaway.')
 
     @utils.mod_only
-    def reset_giveaway(self, db_session):
+    def reset_giveaway(self, message, db_session):
         """
-        Sets the entrants list to be an empty list and then writes
-        that to the entrants file.
+        Resets the giveaway so that no one is entered
 
         !clear_contest_entrants
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.entered_in_contest: False}))
-        self._add_to_chat_queue('Giveaway entrants cleared.')
+        utils.add_to_appropriate_chat_queue(self, message, 'Giveaway entrants cleared.')

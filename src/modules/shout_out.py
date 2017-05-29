@@ -25,16 +25,15 @@ class ShoutOutMixin:
                     game = r.json()['game']
                     channel_url = r.json()['url']
                     shout_out_str = f'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {channel_url}! Tell \'em {me} sent you!'
-                    self._add_to_chat_queue(shout_out_str)
+                    utils.add_to_public_chat_queue(self, shout_out_str)
                 except requests.exceptions.HTTPError:
-                    self._add_to_chat_queue(f"Hey {user}, that's not a real streamer!")
+                    utils.add_to_public_chat_queue(self, f"Hey {user}, that's not a real streamer!")
                     break
                 except ValueError:
                     continue
                 else:
                     break
             else:
-                self._add_to_chat_queue(
-                    "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+                utils.add_to_appropriate_chat_queue(self, message, "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
         else:
-            self._add_to_chat_queue(f'Sorry {user}, you need to specify a caster to shout out.')
+            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, you need to specify a caster to shout out.')

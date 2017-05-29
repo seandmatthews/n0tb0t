@@ -24,8 +24,7 @@ class StrawPollMixin:
             else:
                 return poll_options, poll_votes
         else:
-            self._add_to_chat_queue("Sorry, there was a problem talking to the strawpoll api. "
-                                    "Maybe wait a bit and retry your command?")
+            raise RuntimeError("Sorry, there was a problem talking to the strawpoll api. Maybe wait a bit and retry your command?")
 
     @utils.mod_only
     def create_poll(self, message):
@@ -46,7 +45,7 @@ class StrawPollMixin:
                 options_index = index
                 break
         if title_index == -1 or options_index == -1:
-            self._add_to_chat_queue('Please form the command correctly')
+            utils.add_to_appropriate_chat_queue(self, message, 'Please form the command correctly')
         else:
             title = ' '.join(msg_list[title_index+1:options_index])
             options_str = ' '.join(msg_list[options_index+1:])
@@ -56,11 +55,10 @@ class StrawPollMixin:
             r = requests.post(url, data=json.dumps(payload))
             try:
                 self.strawpoll_id = r.json()['id']
-                self._add_to_chat_queue(f'New strawpoll is up at https://www.strawpoll.me/{self.strawpoll_id}')
+                utils.add_to_public_chat_queue(self, 'New strawpoll is up at https://www.strawpoll.me/{self.strawpoll_id}')
             except KeyError:
                 # Strawpoll got angry at us, possibly due to not enough options
-                self._add_to_chat_queue('Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
-
+                utils.add_to_appropriate_chat_queue(self, message, 'Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
 
     @utils.mod_only
     def end_poll(self, message):
@@ -72,7 +70,7 @@ class StrawPollMixin:
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 1 and self.strawpoll_id == '':
-            self._add_to_chat_queue('No ID supplied, please try again')
+            utils.add_to_appropriate_chat_queue(self, message, 'No ID supplied, please try again')
             holder_id = None
         elif len(msg_list) == 1 and self.strawpoll_id != '':
             holder_id = self.strawpoll_id
@@ -80,21 +78,24 @@ class StrawPollMixin:
         elif len(msg_list) == 2:
             holder_id = msg_list[1]
         else:
-            self._add_to_chat_queue('Sorry, no ID could be found. Please ensure the command is formatted correctly.')
+            utils.add_to_appropriate_chat_queue(self, message, 'Sorry, no ID could be found. Please ensure the command is formatted correctly.')
             holder_id = None
         if holder_id is not None:
-            holder_options, holder_votes = self._get_poll_info(holder_id)
-            probability_list = []
-            for vote_number in holder_votes:
-                try:
-                    temp_prob = vote_number*(1/sum(holder_votes))
-                    probability_list.append(temp_prob)
-                except ZeroDivisionError:
-                    self._add_to_chat_queue('No one has voted yet! You will need to end the poll again by specifying the ID.')
-                    return
-            die_roll = random.random()
-            for index, probability in enumerate(probability_list):
-                if die_roll <= sum(probability_list[0:index+1]):
-                    winning_chance = round(probability*100)
-                    self._add_to_chat_queue(f'{holder_options[index]} won the poll choice with {holder_votes[index]} votes and had a {winning_chance}% chance to win!')
-                    break
+            try:
+                holder_options, holder_votes = self._get_poll_info(holder_id)
+                probability_list = []
+                for vote_number in holder_votes:
+                    try:
+                        temp_prob = vote_number*(1/sum(holder_votes))
+                        probability_list.append(temp_prob)
+                    except ZeroDivisionError:
+                        utils.add_to_public_chat_queue(self, 'No one has voted yet! You will need to end the poll again by specifying the ID.')
+                        return
+                die_roll = random.random()
+                for index, probability in enumerate(probability_list):
+                    if die_roll <= sum(probability_list[0:index+1]):
+                        winning_chance = round(probability*100)
+                        utils.add_to_public_chat_queue(self, f'{holder_options[index]} won the poll choice with {holder_votes[index]} votes and had a {winning_chance}% chance to win!')
+                        break
+            except RuntimeError as e:
+                utils.add_to_appropriate_chat_queue(self, message, str(e))

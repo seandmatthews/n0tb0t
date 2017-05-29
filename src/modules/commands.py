@@ -7,7 +7,7 @@ import src.utils as utils
 
 
 class CommandsMixin:
-    def show_commands(self):
+    def show_commands(self, message):
         """
         Links the google spreadsheet containing all commands in chat
 
@@ -15,7 +15,7 @@ class CommandsMixin:
         """
         web_view_link = self.spreadsheets['commands'][1]
         short_url = self.shortener.short(web_view_link)
-        self._add_to_chat_queue('View the commands at: {}'.format(short_url))
+        utils.add_to_appropriate_chat_queue(self, message, 'View the commands at: {}'.format(short_url))
 
     @utils.mod_only
     @utils.retry_gspread_func
@@ -84,10 +84,10 @@ class CommandsMixin:
                 users = msg_list[1:index + 1]
                 command_response = ' '.join(msg_list[index + 2:])
                 response_str = self._add_command(db_session, command_str, users, command_response)
-                self._add_to_chat_queue(response_str)
+                utils.add_to_appropriate_chat_queue(self, message, response_str)
                 break
         else:
-            self._add_to_chat_queue('Sorry, the command needs to have an ! in it.')
+            utils.add_to_appropriate_chat_queue(self, message, 'Sorry, the command needs to have an ! in it.')
 
     @utils.mod_only
     def edit_command(self, message, db_session):
@@ -100,7 +100,7 @@ class CommandsMixin:
         command_str = msg_list[1][1:].lower()
         response = ' '.join(msg_list[2:])
         response_str = self._edit_command(db_session, command_str, response)
-        self._add_to_chat_queue(response_str)
+        utils.add_to_appropriate_chat_queue(self, message, response_str)
         
     @utils.mod_only
     def delete_command(self, message, db_session):
@@ -113,35 +113,42 @@ class CommandsMixin:
         msg_list = self.service.get_message_content(message).split(' ')
         command_str = msg_list[1][1:].lower()
         response_str = self._delete_command(db_session, command_str)
-        self._add_to_chat_queue(response_str)
+        utils.add_to_appropriate_chat_queue(self, message, response_str)
 
     @utils.mod_only
     def command(self, message, db_session):
         msg_list = self.service.get_message_content(message).split(' ')
-        action = msg_list[1].lower()
-        if action == 'add':
-            for index, word in enumerate(msg_list[2:]):  # exclude !command add
-                if word[0] == '!':
-                    command_str = word[1:].lower()
-                    users = msg_list[2:index + 1]
-                    response = ' '.join(msg_list[index + 3:])
-                    response_str = self._add_command(db_session, command_str, users, response)
-                    break
-                else:
-                    response_str = 'Sorry, the command needs to have an ! in it.'
-        elif action == 'edit':
-            command_str = msg_list[2][1:].lower()
-            response = ' '.join(msg_list[3:])
-            response_str = self._edit_command(db_session, command_str, response)
-        elif action == 'delete':
-            command_str = msg_list[2][1:].lower()
-            response_str = self._delete_command(db_session, command_str)
-        self._add_to_chat_queue(response_str)
+        if len(msg_list) > 1:
+            action = msg_list[1].lower()
+            if action == 'add':
+                for index, word in enumerate(msg_list[2:]):  # exclude !command add
+                    if word[0] == '!':
+                        command_str = word[1:].lower()
+                        users = msg_list[2:index + 1]
+                        response = ' '.join(msg_list[index + 3:])
+                        response_str = self._add_command(db_session, command_str, users, response)
+                        utils.add_to_appropriate_chat_queue(self, message, response_str)
+                        break
+                    else:
+                        response_str = 'Sorry, the command needs to have an ! in it.'
+                        utils.add_to_appropriate_chat_queue(self, message, response_str)
+            elif action == 'edit':
+                command_str = msg_list[2][1:].lower()
+                response = ' '.join(msg_list[3:])
+                response_str = self._edit_command(db_session, command_str, response)
+                utils.add_to_appropriate_chat_queue(self, message, response_str)
+            elif action == 'delete':
+                command_str = msg_list[2][1:].lower()
+                response_str = self._delete_command(db_session, command_str)
+                utils.add_to_appropriate_chat_queue(self, message, response_str)
+            else:
+                response_str = 'Sorry, the only options are add, edit and delete'
+                utils.add_to_appropriate_chat_queue(self, message, response_str)
+        else:
+            response_str = 'You must follow command with either add edit or delete'
+            utils.add_to_appropriate_chat_queue(self, message, response_str)
 
-
-    """
-    These functions do most of the heavy lifting.
-    """
+    # These functions do most of the heavy lifting.
     def _add_command(self, db_session, command_str, users, response):
         if db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none():
             return 'Sorry, that command already exists. Please delete it first.'
@@ -154,7 +161,7 @@ class CommandsMixin:
                     permissions.append(models.Permission(user_entity=user))
                 db_command.permissions = permissions
             db_session.add(db_command)
-            self._add_to_command_queue('update_command_spreadsheet')
+            utils.add_to_command_queue(self, 'update_command_spreadsheet')
             return 'Command added.'
 
     def _edit_command(self, db_session, command_str, response):
@@ -163,7 +170,7 @@ class CommandsMixin:
             response_str = 'Sorry, that command does not exist.'
         else:
             command_obj.response = response
-            self._add_to_command_queue('update_command_spreadsheet')
+            utils.add_to_command_queue(self, 'update_command_spreadsheet')
             response_str = 'Command edited.'
         return response_str
 
@@ -172,7 +179,7 @@ class CommandsMixin:
         if command_obj is not None:
             db_session.delete(command_obj)
             response_str = 'Command deleted.'
-            self._add_to_command_queue('update_command_spreadsheet')
+            utils.add_to_command_queue(self, 'update_command_spreadsheet')
         else:
             response_str = "Sorry, that command doesn't exist."
         return response_str

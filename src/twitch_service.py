@@ -33,9 +33,11 @@ class MessageTypes(Enum):
 
 class TwitchMessage(Message):
     def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False):
-        Message.__init__(self, service=Service.TWITCH, message_type=message_type, user=user, content=content)
-        self.display_name = display_name
-        self.is_mod = is_mod
+        Message.__init__(self, service=Service.TWITCH,
+                         message_type=message_type,
+                         user=user, content=content,
+                         display_name=display_name,
+                         is_mod=is_mod)
 
 
 class TwitchService(object):

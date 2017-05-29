@@ -18,6 +18,7 @@ import src.utils as utils
 from config import time_zone_choice
 from src.modules.player_queue import PlayerQueue
 
+
 # Collect all the Mixin classes from all the modules in the src/modules directory
 # Store these class objects in a mixin_classes list so that Bot can inherit from them
 print('Loading Modules')
@@ -61,8 +62,8 @@ class Bot(*mixin_classes):
         # Most functions run in the main thread, but we can put slow ones here
         self.command_queue = collections.deque()
 
-        self.chat_message_queue = collections.deque()
-        self.whisper_message_queue = collections.deque()
+        self.public_message_queue = collections.deque()
+        self.private_message_queue = collections.deque()
         try:
             with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
                 self.player_queue = PlayerQueue(input_iterable=json.loads(player_file.read()))
@@ -94,12 +95,12 @@ class Bot(*mixin_classes):
         self.allowed_to_chat = True
 
         self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.chat_message_queue})
+                                            kwargs={'chat_queue': self.public_message_queue})
         self.chat_thread.daemon = True
         self.chat_thread.start()
 
         self.whisper_thread = threading.Thread(target=self._process_whisper_queue,
-                                               kwargs={'whisper_queue': self.whisper_message_queue})
+                                               kwargs={'whisper_queue': self.private_message_queue})
         self.whisper_thread.daemon = True
         self.whisper_thread.start()
 
@@ -108,7 +109,7 @@ class Bot(*mixin_classes):
         self.command_thread.daemon = True
         self.command_thread.start()
 
-        self._add_to_chat_queue('{} is online'.format(bot_info['user']))
+        utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
 
         self.start_auto_quotes(db_session)
         self.player_queue_credentials = None
@@ -160,8 +161,8 @@ class Bot(*mixin_classes):
         Creates the database and domain model and Session Class
         """
         channel = self.info['channel']
-        self.db_path = os.path.join(db_location, '{}.db'.format(channel))
-        engine = sqlalchemy.create_engine('sqlite:///{}'.format(self.db_path), connect_args={'check_same_thread': False})
+        self.db_path = os.path.join(db_location, f'{channel}.db')
+        engine = sqlalchemy.create_engine(f'sqlite:///{self.db_path}', connect_args={'check_same_thread': False})
         # noinspection PyPep8Naming
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         models.Base.metadata.create_all(engine)
@@ -333,31 +334,6 @@ class Bot(*mixin_classes):
         pqs.update_acell('C1', 'Info:')
         pqs.update_acell('C2', info)
 
-    def _add_to_chat_queue(self, message):
-        """
-        Adds the message to the left side of the chat queue.
-        """
-        self.chat_message_queue.appendleft(message)
-
-    def _add_to_whisper_queue(self, user, message):
-        """
-        Creates a tuple of the user and message.
-        Appends that to the left side of the whisper queue.
-        """
-        whisper_tuple = (user, message)
-        self.whisper_message_queue.appendleft(whisper_tuple)
-
-    def _add_to_command_queue(self, function, kwargs=None):
-        """
-        Creates a tuple of the function and key word arguments.
-        Appends that to the left side of the command queue.
-        """
-        if kwargs is not None:
-            command_tuple = (function, kwargs)
-        else:
-            command_tuple = (function, {})
-        self.command_queue.appendleft(command_tuple)
-
     def _process_chat_queue(self, chat_queue):
         """
         If there are messages in the chat queue that need
@@ -405,7 +381,7 @@ class Bot(*mixin_classes):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            self._add_to_chat_queue(self.service.get_message_content(message).replace('PING', 'PONG'))
+            utils.add_to_public_chat_queue(self, self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
@@ -472,7 +448,7 @@ class Bot(*mixin_classes):
         """
         if command[0] == CommandTypes.DYNAMIC:
             db_command = command[1]
-            self._add_to_chat_queue(db_command.response)
+            utils.add_to_appropriate_chat_queue(self, message, db_command.response)
         else:
             method_command = command[1]
             kwargs = {}
@@ -501,8 +477,8 @@ class Bot(*mixin_classes):
         !start_speaking
         """
         self.allowed_to_chat = True
-        self.chat_message_queue.clear()
+        self.public_message_queue.clear()
         self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.chat_message_queue})
+                                            kwargs={'chat_queue': self.public_message_queue})
         self.chat_thread.daemon = True
         self.chat_thread.start()

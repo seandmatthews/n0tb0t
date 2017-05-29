@@ -1,4 +1,5 @@
 from collections import deque
+from enum import Enum, auto
 from inspect import getsourcefile
 import os
 import sys
@@ -30,16 +31,9 @@ class Service:
         return message.display_name
 
 
-def _add_to_chat_queue(self, chat_str):
-    self.chat_queue.appendleft(chat_str)
-
-
-def _add_to_command_queue(self, func_name, kwargs=None):
-    if kwargs is not None:
-        command_tuple = (func_name, kwargs)
-    else:
-        command_tuple = (func_name, {})
-    self.command_queue.appendleft(command_tuple)
+class MessageTypes(Enum):
+    PUBLIC = auto()
+    PRIVATE = auto()
 
 
 def _write_player_queue(self):
@@ -56,11 +50,9 @@ def mock_db_session():
 def player_queue_mixin_obj():
     player_queue_mixin_obj = PlayerQueueMixin()
     player_queue_mixin_obj.player_queue = PlayerQueue()
-    player_queue_mixin_obj.chat_queue = deque()
+    player_queue_mixin_obj.public_message_queue = deque()
     player_queue_mixin_obj.command_queue = deque()
     player_queue_mixin_obj.player_queue_credentials = None
-    player_queue_mixin_obj._add_to_chat_queue = _add_to_chat_queue.__get__(player_queue_mixin_obj, PlayerQueueMixin)
-    player_queue_mixin_obj._add_to_command_queue = _add_to_command_queue.__get__(player_queue_mixin_obj, PlayerQueueMixin)
     player_queue_mixin_obj._write_player_queue = _write_player_queue.__get__(player_queue_mixin_obj, PlayerQueueMixin)
     player_queue_mixin_obj.service = Service()
     return player_queue_mixin_obj
@@ -96,17 +88,17 @@ def test_join(player_queue_mixin_obj, mock_db_session):
     query_val = mock_db_session.query.return_value
     filter_val = query_val.filter.return_value
     filter_val.one_or_none.return_value = None
-    player_queue_mixin_obj.join(Message(content="!join", display_name='Alice'), mock_db_session)
+    player_queue_mixin_obj.join(Message(content="!join", display_name='Alice', message_type=MessageTypes.PUBLIC), mock_db_session)
     mock_db_session.add.assert_called()
     assert len(player_queue_mixin_obj.player_queue.queue) == 1
-    assert player_queue_mixin_obj.chat_queue[0] == "Alice, you've joined the queue."
+    assert player_queue_mixin_obj.public_message_queue[0] == "Alice, you've joined the queue."
 
 
 def test_leave(player_queue_mixin_obj, mock_db_session):
     query_val = mock_db_session.query.return_value
     filter_val = query_val.filter.return_value
     filter_val.one_or_none.return_value = None
-    player_queue_mixin_obj.join(Message(content="!join", display_name='Alice'), mock_db_session)
-    player_queue_mixin_obj.leave(Message(content="!leave", display_name='Alice'))
-    assert player_queue_mixin_obj.chat_queue[0] == "Alice, you've left the queue."
+    player_queue_mixin_obj.join(Message(content="!join", display_name='Alice', message_type=MessageTypes.PUBLIC), mock_db_session)
+    player_queue_mixin_obj.leave(Message(content="!leave", display_name='Alice', message_type=MessageTypes.PUBLIC))
+    assert player_queue_mixin_obj.public_message_queue[0] == "Alice, you've left the queue."
     assert len(player_queue_mixin_obj.player_queue.queue) == 0

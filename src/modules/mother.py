@@ -1,5 +1,8 @@
+import src.utils as utils
+
+
 class MotherMixin:
-    def mama(self):
+    def mama(self, message):
         """
         Checks to see if RizMomma is in chat.
         Mostly so Riz knows how lewd to be when playing Quiplash
@@ -8,6 +11,6 @@ class MotherMixin:
         """
         chatters = self.service.get_all_chatters()
         if 'rizmomma' in chatters:
-            self._add_to_chat_queue('Mother is here! Everybody be cool!')
+            utils.add_to_appropriate_chat_queue(self, message, 'Mother is here! Everybody be cool!')
         else:
-            self._add_to_chat_queue('Mother is gone! Go crazy!')
+            utils.add_to_appropriate_chat_queue(self, message, 'Mother is gone! Go crazy!')

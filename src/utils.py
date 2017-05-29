@@ -11,6 +11,7 @@ from config import reddit_client_secret
 from config import reddit_user_agent
 from config import bot_info
 from src.loggers import error_logger
+from src.service import Service
 
 
 # DECORATORS #
@@ -53,6 +54,45 @@ def public_message_disallowed(f):
     return f
 
 # END DECORATORS #
+
+
+def add_to_public_chat_queue(bot, content):
+    """
+    Adds the message to the left side of the chat queue.
+    """
+    bot.public_message_queue.appendleft(content)
+
+
+def add_to_private_chat_queue(bot, user_display_name, content):
+    """
+    Creates a tuple of the user and message.
+    Appends that to the left side of the whisper queue.
+    """
+    whisper_tuple = (user_display_name, content)
+    bot.private_message_queue.appendleft(whisper_tuple)
+
+
+def add_to_appropriate_chat_queue(bot, message, content):
+    if message.message_type.name == 'PUBLIC':
+        bot.public_message_queue.appendleft(content)
+    elif message.message_type.name == 'PRIVATE':
+        user_display_name = message.display_name
+        whisper_tuple = (user_display_name, content)
+        bot.private_message_queue.appendleft(whisper_tuple)
+    else:
+        raise RuntimeError("Message class should have message_type enum with at least PRIVATE and PUBLIC fields")
+
+
+def add_to_command_queue(bot, function, kwargs=None):
+    """
+    Creates a tuple of the function and key word arguments.
+    Appends that to the left side of the command queue.
+    """
+    if kwargs is not None:
+        command_tuple = (function, kwargs)
+    else:
+        command_tuple = (function, {})
+    bot.command_queue.appendleft(command_tuple)
 
 
 def get_live_time():
