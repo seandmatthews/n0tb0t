@@ -381,7 +381,7 @@ class Bot(*mixin_classes):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            utils.add_to_public_chat_queue(self, self.service.get_message_content(message).replace('PING', 'PONG'))
+            utils.add_to_appropriate_chat_queue(self, message, self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
