@@ -1,4 +1,5 @@
 import src.utils as utils
+from src.message import Message
 
 
 class NordMixin:
@@ -10,15 +11,24 @@ class NordMixin:
         !nord something that belongs to the Nords
         """
         msg_list = self.service.get_message_content(message).split(' ')
+        user = self.service.get_message_display_name(message)
 
         if len(msg_list) > 1:
             belongs_str = ' '.join(msg_list[1:])
-            # TODO: Use NLP magic to figure out whether offender_str is plural or not
-            plural = False  # We are lazy right now
-            if plural:
-                nord_str = f'{belongs_str} belong to the Nords!'
+            if belongs_str[0] == "!":
+                nord_str = 'Dirty cheaters belong to the Nords!'
+                utils.add_to_appropriate_chat_queue(self, message, nord_str)
+                utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')
+                cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
+                self.ban_roulette(cheaty_message_object)
             else:
-                nord_str = f'{belongs_str} belongs to the Nords!'
+                 # TODO: Use NLP magic to figure out whether belongs_str is plural or not
+                plural = False  # We are lazy right now
+                if plural:
+                    nord_str = f'{belongs_str} belong to the Nords!'
+                else:
+                    nord_str = f'{belongs_str} belongs to the Nords!'
+                utils.add_to_appropriate_chat_queue(self, message, nord_str)
         else:
-            nord_str = f'Skyrim belongs to the Nords!'
-        utils.add_to_appropriate_chat_queue(self, message, nord_str)
+            nord_str = 'Skyrim belongs to the Nords!'
+            utils.add_to_appropriate_chat_queue(self, message, nord_str)
