@@ -31,9 +31,9 @@ class StrawPollMixin:
         """
         Generates strawpoll and fetches ID for later use with !end_poll.
         The title is the bit between "title:" and (the first) "options:"
-        Options are delineated by commas; using commas in your options will break things.
+        Options are delineated by space - space; using space - space in your options will break things.
 
-        !create_poll Title: Poll Title Options: Option 1, Option 2, ... Option N
+        !create_poll Title: Poll Title Options: Option 1 - Option 2 - ... Option N
         """
         msg_list = self.service.get_message_content(message).split(' ')
         title_index = -1
@@ -49,24 +49,25 @@ class StrawPollMixin:
         else:
             title = ' '.join(msg_list[title_index+1:options_index])
             options_str = ' '.join(msg_list[options_index+1:])
-            options = options_str.split(', ')
+            options = options_str.split(' - ')
             payload = {'title': title, 'options': options}
             url = 'https://strawpoll.me/api/v2/polls'
             r = requests.post(url, data=json.dumps(payload))
             try:
                 self.strawpoll_id = r.json()['id']
-                utils.add_to_public_chat_queue(self, 'New strawpoll is up at https://www.strawpoll.me/{self.strawpoll_id}')
+                utils.add_to_public_chat_queue(self, f'New strawpoll is up at https://www.strawpoll.me/{self.strawpoll_id}')
             except KeyError:
                 # Strawpoll got angry at us, possibly due to not enough options
                 utils.add_to_appropriate_chat_queue(self, message, 'Strawpoll has rejected the poll. If you have fewer than two options, you need at least two.')
 
     @utils.mod_only
-    def end_poll(self, message):
+    def end_poll_weighted(self, message):
         """
-        Ends the poll that was started with the !create_poll
+        Ends the poll that was started with the !create_poll and picks the result based on a weighted average.
+        A strawpoll.me id can be specified after the command to end a specific poll.
 
-        !end_poll
-        !end_poll 111111111
+        !end_poll_weighted
+        !end_poll_weighted 111111111
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 1 and self.strawpoll_id == '':
@@ -99,3 +100,38 @@ class StrawPollMixin:
                         break
             except RuntimeError as e:
                 utils.add_to_appropriate_chat_queue(self, message, str(e))
+
+    @utils.mod_only
+    def end_poll(self, message):
+        """
+        Ends the poll that was started with the !create_poll and picks the result based votes only.
+        A strawpoll.me id can be specified after the command to end a specific poll.
+
+        !end_poll
+        !end_poll 111111111
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        if len(msg_list) == 1 and self.strawpoll_id == '':
+            utils.add_to_appropriate_chat_queue(self, message, 'No ID supplied, please try again')
+            holder_id = None
+        elif len(msg_list) == 1 and self.strawpoll_id != '':
+            holder_id = self.strawpoll_id
+            self.strawpoll_id = ''
+        elif len(msg_list) == 2:
+            holder_id = msg_list[1]
+        else:
+            utils.add_to_appropriate_chat_queue(self, message, 'Sorry, no ID could be found. Please ensure the command is formatted correctly.')
+            holder_id = None
+        if holder_id is not None:
+            try:
+                holder_options, holder_votes = self._get_poll_info(holder_id)
+                max_votes = 0
+                max_votes_index = None
+                for index, num_votes in enumerate(holder_votes):
+                    if num_votes > max_votes:
+                        max_votes = num_votes
+                        max_votes_index = index
+                utils.add_to_appropriate_chat_queue(self, message, holder_options[max_votes_index])
+            except RuntimeError as e:
+                utils.add_to_appropriate_chat_queue(self, message, str(e))
+
