@@ -5,7 +5,7 @@ import src.models as models
 import src.utils as utils
 
 
-class DeathGuessingDisabled:
+class DeathGuessingMixin:
     @utils.mod_only
     def enable_guessing(self, db_session):
         """
@@ -17,7 +17,7 @@ class DeathGuessingDisabled:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "True"
-        self._add_to_chat_queue("Guessing is now enabled.")
+        utils.add_to_public_chat_queue(self, "Guessing is now enabled.")
 
     @utils.mod_only
     def disable_guessing(self, db_session):
@@ -30,7 +30,7 @@ class DeathGuessingDisabled:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "False"
-        self._add_to_chat_queue("Guessing is now disabled.")
+        utils.add_to_public_chat_queue(self, "Guessing is now disabled.")
 
     def guess(self, message, db_session):
         """
@@ -48,14 +48,13 @@ class DeathGuessingDisabled:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
                     self._set_current_guess(user, guess, db_session)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    utils.add_to_appropriate_chat_queue(self, message, f"{user} your guess has been recorded.")
                 else:
-                    self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                    utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, that's not a non-negative integer.")
             else:
-                self._add_to_whisper_queue(user,
-                                           "Sorry {}, !guess must be followed by a non-negative integer.".format(user))
+                utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, !guess must be followed by a non-negative integer.")
         else:
-            self._add_to_whisper_queue(user, "Sorry {}, guessing is disabled.".format(user))
+            utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing is disabled.")
 
     @utils.mod_only
     def enable_guesstotal(self, db_session):
@@ -68,7 +67,7 @@ class DeathGuessingDisabled:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "True"
-        self._add_to_chat_queue("Guessing for the total amount of deaths is now enabled.")
+        utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now enabled.")
 
     @utils.mod_only
     def disable_guesstotal(self, db_session):
@@ -79,9 +78,9 @@ class DeathGuessingDisabled:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "False"
-        self._add_to_chat_queue("Guessing for the total amount of deaths is now disabled.")
+        utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now disabled.")
 
-    def guesstotal(self, message, db_session):
+    def guess_total(self, message, db_session):
         """
         Updates the database with a user's guess
         for the total number of deaths in the run
@@ -89,7 +88,7 @@ class DeathGuessingDisabled:
         doesn't fit the acceptable parameters
         or that guessing is disabled for everyone.
 
-        !guesstotal 50
+        !guess_total 50
         """
         user = self.service.get_message_display_name(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
@@ -98,15 +97,13 @@ class DeathGuessingDisabled:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
                     self._set_total_guess(user, guess, db_session)
-                    self._add_to_whisper_queue(user, "{} your guess has been recorded.".format(user))
+                    utils.add_to_appropriate_chat_queue(self, message, f"{user} your guess has been recorded.")
                 else:
-                    self._add_to_whisper_queue(user, "Sorry {}, that's not a non-negative integer.".format(user))
+                    utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, that's not a non-negative integer.")
             else:
-                self._add_to_whisper_queue(user,
-                                           "Sorry {}, you need to include a number after your guess.".format(user))
+                utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, you need to include a number after your guess.")
         else:
-            self._add_to_whisper_queue(user,
-                                       "Sorry {}, guessing for the total number of deaths is disabled.".format(user))
+            utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing for the total number of deaths is disabled.")
 
     @utils.mod_only
     def clear_guesses(self, db_session):
@@ -118,7 +115,7 @@ class DeathGuessingDisabled:
         !clear_guesses
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.current_guess: None}))
-        self._add_to_chat_queue("Guesses have been cleared.")
+        utils.add_to_public_chat_queue(self, "Guesses have been cleared.")
 
     @utils.mod_only
     def clear_total_guesses(self, db_session):
@@ -130,7 +127,7 @@ class DeathGuessingDisabled:
         !clear_total_guesses
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.total_guess: None}))
-        self._add_to_chat_queue("Guesses for the total number of deaths have been cleared.")
+        utils.add_to_public_chat_queue(self, "Guesses for the total number of deaths have been cleared.")
 
     @utils.retry_gspread_func
     def _update_player_guesses_spreadsheet(self):
@@ -164,15 +161,11 @@ class DeathGuessingDisabled:
 
         !show_guesses
         """
-        self._add_to_chat_queue(
-            "Formatting the google sheet with the latest information about all the guesses may take a bit." +
-            " I'll let you know when it's done.")
+        utils.add_to_public_chat_queue(self, "Formatting the google sheet with the latest information about all the guesses may take a bit. I'll let you know when it's done.")
         web_view_link = self.spreadsheets['player_guesses'][1]
         short_url = self.shortener.short(web_view_link)
         self._update_player_guesses_spreadsheet()
-        self._add_to_chat_queue(
-            "Hello again friends. I've updated a google spread sheet with the latest guess information. " +
-            "Here's a link. {}".format(short_url))
+        utils.add_to_public_chat_queue(self, f"Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. {short_url}")
 
     @utils.mod_only
     def set_deaths(self, message, db_session):
@@ -188,15 +181,11 @@ class DeathGuessingDisabled:
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
                 self._set_deaths(deaths_num, db_session)
-                self._add_to_whisper_queue(user, 'Current deaths: {}'.format(deaths_num))
+                utils.add_to_appropriate_chat_queue(self, message, f'Current deaths: {deaths_num}')
             else:
-                self._add_to_whisper_queue(user,
-                                           'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(
-                                               user))
+                utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
         else:
-            self._add_to_whisper_queue(user,
-                                       'Sorry {}, !set_deaths should be followed by a non-negative integer'.format(
-                                           user))
+            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
 
     @utils.mod_only
     def set_total_deaths(self, message, db_session):
@@ -212,15 +201,11 @@ class DeathGuessingDisabled:
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
                 self._set_total_deaths(total_deaths_num, db_session)
-                self._add_to_whisper_queue(user, 'Total deaths: {}'.format(total_deaths_num))
+                utils.add_to_appropriate_chat_queue(self, message, f'Total deaths: {total_deaths_num}')
             else:
-                self._add_to_whisper_queue(user,
-                                           'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(
-                                               user))
+                utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
         else:
-            self._add_to_whisper_queue(user,
-                                       'Sorry {}, !set_total_deaths should be followed by a non-negative integer'.format(
-                                           user))
+            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
 
     @utils.mod_only
     def add_death(self, message, db_session):
@@ -237,8 +222,8 @@ class DeathGuessingDisabled:
         total_deaths += 1
         self._set_deaths(str(deaths), db_session)
         self._set_total_deaths(str(total_deaths), db_session)
-        whisper_msg = 'Current Deaths: {}, Total Deaths: {}'.format(deaths, total_deaths)
-        self._add_to_whisper_queue(user, whisper_msg)
+        whisper_msg = f'Current Deaths: {deaths}, Total Deaths: {total_deaths}'
+        utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
 
     @utils.mod_only
     def clear_deaths(self, db_session):
@@ -261,7 +246,7 @@ class DeathGuessingDisabled:
         """
         deaths = self._get_current_deaths(db_session)
         total_deaths = self._get_total_deaths(db_session)
-        self._add_to_chat_queue("Current Boss Deaths: {}, Total Deaths: {}".format(deaths, total_deaths))
+        utils.add_to_public_chat_queue(self, f"Current Boss Deaths: {deaths}, Total Deaths: {total_deaths}")
 
     def show_winner(self, db_session):
         """
@@ -284,16 +269,16 @@ class DeathGuessingDisabled:
                 elif user.current_guess == last_winning_guess:
                     winners_list.append(user.name)
         if len(winners_list) == 1:
-            winners_str = "The winner is {}.".format(winners_list[0])
+            winners_str = f"The winner is {winners_list[0]}."
         elif len(winners_list) > 1:
             winners_str = 'The winners are '
             for winner in winners_list[:-1]:
-                winners_str += "{}, ".format(winner)
-            winners_str = '{} and {}!'.format(winners_str[:-2], winners_list[-1])
+                winners_str += f"{winner}, "
+            winners_str = f'{winners_str[:2]} and {winners_list[-1]}!'
         else:
             me = self.info['channel']
-            winners_str = 'You all guessed too high. You should have had more faith in {}. {} wins!'.format(me, me)
-        self._add_to_chat_queue(winners_str)
+            winners_str = f'You all guessed too high. You should have had more faith in {me}. {me} wins!'
+        utils.add_to_public_chat_queue(self, winners_str)
 
     def _set_current_guess(self, user, guess, db_session):
         """
