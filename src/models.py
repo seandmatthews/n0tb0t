@@ -68,6 +68,7 @@ class Command(Base):
     enabled = sqlalchemy.Column(sqlalchemy.Boolean)
     public_allowed = sqlalchemy.Column(sqlalchemy.Boolean)
     private_allowed = sqlalchemy.Column(sqlalchemy.Boolean)
+    twitch_allowed = sqlalchemy.Column(sqlalchemy.Boolean)
     response = sqlalchemy.Column(sqlalchemy.String)
     cool_down = sqlalchemy.Column(sqlalchemy.Integer)
     last_used = sqlalchemy.Column(sqlalchemy.DateTime)
