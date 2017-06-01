@@ -80,7 +80,7 @@ class DeathGuessingMixin:
         mv_obj.mv_value = "False"
         utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now disabled.")
 
-    def guess_total(self, message, db_session):
+    def guesstotal(self, message, db_session):
         """
         Updates the database with a user's guess
         for the total number of deaths in the run
@@ -153,7 +153,7 @@ class DeathGuessingMixin:
         return web_view_link
 
     @utils.mod_only
-    def show_guesses(self, db_session):
+    def show_guesses(self):
         """
         Clears all guesses out of the google
         spreadsheet, then repopulate it from
@@ -208,14 +208,13 @@ class DeathGuessingMixin:
             utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
 
     @utils.mod_only
-    def add_death(self, message, db_session):
+    def adddeath(self, message, db_session):
         """
         Adds one to both the current sequence
         and total death counters.
 
-        !add_death
+        !adddeath
         """
-        user = self.service.get_message_display_name(message)
         deaths = int(self._get_current_deaths(db_session))
         total_deaths = int(self._get_total_deaths(db_session))
         deaths += 1
@@ -235,26 +234,27 @@ class DeathGuessingMixin:
         !clear_deaths
         """
         self._set_deaths('0', db_session)
-        self.show_deaths()
+        self.deaths(db_session)
 
-    def show_deaths(self, db_session):
+    def deaths(self, db_session):
         """
         Sends the current and total death
         counters to the chat.
 
-        !show_deaths
+        !deaths
         """
         deaths = self._get_current_deaths(db_session)
         total_deaths = self._get_total_deaths(db_session)
         utils.add_to_public_chat_queue(self, f"Current Boss Deaths: {deaths}, Total Deaths: {total_deaths}")
 
-    def show_winner(self, db_session):
+    @utils.mod_only
+    def winner(self, db_session):
         """
         Sends the name of the currently winning
         player to the chat. Should be used after
         stage completion to display who won.
 
-        !show_winner
+        !winner
         """
         winners_list = []
         deaths = self._get_current_deaths(db_session)
@@ -278,7 +278,7 @@ class DeathGuessingMixin:
         else:
             me = self.info['channel']
             winners_str = f'You all guessed too high. You should have had more faith in {me}. {me} wins!'
-        utils.add_to_public_chat_queue(self, winners_str)
+        utils.add_to_appropriate_chat_queue(self, winners_str)
 
     def _set_current_guess(self, user, guess, db_session):
         """
