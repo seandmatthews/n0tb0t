@@ -126,12 +126,22 @@ class StrawPollMixin:
             try:
                 holder_options, holder_votes = self._get_poll_info(holder_id)
                 max_votes = 0
-                max_votes_index = None
+                max_votes_list = None
                 for index, num_votes in enumerate(holder_votes):
                     if num_votes > max_votes:
                         max_votes = num_votes
-                        max_votes_index = index
-                utils.add_to_appropriate_chat_queue(self, message, holder_options[max_votes_index])
+                        max_votes_list = [index]
+                    elif num_votes == max_votes and max_votes != 0:
+                        max_votes_list.append(index)
+                if max_votes_list == None:
+                    utils.add_to_appropriate_chat_queue(self, message, 'No one has voted yet!')
+                elif len(max_votes_list) > 1:
+                    winners_list = []
+                    for index in max_votes_list:
+                        winners_list.append(holder_options[index])
+                    utils.add_to_appropriate_chat_queue(self, message, f"It's a tie! The winners are {', '.join(winners_list)}!")
+                else:
+                    utils.add_to_appropriate_chat_queue(self, message, f"The winner is {holder_options[max_votes_list[0]]}!")
             except RuntimeError as e:
                 utils.add_to_appropriate_chat_queue(self, message, str(e))
 
