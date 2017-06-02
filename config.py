@@ -15,8 +15,11 @@ bot_info = {
     'pw': '',  # Oauth token from twitch - get it here: https://twitchapps.com/tmi/
     'user': '',  # Twitch username of the bot account
     'channel': '',  # Twitch chat channel to join
-    'twitch_api_client_id': ''  # Twitch client id - get it here: https://www.twitch.tv/settings/connections
+    'twitch_api_client_id': '' # Twitch client id - get it here: https://www.twitch.tv/settings/connections
 }
+
+death_file_path = r"" # The file path for the .txt that stores the current amount of deaths in death_guessing.
+total_death_file_path = r"" # The file path for the .txt that stores the total amount of deaths in death_guessing.
 
 bitly_access_token = ''  # Token from bitly for URL shortening
 
@@ -28,7 +31,7 @@ reddit_client_id = ''  # Found here https://www.reddit.com/prefs/apps
 reddit_client_secret = ''  # Found here https://www.reddit.com/prefs/apps
 reddit_user_agent = ''  # Should use the form: <platform>:<app ID>:<version string> (by /u/<Reddit username>)
 
-time_zone_choice = "US/Central"  # Pick your timezone. Some examples are listed below.
+time_zone_choice = ""  # Pick your timezone. Some examples are listed below.
 
 time_zone_examples = [
     "US/Alaska",
@@ -73,3 +76,4 @@ time_zone_examples = [
     "Etc/GMT-8",
     "Etc/GMT-9"
 ]
+

@@ -1,6 +1,7 @@
 import gspread
 import sqlalchemy
 
+import config
 import src.models as models
 import src.utils as utils
 
@@ -324,15 +325,21 @@ class DeathGuessingMixin:
     def _set_deaths(self, deaths_num, db_session):
         """
         Takes a string for the number of deaths.
-        Updates the miscellaneous values table.
+        Updates the miscellaneous values table and the txt file specified in the config.
         """
+        if config.death_file_path != '':
+            with open(config.death_file_path, 'w') as f:
+                f.write(f'Current deaths: {deaths_num}\n')
         deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
         deaths_obj.mv_value = deaths_num
 
     def _set_total_deaths(self, total_deaths_num, db_session):
         """
         Takes a string for the total number of deaths.
-        Updates the miscellaneous values table.
+        Updates the miscellaneous values table and the txt file specified in the config.
         """
+        if config.total_death_file_path != '':
+            with open(config.death_file_path, 'w') as f:
+                f.write(f'Total deaths: {total_deaths_num}')
         total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
         total_deaths_obj.mv_value = total_deaths_num
