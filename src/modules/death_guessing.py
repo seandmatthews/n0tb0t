@@ -361,7 +361,7 @@ class DeathGuessingMixin:
         """
         if config.death_file_path != '':
             with open(config.death_file_path, 'w') as f:
-                f.write(f'Current deaths: {deaths_num}\n')
+                f.write(f'{deaths_num}')
         deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
         deaths_obj.mv_value = deaths_num
 
@@ -372,6 +372,6 @@ class DeathGuessingMixin:
         """
         if config.total_death_file_path != '':
             with open(config.total_death_file_path, 'w') as f:
-                f.write(f'Total deaths: {total_deaths_num}')
+                f.write(f'{total_deaths_num}')
         total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
         total_deaths_obj.mv_value = total_deaths_num
