@@ -218,19 +218,19 @@ class DeathGuessingMixin:
         !adddeath
         """
         current_deaths, total_deaths = self._add_death(db_session)
-        whisper_msg = f'Current Deaths: {deaths}, Total Deaths: {total_deaths}'
+        whisper_msg = f'Current Deaths: {current_deaths}, Total Deaths: {total_deaths}'
         utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
 
     @utils.mod_only
     def removedeath(self, message, db_session):
         """
-        Adds one to both the current sequence
+        Removes one from both the current sequence
         and total death counters.
 
         !removedeath
         """
-        current_deaths, total_deaths = self._add_death(db_session)
-        whisper_msg = f'Current Deaths: {deaths}, Total Deaths: {total_deaths}'
+        current_deaths, total_deaths = self._remove_death(db_session)
+        whisper_msg = f'Current Deaths: {current_deaths}, Total Deaths: {total_deaths}'
         utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
 
     @utils.mod_only
@@ -371,7 +371,7 @@ class DeathGuessingMixin:
         Updates the miscellaneous values table and the txt file specified in the config.
         """
         if config.total_death_file_path != '':
-            with open(config.death_file_path, 'w') as f:
+            with open(config.total_death_file_path, 'w') as f:
                 f.write(f'Total deaths: {total_deaths_num}')
         total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
         total_deaths_obj.mv_value = total_deaths_num
