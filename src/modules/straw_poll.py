@@ -133,7 +133,7 @@ class StrawPollMixin:
                         max_votes_list = [index]
                     elif num_votes == max_votes and max_votes != 0:
                         max_votes_list.append(index)
-                if max_votes_list == None:
+                if max_votes_list is None:
                     utils.add_to_appropriate_chat_queue(self, message, 'No one has voted yet!')
                 elif len(max_votes_list) > 1:
                     winners_list = []

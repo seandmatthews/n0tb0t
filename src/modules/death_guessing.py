@@ -7,6 +7,7 @@ import src.utils as utils
 
 
 class DeathGuessingMixin:
+
     @utils.mod_only
     def enable_guessing(self, db_session):
         """
@@ -216,12 +217,19 @@ class DeathGuessingMixin:
 
         !adddeath
         """
-        deaths = int(self._get_current_deaths(db_session))
-        total_deaths = int(self._get_total_deaths(db_session))
-        deaths += 1
-        total_deaths += 1
-        self._set_deaths(str(deaths), db_session)
-        self._set_total_deaths(str(total_deaths), db_session)
+        current_deaths, total_deaths = self._add_death(db_session)
+        whisper_msg = f'Current Deaths: {deaths}, Total Deaths: {total_deaths}'
+        utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
+
+    @utils.mod_only
+    def removedeath(self, message, db_session):
+        """
+        Adds one to both the current sequence
+        and total death counters.
+
+        !removedeath
+        """
+        current_deaths, total_deaths = self._add_death(db_session)
         whisper_msg = f'Current Deaths: {deaths}, Total Deaths: {total_deaths}'
         utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
 
@@ -321,6 +329,30 @@ class DeathGuessingMixin:
         """
         total_deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'total-deaths').one()
         return total_deaths_obj.mv_value
+
+    def _add_death(self, db_session):
+        """
+        Adds a death to the current and total deaths
+        """
+        deaths = int(self._get_current_deaths(db_session))
+        total_deaths = int(self._get_total_deaths(db_session))
+        deaths += 1
+        total_deaths += 1
+        self._set_deaths(str(deaths), db_session)
+        self._set_total_deaths(str(total_deaths), db_session)
+        return deaths, total_deaths
+
+    def _remove_death(self, db_session):
+        """
+        Removes a death from the current and total deaths.
+        """
+        deaths = int(self._get_current_deaths(db_session))
+        total_deaths = int(self._get_total_deaths(db_session))
+        deaths -= 1
+        total_deaths -= 1
+        self._set_deaths(str(deaths), db_session)
+        self._set_total_deaths(str(total_deaths), db_session)
+        return deaths, total_deaths
 
     def _set_deaths(self, deaths_num, db_session):
         """
