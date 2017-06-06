@@ -164,6 +164,12 @@ class DeathGuessingMixin:
         !show_guesses
         """
         utils.add_to_public_chat_queue(self, "Formatting the google sheet with the latest information about all the guesses may take a bit. I'll let you know when it's done.")
+        utils.add_to_command_queue(self, 'update_guess_spreadsheet')
+
+    def update_guess_spreadsheet(self):
+        """
+        Do all the actual work of updating the guess spreadsheet so that we can stick it in a function queue
+        """
         web_view_link = self.spreadsheets['player_guesses'][1]
         short_url = self.shortener.short(web_view_link)
         self._update_player_guesses_spreadsheet()
@@ -257,7 +263,7 @@ class DeathGuessingMixin:
         utils.add_to_public_chat_queue(self, f"Current Boss Deaths: {deaths}, Total Deaths: {total_deaths}")
 
     @utils.mod_only
-    def winner(self, db_session):
+    def winner(self, message, db_session):
         """
         Sends the name of the currently winning
         player to the chat. Should be used after
@@ -287,7 +293,7 @@ class DeathGuessingMixin:
         else:
             me = self.info['channel']
             winners_str = f'You all guessed too high. You should have had more faith in {me}. {me} wins!'
-        utils.add_to_appropriate_chat_queue(self, winners_str)
+        utils.add_to_appropriate_chat_queue(self, message, winners_str)
 
     def _set_current_guess(self, user, guess, db_session):
         """
