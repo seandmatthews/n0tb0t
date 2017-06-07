@@ -286,13 +286,10 @@ class DeathGuessingMixin:
         if len(winners_list) == 1:
             winners_str = f"The winner is {winners_list[0]}."
         elif len(winners_list) > 1:
-            winners_str = 'The winners are '
-            for winner in winners_list[:-1]:
-                winners_str += f"{winner}, "
-            winners_str = f'{winners_str[:2]} and {winners_list[-1]}!'
+            winners_str = f'The winners are {", ".join(winners_list[:-1])} and {winners_list[-1]}!'
         else:
-            me = self.info['channel']
-            winners_str = f'You all guessed too high. You should have had more faith in {me}. {me} wins!'
+            caster = self.info['channel']
+            winners_str = f'You all guessed too high. You should have had more faith in {caster}. {caster} wins!'
         utils.add_to_appropriate_chat_queue(self, message, winners_str)
 
     def _set_current_guess(self, user, guess, db_session):
