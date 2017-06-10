@@ -1,18 +1,16 @@
 from pynput.keyboard import Key, Listener, KeyCode
 
+import src.utils as utils
+
 
 class KeyboardListenerMixin:
-    def __init__(self):
-        keyboard_listener = Listener(on_press=self.on_press, on_release=self.on_release)
-        keyboard_listener.start()
-
-    def on_press(self, key):
+    def _on_press(self, key):
         # print('{0} pressed'.format(key))
         # print(key, type(key))
         # print(isinstance(key, KeyCode))
         pass
 
-    def on_release(self, key):
+    def _on_release(self, key):
         # print('{0} released'.format(key))
         if isinstance(key, KeyCode):
             if key.char == '+':
@@ -29,3 +27,12 @@ class KeyboardListenerMixin:
         # if key == Key.esc:
         #     # Stop listener
         #     return False
+
+    @utils.mod_only
+    def enable_key_listener(self):
+        self.keyboard_listener = Listener(on_press=self._on_press, on_release=self._on_release)
+        self.keyboard_listener.start()
+
+    @utils.mod_only
+    def disable_key_listener(self):
+        self.keyboard_listener.stop()

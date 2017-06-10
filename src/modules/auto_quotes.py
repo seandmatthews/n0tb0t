@@ -184,6 +184,7 @@ class AutoQuoteMixin:
 
             self._start_auto_quote(autoquote.id, db_session)
             utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            utils.add_to_appropriate_chat_queue(self, message, 'AutoQuote activated')
 
     @utils.mod_only
     def deactivate_auto_quote(self, message, db_session):
@@ -204,3 +205,4 @@ class AutoQuoteMixin:
 
             self._stop_auto_quote(auto_auote_id)
             utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            utils.add_to_appropriate_chat_queue(self, message, 'AutoQuote deactivated')
