@@ -166,7 +166,7 @@ class AutoQuoteMixin:
             utils.add_to_appropriate_chat_queue(self, message, 'Sorry, you must provide the number of the auto quote to delete.')
 
     @utils.mod_only
-    def activate_auto_quote(self, message, db_session):
+    def start_auto_quote(self, message, db_session):
         """
         Starts an auto_quote after it has been deactivated
         Takes the id of an auto_quote
@@ -187,7 +187,7 @@ class AutoQuoteMixin:
             utils.add_to_appropriate_chat_queue(self, message, 'AutoQuote activated')
 
     @utils.mod_only
-    def deactivate_auto_quote(self, message, db_session):
+    def stop_auto_quote(self, message, db_session):
         """
         Stops an auto_quote from being posted to chat, but leaves it intact to be easily activated later
         Takes the id of an auto_quote

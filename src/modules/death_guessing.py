@@ -9,26 +9,26 @@ import src.utils as utils
 class DeathGuessingMixin:
 
     @utils.mod_only
-    def enable_guessing(self, db_session):
+    def start_guessing(self, db_session):
         """
         Allows users to guess about the number of deaths
         before the next progression checkpoint.
         Expresses this in chat.
 
-        !enable_guessing
+        !start_guessing
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "True"
         utils.add_to_public_chat_queue(self, "Guessing is now enabled.")
 
     @utils.mod_only
-    def disable_guessing(self, db_session):
+    def stop_guessing(self, db_session):
         """
         Stops users from guess about the number of deaths
         before the next progression checkpoint.
         Expresses this in chat.
 
-        !disable_guessing
+        !stop_guessing
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "False"
@@ -59,24 +59,24 @@ class DeathGuessingMixin:
             utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing is disabled.")
 
     @utils.mod_only
-    def enable_guesstotal(self, db_session):
+    def start_guesstotal(self, db_session):
         """
         Enables guessing for the total number of deaths for the run.
         Modifies the value associated with the guess-total-enabled key
         in the miscellaneous values dictionary and writes it to the json file.
 
-        !enable_guesstotal
+        !start_guesstotal
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "True"
         utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now enabled.")
 
     @utils.mod_only
-    def disable_guesstotal(self, db_session):
+    def stop_guesstotal(self, db_session):
         """
         Disables guessing for the total number of deaths for the run.
 
-        !disable_guesstotal
+        !stop_guesstotal
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "False"
@@ -90,7 +90,7 @@ class DeathGuessingMixin:
         doesn't fit the acceptable parameters
         or that guessing is disabled for everyone.
 
-        !guess_total 50
+        !guesstotal 50
         """
         user = self.service.get_message_display_name(message)
         if db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one().mv_value == "True":
@@ -108,25 +108,25 @@ class DeathGuessingMixin:
             utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing for the total number of deaths is disabled.")
 
     @utils.mod_only
-    def clear_guesses(self, db_session):
+    def reset_guesses(self, db_session):
         """
         Clear all guesses so that users
         can guess again for the next segment
         of the run.
 
-        !clear_guesses
+        !reset_guesses
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.current_guess: None}))
         utils.add_to_public_chat_queue(self, "Guesses have been cleared.")
 
     @utils.mod_only
-    def clear_total_guesses(self, db_session):
+    def reset_total_guesses(self, db_session):
         """
         Clear all total guesses so that users
         can guess again for the next game
         where they guess about the total number of deaths
 
-        !clear_total_guesses
+        !reset_total_guesses
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.total_guess: None}))
         utils.add_to_public_chat_queue(self, "Guesses for the total number of deaths have been cleared.")
@@ -166,7 +166,7 @@ class DeathGuessingMixin:
         utils.add_to_public_chat_queue(self, "Formatting the google sheet with the latest information about all the guesses may take a bit. I'll let you know when it's done.")
         utils.add_to_command_queue(self, 'update_guess_spreadsheet')
 
-    def update_guess_spreadsheet(self):
+    def _update_guess_spreadsheet(self):
         """
         Do all the actual work of updating the guess spreadsheet so that we can stick it in a function queue
         """
@@ -240,13 +240,13 @@ class DeathGuessingMixin:
         utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
 
     @utils.mod_only
-    def clear_deaths(self, db_session):
+    def reset_deaths(self, db_session):
         """
         Sets the number of deaths for the current
         stage of the run to 0. Used after progressing
         to the next stage of the run.
 
-        !clear_deaths
+        !reset_deaths
         """
         self._set_deaths('0', db_session)
         self.deaths(db_session)
