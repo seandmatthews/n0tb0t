@@ -25,13 +25,19 @@ class QuotesMixin:
 
         quotes = db_session.query(models.Quote).all()
 
-        for index in range(len(quotes) + 10):
-            qs.update_cell(index + 2, 1, '')
-            qs.update_cell(index + 2, 2, '')
+        cells = qs.range(f'A2:B{len(quotes)+11}')
+        for cell in cells:
+            cell.value = ''
+        qs.update_cells(cells)
 
+        cells = qs.range(f'A2:B{len(quotes)+1}')
         for index, quote_obj in enumerate(quotes):
-            qs.update_cell(index + 2, 1, index + 1)
-            qs.update_cell(index + 2, 2, quote_obj.quote)
+            quote_cell_index = ((index + 1) * 2) - 1
+            human_readable_index_cell_index = quote_cell_index - 1
+
+            cells[human_readable_index_cell_index].value = index + 1
+            cells[quote_cell_index].value = quote_obj.quote
+        qs.update_cells(cells)
 
         db_session.commit()
         db_session.close()

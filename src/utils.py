@@ -1,6 +1,7 @@
 import datetime
 import functools
 import random
+import time
 
 import gspread
 import praw
@@ -33,6 +34,7 @@ def retry_gspread_func(f):
             except (gspread.exceptions.GSpreadException, TypeError) as e:
                 print('Gspread failure; retrying')
                 error_logger.exception('Gspread failure')
+                time.sleep(5)
                 continue
             break
 

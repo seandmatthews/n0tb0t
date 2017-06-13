@@ -134,7 +134,7 @@ class DeathGuessingMixin:
         utils.add_to_public_chat_queue(self, "Guesses for the total number of deaths have been cleared.")
 
     @utils.retry_gspread_func
-    def _update_player_guesses_spreadsheet(self):
+    def update_player_guesses_spreadsheet(self):
         """
         Updates the player guesses spreadsheet from the database.
         """
@@ -144,22 +144,27 @@ class DeathGuessingMixin:
             gc = gspread.authorize(self.credentials)
             sheet = gc.open(spreadsheet_name)
             ws = sheet.worksheet('Player Guesses')
+
+            # Cheesing retry logic into gspread
+            ws.update_cell = utils.retry_gspread_func(ws.update_cell)
+
             all_users = db_session.query(models.User).all()
             users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
-            futures = []
-            for i in range(2, len(users) + 10):
-                futures.append(executor.submit(ws.update_cell, i, 1, ''))
-                futures.append(executor.submit(ws.update_cell, i, 2, ''))
-                futures.append(executor.submit(ws.update_cell, i, 3, ''))
-            concurrent.futures.wait(futures)
 
-            futures = []
+            cells = ws.range(f'A2:C{len(users)+11}')
+            for cell in cells:
+                cell.value = ''
+            ws.update_cells(cells)
+
+            cells = ws.range(f'A2:C{len(users)+1}')
             for index, user in enumerate(users):
-                row_num = index + 2
-                futures.append(executor.submit(ws.update_cell, row_num, 1, user.name))
-                futures.append(executor.submit(ws.update_cell, row_num, 2, user.current_guess))
-                futures.append(executor.submit(ws.update_cell, row_num, 3, user.total_guess))
-            concurrent.futures.wait(futures)
+                total_guess_cell_index = ((index+1)*3)-1
+                current_guess_cell_index = total_guess_cell_index - 1
+                name_cell_index = current_guess_cell_index - 1
+                cells[total_guess_cell_index].value = user.total_guess
+                cells[current_guess_cell_index].value = user.current_guess
+                cells[name_cell_index].value = user.name
+            ws.update_cells(cells)
         return web_view_link
 
     @utils.mod_only
@@ -171,7 +176,6 @@ class DeathGuessingMixin:
 
         !show_guesses
         """
-        utils.add_to_public_chat_queue(self, "Formatting the google sheet with the latest information about all the guesses may take a bit. I'll let you know when it's done.")
         utils.add_to_command_queue(self, '_update_guess_spreadsheet')
 
     def _update_guess_spreadsheet(self):
@@ -180,8 +184,8 @@ class DeathGuessingMixin:
         """
         web_view_link = self.spreadsheets['player_guesses'][1]
         short_url = self.shortener.short(web_view_link)
-        self._update_player_guesses_spreadsheet()
-        utils.add_to_public_chat_queue(self, f"Hello again friends. I've updated a google spread sheet with the latest guess information. Here's a link. {short_url}")
+        self.update_player_guesses_spreadsheet()
+        utils.add_to_public_chat_queue(self, f"Spreadsheet updated. {short_url}")
 
     @utils.mod_only
     def set_deaths(self, message, db_session):
