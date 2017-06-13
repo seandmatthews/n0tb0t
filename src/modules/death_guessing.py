@@ -1,3 +1,5 @@
+import concurrent.futures
+
 import gspread
 import sqlalchemy
 
@@ -136,6 +138,7 @@ class DeathGuessingMixin:
         """
         Updates the player guesses spreadsheet from the database.
         """
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
         gc = gspread.authorize(self.credentials)
@@ -143,15 +146,20 @@ class DeathGuessingMixin:
         ws = sheet.worksheet('Player Guesses')
         all_users = db_session.query(models.User).all()
         users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
+        futures = []
         for i in range(2, len(users) + 10):
-            ws.update_cell(i, 1, '')
-            ws.update_cell(i, 2, '')
-            ws.update_cell(i, 3, '')
+            futures.append(executor.submit(ws.update_cell, i, 1, ''))
+            futures.append(executor.submit(ws.update_cell, i, 2, ''))
+            futures.append(executor.submit(ws.update_cell, i, 3, ''))
+        concurrent.futures.wait(futures)
+
+        futures = []
         for index, user in enumerate(users):
             row_num = index + 2
-            ws.update_cell(row_num, 1, user.name)
-            ws.update_cell(row_num, 2, user.current_guess)
-            ws.update_cell(row_num, 3, user.total_guess)
+            futures.append(executor.submit(ws.update_cell, row_num, 1, user.name))
+            futures.append(executor.submit(ws.update_cell, row_num, 2, user.current_guess))
+            futures.append(executor.submit(ws.update_cell, row_num, 3, user.total_guess))
+        concurrent.futures.wait(futures)
         return web_view_link
 
     @utils.mod_only
@@ -164,7 +172,7 @@ class DeathGuessingMixin:
         !show_guesses
         """
         utils.add_to_public_chat_queue(self, "Formatting the google sheet with the latest information about all the guesses may take a bit. I'll let you know when it's done.")
-        utils.add_to_command_queue(self, 'update_guess_spreadsheet')
+        utils.add_to_command_queue(self, '_update_guess_spreadsheet')
 
     def _update_guess_spreadsheet(self):
         """
