@@ -145,8 +145,7 @@ class DeathGuessingMixin:
             sheet = gc.open(spreadsheet_name)
             ws = sheet.worksheet('Player Guesses')
 
-            # Cheesing retry logic into gspread
-            ws.update_cell = utils.retry_gspread_func(ws.update_cell)
+            worksheet_width = 3
 
             all_users = db_session.query(models.User).all()
             users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
@@ -158,12 +157,14 @@ class DeathGuessingMixin:
 
             cells = ws.range(f'A2:C{len(users)+1}')
             for index, user in enumerate(users):
-                total_guess_cell_index = ((index+1)*3)-1
-                current_guess_cell_index = total_guess_cell_index - 1
-                name_cell_index = current_guess_cell_index - 1
-                cells[total_guess_cell_index].value = user.total_guess
-                cells[current_guess_cell_index].value = user.current_guess
+                name_cell_index = index * worksheet_width
+                current_guess_cell_index = name_cell_index + 1
+                total_guess_cell_index = current_guess_cell_index + 1
+
                 cells[name_cell_index].value = user.name
+                cells[current_guess_cell_index].value = user.current_guess
+                cells[total_guess_cell_index].value = user.total_guess
+
             ws.update_cells(cells)
         return web_view_link
 

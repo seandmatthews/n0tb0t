@@ -12,7 +12,7 @@ current_dir = os.path.dirname(current_path)
 root_dir = os.path.join(current_dir, os.pardir, os.pardir)
 sys.path.append(root_dir)
 
-import src.modules.commands as commands
+import src.core_modules.commands as commands
 from src.message import Message
 from src.models import Command
 

@@ -16,26 +16,36 @@ import src.google_auth as google_auth
 import src.models as models
 import src.utils as utils
 from config import time_zone_choice
-from src.modules.player_queue import PlayerQueue
+from src.core_modules.player_queue import PlayerQueue
 
 
-# Collect all the Mixin classes from all the modules in the src/modules directory
-# Store these class objects in a mixin_classes list so that Bot can inherit from them
-print('Loading Modules')
-cur_dir = os.path.dirname(os.path.realpath(__file__))
-modules_dir = os.path.join(cur_dir, 'modules')
-module_files = [f for f in os.listdir(modules_dir) if os.path.isfile(os.path.join(modules_dir, f))]
+def collect_mixin_classes(directory_name):
+    """
+    Collect all the Mixin classes from all the modules in the specified directory
+    Store these class objects in a mixin_classes list
+    Return that list so that the bot can inherit from them
+    """
+    print(F'Loading Modules from {directory_name}')
+    cur_dir = os.path.dirname(os.path.realpath(__file__))
+    modules_dir = os.path.join(cur_dir, directory_name)
+    module_files = [f for f in os.listdir(modules_dir) if os.path.isfile(os.path.join(modules_dir, f))]
+    mixin_classes = []
+
+    for file in module_files:
+        if file != '__init__.py' and file[-3:] == '.py':
+            # Take these .py files and import them, turning them into module objects
+            imported = importlib.import_module(f'src.{directory_name}.{file[:-3]}')
+            for item in dir(imported):
+                if item[0] != '_':
+                    if isinstance(getattr(imported, item), type) and 'Mixin' in item:
+                        mixin_classes.append(getattr(imported, item))
+                        print(item)
+    return mixin_classes
+
+
 mixin_classes = []
-
-for file in module_files:
-    if file != '__init__.py' and file[-3:] == '.py':
-        # Take these .py files and import them, turning them into module objects
-        imported = importlib.import_module(f'src.modules.{file[:-3]}')
-        for item in dir(imported):
-            if item[0] != '_':
-                if isinstance(getattr(imported, item), type) and 'Mixin' in item:
-                    mixin_classes.append(getattr(imported, item))
-                    print(item)
+mixin_classes += collect_mixin_classes('core_modules')
+mixin_classes += collect_mixin_classes('streamer_specific_modules')
 
 
 class CommandTypes(Enum):

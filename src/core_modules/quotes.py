@@ -22,6 +22,7 @@ class QuotesMixin:
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
         qs = sheet.worksheet('Quotes')
+        worksheet_width = 2
 
         quotes = db_session.query(models.Quote).all()
 
@@ -32,8 +33,8 @@ class QuotesMixin:
 
         cells = qs.range(f'A2:B{len(quotes)+1}')
         for index, quote_obj in enumerate(quotes):
-            quote_cell_index = ((index + 1) * 2) - 1
-            human_readable_index_cell_index = quote_cell_index - 1
+            human_readable_index_cell_index = index * worksheet_width
+            quote_cell_index = human_readable_index_cell_index + 1
 
             cells[human_readable_index_cell_index].value = index + 1
             cells[quote_cell_index].value = quote_obj.quote

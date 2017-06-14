@@ -13,8 +13,8 @@ root_dir = os.path.join(current_dir, os.pardir, os.pardir)
 sys.path.append(root_dir)
 
 from src.message import Message
-from src.modules.player_queue import PlayerQueue as PlayerQueue
-from src.modules.player_queue import PlayerQueueMixin as PlayerQueueMixin
+from src.core_modules.player_queue import PlayerQueue as PlayerQueue
+from src.core_modules.player_queue import PlayerQueueMixin as PlayerQueueMixin
 
 
 class Service:
