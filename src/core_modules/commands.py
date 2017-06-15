@@ -117,6 +117,13 @@ class CommandsMixin:
 
     @utils.mod_only
     def command(self, message, db_session):
+        """
+        Adds, edits, or deletes commands by appending add, edit, or delete to !command
+
+        !command edit !test_command New content
+        !command add !new_command Content
+        !command delete !test_command
+        """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
             action = msg_list[1].lower()
