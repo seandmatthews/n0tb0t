@@ -22,7 +22,6 @@ class NordMixin:
                 cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
                 self.ban_roulette(cheaty_message_object)
             else:
-                 # TODO: Use NLP magic to figure out whether belongs_str is plural or not
                 plural = False  # We are lazy right now
                 if plural:
                     nord_str = f'{belongs_str} belong to the Nords!'

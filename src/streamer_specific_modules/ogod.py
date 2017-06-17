@@ -23,7 +23,6 @@ class OgodMixin:
                 cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
                 self.ban_roulette(cheaty_message_object)
             else:
-                # TODO: Use NLP magic to figure out whether offender_str is plural or not
                 plural = False  # We are lazy right now
                 if plural:
                     ogod_str = f"{offender_str} have offended {user}'s delicate sensibilities!"
