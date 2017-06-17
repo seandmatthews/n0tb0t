@@ -24,20 +24,29 @@ class AutoQuoteMixin:
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
         aqs = sheet.worksheet('Auto Quotes')
+        worksheet_width = 4
 
         auto_quotes = db_session.query(models.AutoQuote).all()
 
-        for index in range(len(auto_quotes)+10):
-            aqs.update_cell(index+2, 1, '')
-            aqs.update_cell(index+2, 2, '')
-            aqs.update_cell(index+2, 3, '')
-            aqs.update_cell(index+2, 4, '')
+        cells = aqs.range(f'A2:D{len(auto_quotes)+11}')
+        for cell in cells:
+            cell.value = ''
+        aqs.update_cells(cells)
 
-        for index, aq in enumerate(auto_quotes):
-            aqs.update_cell(index+2, 1, index+1)
-            aqs.update_cell(index+2, 2, aq.quote)
-            aqs.update_cell(index+2, 3, aq.period)
-            aqs.update_cell(index+2, 4, aq.active)
+        cells = aqs.range(f'A2:D{len(auto_quotes)+1}')
+        for index, auto_quote_obj in enumerate(auto_quotes):
+            human_readable_index_cell_index = index * worksheet_width
+            auto_quote_cell_index = human_readable_index_cell_index + 1
+            period_cell_index = auto_quote_cell_index + 1
+            active_cell_index = period_cell_index + 1
+
+            cells[human_readable_index_cell_index].value = index + 1
+            cells[auto_quote_cell_index].value = auto_quote_obj.quote
+            cells[period_cell_index].value = auto_quote_obj.period
+            cells[active_cell_index].value = auto_quote_obj.active
+        aqs.update_cells(cells)
+
+        db_session.commit()
         db_session.close()
 
     @utils.mod_only
@@ -50,10 +59,10 @@ class AutoQuoteMixin:
         """
         auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         self.auto_quotes_timers = {}
-        for auto_quote in auto_quotes:
+        for index, auto_quote in enumerate(auto_quotes):
             quote = auto_quote.quote
             period = auto_quote.period
-            AQ_ID = auto_quote.id
+            AQ_ID = index
             self._auto_quote(index=AQ_ID, quote=quote, period=period)
 
     @utils.mod_only
@@ -149,9 +158,10 @@ class AutoQuoteMixin:
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
-            auto_quote_id = int(msg_list[1])
+            auto_quote_id = int(msg_list[1] - 1)
 
-            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
+            auto_quote_objs = db_session.query(models.AutoQuote).all()
+            autoquote = auto_quote_objs[auto_quote_id]
 
             autoquote.active = True
             db_session.flush()
@@ -169,9 +179,10 @@ class AutoQuoteMixin:
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 2 and msg_list[1].isdigit():
-            auto_quote_id = int(msg_list[1])
+            auto_quote_id = int(msg_list[1] - 1)
 
-            autoquote = db_session.query(models.AutoQuote).filter(models.AutoQuote.id == auto_quote_id).one()
+            auto_quote_objs = db_session.query(models.AutoQuote).all()
+            autoquote = auto_quote_objs[auto_quote_id]
 
             autoquote.active = False
             db_session.flush()
@@ -214,7 +225,7 @@ class AutoQuoteMixin:
                 self._start_auto_quote(auto_quote_index, db_session)
 
             elif msg_list[1].lower() == 'delete' and len(msg_list) > 2 and msg_list[2].isdigit():
-                auto_quote_index = int(msg_list[2])
+                auto_quote_index = int(msg_list[2]) - 1
 
                 self._stop_auto_quote(auto_quote_index)
                 displayed_feedback_message = self._delete_auto_quote(db_session, auto_quote_index)
