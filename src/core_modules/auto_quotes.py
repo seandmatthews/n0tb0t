@@ -9,6 +9,9 @@ import src.utils as utils
 
 
 class AutoQuoteMixin:
+    def __init__(self):
+        self.auto_quotes_timers = {}
+
     @utils.mod_only
     @utils.retry_gspread_func
     def update_auto_quote_spreadsheet(self):
@@ -19,6 +22,10 @@ class AutoQuoteMixin:
 
         !update_auto_quote_spreadsheet
         """
+        # If this is called in a separate thread, it's conceivable that if the main thread doesn't flush changes to the
+        # DB first, that this might read in old data from the DB. If this function is displaying incorrect data that
+        # don't reflect the last change made to the auto_quotes table, please ensure all DB Changes are flushed first
+        # http://docs.sqlalchemy.org/en/latest/orm/session_api.html#sqlalchemy.orm.session.Session.flush
         db_session = self.Session()
         spreadsheet_name, web_view_link = self.spreadsheets['auto_quotes']
         gc = gspread.authorize(self.credentials)
@@ -49,34 +56,6 @@ class AutoQuoteMixin:
         db_session.commit()
         db_session.close()
 
-    @utils.mod_only
-    def start_auto_quotes(self, db_session):
-        """
-        Starts the bot spitting out auto quotes by calling the
-        _auto_quote function on all quotes in the AUTOQUOTES table
-
-        !start_auto_quotes
-        """
-        auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
-        self.auto_quotes_timers = {}
-        for index, auto_quote in enumerate(auto_quotes):
-            quote = auto_quote.quote
-            period = auto_quote.period
-            AQ_ID = index
-            self._auto_quote(index=AQ_ID, quote=quote, period=period)
-
-    @utils.mod_only
-    def stop_auto_quotes(self):
-        """
-        Stops the bot from spitting out quotes by cancelling all auto quote threads.
-
-        !stop_auto_quotes
-        """
-        for AQ in self.auto_quotes_timers:
-            self.auto_quotes_timers[AQ].cancel()
-            time.sleep(1)
-            self.auto_quotes_timers[AQ].cancel()
-
     def show_auto_quotes(self, message):
         """
         Links to a google spreadsheet containing all auto quotes
@@ -86,6 +65,67 @@ class AutoQuoteMixin:
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
         utils.add_to_appropriate_chat_queue(self, message, 'View the auto quotes at: {}'.format(short_url))
+
+    @utils.mod_only
+    def start_auto_quote(self, message, db_session):
+        """
+        Starts an auto_quote after it has been deactivated
+        Takes the id of an auto quote
+
+        !star_auto_quote 1
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        if len(msg_list) == 2 and msg_list[1].isdigit():
+            human_readable_auto_quote_index = int(msg_list[1])
+            response = self._start_auto_quote(db_session, human_readable_auto_quote_index)
+            if response is not None:
+                utils.add_to_appropriate_chat_queue(self, message, response)
+        else:
+            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
+
+    @utils.mod_only
+    def stop_auto_quote(self, message, db_session):
+        """
+        Stops an auto_quote from being posted to chat, but leaves it intact to be easily activated later
+        Takes the id of an auto quote
+
+        !stop_auto_quote 1
+        """
+        msg_list = self.service.get_message_content(message).split(' ')
+        if len(msg_list) == 2 and msg_list[1].isdigit():
+            human_readable_auto_quote_index = int(msg_list[1])
+            response = self._stop_auto_quote(db_session, human_readable_auto_quote_index)
+            if response is not None:
+                utils.add_to_appropriate_chat_queue(self, message, response)
+        else:
+            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
+
+    @utils.mod_only
+    def start_all_auto_quotes(self, db_session):
+        """
+        Starts all currently inactive auto quotes
+
+        !start_all_auto_quotes
+        """
+        inactive_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == False).all()
+        for iaq in inactive_auto_quotes:
+            iaq.active = True
+            self._create_timer_for_auto_quote_object(iaq)
+        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+
+    @utils.mod_only
+    def stop_all_auto_quotes(self, message, db_session):
+        """
+        Stops all currently active auto quotes
+
+        !stop_all_auto_quotes
+        """
+        active_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
+        for aaq in active_auto_quotes:
+            aaq.active = False
+            self._delete_timer_for_auto_quote_object(aaq)
+        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        utils.add_to_appropriate_chat_queue(self, message, 'All auto quotes have been stopped')
 
     @utils.mod_only
     def add_auto_quote(self, message, db_session):
@@ -103,8 +143,6 @@ class AutoQuoteMixin:
 
             displayed_feedback_message = self._add_auto_quote(db_session, delay, quote_str)
             utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
-            self.stop_auto_quotes()
-            self.start_auto_quotes(db_session)
         else:
             utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
 
@@ -123,9 +161,6 @@ class AutoQuoteMixin:
 
             displayed_feedback_message = self._edit_auto_quote(db_session, auto_quote_id, auto_quote, auto_quote_period)
             utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
-            db_session.flush()
-            self.stop_auto_quotes()
-            self.start_auto_quotes(db_session)
         else:
             utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted correctly.")
 
@@ -142,53 +177,8 @@ class AutoQuoteMixin:
             auto_quote_id = int(msg_list[1])
             displayed_feedback_message = self._delete_auto_quote(db_session, auto_quote_id)
             utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
-            db_session.flush()
-            self.stop_auto_quotes()
-            self.start_auto_quotes(db_session)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, 'Sorry, you must provide the number of the auto quote to delete.')
-
-    @utils.mod_only
-    def start_auto_quote(self, message, db_session):
-        """
-        Starts an auto_quote after it has been deactivated
-        Takes the id of an auto_quote
-
-        !deactivate_auto_quote 1
-        """
-        msg_list = self.service.get_message_content(message).split(' ')
-        if len(msg_list) == 2 and msg_list[1].isdigit():
-            auto_quote_id = int(msg_list[1] - 1)
-
-            auto_quote_objs = db_session.query(models.AutoQuote).all()
-            autoquote = auto_quote_objs[auto_quote_id]
-
-            autoquote.active = True
-            db_session.flush()
-
-            self._start_auto_quote(autoquote.id, db_session)
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
-
-    @utils.mod_only
-    def stop_auto_quote(self, message, db_session):
-        """
-        Stops an auto_quote from being posted to chat, but leaves it intact to be easily activated later
-        Takes the id of an auto_quote
-        
-        !deactivate_auto_quote 1
-        """
-        msg_list = self.service.get_message_content(message).split(' ')
-        if len(msg_list) == 2 and msg_list[1].isdigit():
-            auto_quote_id = int(msg_list[1] - 1)
-
-            auto_quote_objs = db_session.query(models.AutoQuote).all()
-            autoquote = auto_quote_objs[auto_quote_id]
-
-            autoquote.active = False
-            db_session.flush()
-
-            self._stop_auto_quote(auto_quote_id)
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted correctly.")
 
     @utils.mod_only
     def auto_quote(self, message, db_session):
@@ -207,36 +197,40 @@ class AutoQuoteMixin:
             if msg_list[1].lower() == 'add' and len(msg_list) > 3 and msg_list[2].isdigit():
                 auto_quote_period = int(msg_list[2])
                 auto_quote_str = ' '.join(msg_list[3:])
-
-                displayed_feedback_message = self._add_auto_quote(db_session, auto_quote_period, auto_quote_str)
-                utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
-                db_session.flush()
-                self._start_auto_quote(db_session.query(models.AutoQuote).count(), db_session)
+                response = self._add_auto_quote(db_session, auto_quote_period, auto_quote_str)
+                utils.add_to_appropriate_chat_queue(self, message, response)
 
             elif msg_list[1].lower() == 'edit' and len(msg_list) > 4 and msg_list[2].isdigit() and msg_list[3].isdigit():
                 auto_quote_index = int(msg_list[2])
                 auto_quote_str = ' '.join(msg_list[4:])
                 auto_quote_period = int(msg_list[3])
-
-                self._stop_auto_quote(auto_quote_index)
-                displayed_feedback_message = self._edit_auto_quote(db_session, auto_quote_index, auto_quote_str, auto_quote_period)
-                utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
-                db_session.flush()
-                self._start_auto_quote(auto_quote_index, db_session)
+                response = self._edit_auto_quote(db_session, auto_quote_index, auto_quote_str, auto_quote_period)
+                utils.add_to_appropriate_chat_queue(self, message, response)
 
             elif msg_list[1].lower() == 'delete' and len(msg_list) > 2 and msg_list[2].isdigit():
-                auto_quote_index = int(msg_list[2]) - 1
+                auto_quote_index = int(msg_list[2])
+                response = self._delete_auto_quote(db_session, auto_quote_index)
+                utils.add_to_appropriate_chat_queue(self, message, response)
 
-                self._stop_auto_quote(auto_quote_index)
-                displayed_feedback_message = self._delete_auto_quote(db_session, auto_quote_index)
-                utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
+            elif msg_list[1].lower() == 'start' and len(msg_list) > 2 and msg_list[2].isdigit():
+                human_readable_auto_quote_index = int(msg_list[2])
+                response = self._start_auto_quote(db_session, human_readable_auto_quote_index)
+                if response is not None:
+                    utils.add_to_appropriate_chat_queue(self, message, response)
+
+            elif msg_list[1].lower() == 'stop' and len(msg_list) > 2 and msg_list[2].isdigit():
+                human_readable_auto_quote_index = int(msg_list[2])
+                response = self._stop_auto_quote(db_session, human_readable_auto_quote_index)
+                if response is not None:
+                    utils.add_to_appropriate_chat_queue(self, message, response)
 
             else:
                 utils.add_to_appropriate_chat_queue(self, message, "Sorry, that command wasn't properly formatted.")
-        else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, auto_quote must be followed by add, edit, or delete.")
 
-    def _auto_quote(self, index, quote, period):
+        else:
+            utils.add_to_appropriate_chat_queue(self, message, "Sorry, auto_quote must be followed by add, edit, delete, start, or stop.")
+
+    def _create_repeating_timer(self, index, quote, period):
         """
         Takes an index, quote and time in seconds.
         Starts a thread that waits the specified time, says the quote
@@ -244,64 +238,115 @@ class AutoQuoteMixin:
         that the quotes continue to be said forever or until they're stopped by the user.
         """
         key = 'AQ{}'.format(index)
-        self.auto_quotes_timers[key] = threading.Timer(period, self._auto_quote,
+        self.auto_quotes_timers[key] = threading.Timer(period, self._create_repeating_timer,
                                                        kwargs={'index': index, 'quote': quote, 'period': period})
         self.auto_quotes_timers[key].start()
         utils.add_to_public_chat_queue(self, quote)
 
-    def _add_auto_quote(self, db_session, delay, quote_str):
+    def _create_timer_for_auto_quote_object(self, auto_quote_object):
         """
-        Does the heavy lifting of interacting with the db_session.
+        Takes a auto_quote object from sqlalchemy and creates a timer for it
         """
-        auto_quote_obj = models.AutoQuote(quote=quote_str, period=delay, active=True)
-        db_session.add(auto_quote_obj)
-        response_str = f'Auto quote added as auto quote #{db_session.query(models.AutoQuote).count()}.'
-        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
-        return response_str
+        aq_id = auto_quote_object.id
+        quote = auto_quote_object.quote
+        period = auto_quote_object.period
+        self._create_repeating_timer(index=aq_id, quote=quote, period=period)
 
-    def _edit_auto_quote(self, db_session, auto_quote_index, auto_quote_str, auto_quote_period):
-        # We grab all the auto quotes because we can't just use the auto quote ID
-        # Auto quotes may get deleted, and so we need to set all auto quotes after that one back by one
-        auto_quote_objs = db_session.query(models.AutoQuote).all()
-        if auto_quote_index <= len(auto_quote_objs):
-            auto_quote_obj = auto_quote_objs[auto_quote_index - 1]
-            auto_quote_obj.quote = auto_quote_str
-            auto_quote_obj.period = auto_quote_period
-            response_str = 'Auto quote has been edited.'
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
-        else:
-            response_str = 'That auto quote does not exist'
-        return response_str
-
-    def _delete_auto_quote(self, db_session, auto_quote_index):
-        # We grab all the auto quotes because we can't just use the auto quote ID
-        # Auto quotes may get deleted, and so we need to set all auto quotes after that one back by one
-        auto_quote_objs = db_session.query(models.AutoQuote).all()
-        if auto_quote_index <= len(auto_quote_objs):
-            auto_quote_obj = auto_quote_objs[auto_quote_index - 1]
-            db_session.delete(auto_quote_obj)
-            response_str = 'Auto quote deleted'
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
-        else:
-            response_str = 'That auto quote does not exist'
-        return response_str
-
-    def _start_auto_quote(self, auto_quote_id, db_session):
+    def _delete_timer_for_auto_quote_object(self, auto_quote_object):
         """
-        Starts the bot spitting out a specific auto quote again, depending from its index.
+        Takes a auto_quote object from sqlalchemy and deletes the timer for it
         """
-        auto_quote = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).filter(
-            models.AutoQuote.id == auto_quote_id).one()
-        quote = auto_quote.quote
-        period = auto_quote.period
-        self._auto_quote(index=auto_quote_id, quote=quote, period=period)
-
-    def _stop_auto_quote(self, auto_quote_id):
-        """
-        Stops the bot from spitting out a specific quote by cancelling the quote thread, depending from its index.
-        """
-        fullid = 'AQ{}'.format(auto_quote_id)
+        fullid = 'AQ{}'.format(auto_quote_object.id)
         self.auto_quotes_timers[fullid].cancel()
         time.sleep(1)
         self.auto_quotes_timers[fullid].cancel()
 
+    def _start_auto_quote(self, db_session, human_readable_auto_quote_index):
+        """
+        Gets a list of all auto_quote objects in the database, subtracts one from the HRAQI
+        to get a 0 based index, sets that auto_quote object's active attribute to True and
+        creates a timer for it
+        """
+        auto_quote_objs = db_session.query(models.AutoQuote).all()
+        auto_quote_obj = auto_quote_objs[human_readable_auto_quote_index - 1]
+
+        if not auto_quote_obj.active:
+            auto_quote_obj.active = True
+            self._create_timer_for_auto_quote_object(auto_quote_obj)
+            db_session.flush()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        else:
+            return 'The auto_quote was already active'
+
+    def _stop_auto_quote(self, db_session, human_readable_auto_quote_index):
+        """
+        Gets a list of all auto_quote objects in the database, subtracts one from the HRAQI
+        to get a 0 based index, sets that auto_quote object's active attribute to False and
+        deletes the timer for it
+        """
+        auto_quote_objs = db_session.query(models.AutoQuote).all()
+        auto_quote_obj = auto_quote_objs[human_readable_auto_quote_index - 1]
+
+        if auto_quote_obj.active:
+            auto_quote_obj.active = False
+            self._delete_timer_for_auto_quote_object(auto_quote_obj)
+            db_session.flush()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            return 'The auto_quote has been stopped'
+        else:
+            return 'The auto_quote was already inactive'
+
+    def _add_auto_quote(self, db_session, delay, quote_str):
+        """
+        Creates an auto quote in the database
+        Sets it to active and creates a repeating timer for it
+        """
+        auto_quote_obj = models.AutoQuote(quote=quote_str, period=delay, active=True)
+        db_session.add(auto_quote_obj)
+        db_session.flush()
+        self._create_timer_for_auto_quote_object(auto_quote_obj)
+        response_str = f'Auto quote added as auto quote #{db_session.query(models.AutoQuote).count()}.'
+        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        return response_str
+
+    def _edit_auto_quote(self, db_session, human_readable_auto_quote_index, auto_quote_str, auto_quote_period):
+        """
+        Edits an auto_quote in the database.
+        If it's active, deletes the timer for the quote and creates a new one
+        """
+        # We grab all the auto quotes because we can't just use the auto quote ID
+        # Auto quotes may get deleted, and so we need to set all auto quotes after that one back by one
+        auto_quote_objs = db_session.query(models.AutoQuote).all()
+        if human_readable_auto_quote_index <= len(auto_quote_objs):
+            auto_quote_obj = auto_quote_objs[human_readable_auto_quote_index - 1]
+            auto_quote_obj.quote = auto_quote_str
+            auto_quote_obj.period = auto_quote_period
+            if auto_quote_obj.active:
+                self._delete_timer_for_auto_quote_object(auto_quote_obj)
+                self._create_timer_for_auto_quote_object(auto_quote_obj)
+            response_str = 'Auto quote has been edited.'
+            db_session.flush()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        else:
+            response_str = 'That auto quote does not exist'
+        return response_str
+
+    def _delete_auto_quote(self, db_session, human_readable_auto_quote_index):
+        """
+        Deletes an auto_quote from the database.
+        If it's currently active, delete the timer for it.
+        """
+        # We grab all the auto quotes because we can't just use the auto quote ID
+        # Auto quotes may get deleted, and so we need to set all auto quotes after that one back by one
+        auto_quote_objs = db_session.query(models.AutoQuote).all()
+        if human_readable_auto_quote_index <= len(auto_quote_objs):
+            auto_quote_obj = auto_quote_objs[human_readable_auto_quote_index - 1]
+            db_session.delete(auto_quote_obj)
+            response_str = 'Auto quote deleted'
+            db_session.flush()
+            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            if auto_quote_obj.active:
+                self._delete_timer_for_auto_quote_object(auto_quote_obj)
+        else:
+            response_str = 'That auto quote does not exist'
+        return response_str

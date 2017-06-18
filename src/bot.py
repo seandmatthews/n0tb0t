@@ -121,7 +121,9 @@ class Bot(*mixin_classes):
 
         utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
 
-        self.start_auto_quotes(db_session)
+        active_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
+        for aaq in active_auto_quotes:
+            self._create_timer_for_auto_quote_object(aaq)
         self.player_queue_credentials = None
         db_session.close()
         self.strawpoll_id = ''
@@ -174,7 +176,7 @@ class Bot(*mixin_classes):
         self.db_path = os.path.join(db_location, f'{channel}.db')
         engine = sqlalchemy.create_engine(f'sqlite:///{self.db_path}', connect_args={'check_same_thread': False})
         # noinspection PyPep8Naming
-        session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        session_factory = sessionmaker(bind=engine)
         models.Base.metadata.create_all(engine)
         db_session = session_factory()
         misc_values = db_session.query(models.MiscValue).all()
