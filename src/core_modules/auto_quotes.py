@@ -191,6 +191,8 @@ class AutoQuoteMixin:
         !auto_quote add 300 This is something the bot will repeat every 300 seconds
         !auto_quote edit 1 350 Auto quote 1 now says this every 350 seconds
         !auto_quote delete 1
+        !auto_quote start 1
+        !auto_quote stop 1
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) > 1:
