@@ -287,17 +287,46 @@ class DeathGuessingMixin:
         winners_list = []
         deaths = self._get_current_deaths(db_session)
         last_winning_guess = -1
-        users = db_session.query(models.User).filter(models.User.current_guess.isnot(None)).all()
+        # If your guess was over the number of deaths you lose due to the price is right rules.
+        users = db_session.query(models.User).filter(models.User.current_guess <= deaths).all()
         for user in users:
-            # If your guess was over the number of deaths you lose due to the price is right rules.
-            if int(user.current_guess) <= int(deaths):
-                if user.current_guess > last_winning_guess:
-                    winners_list = [user.name]
-                    last_winning_guess = user.current_guess
-                elif user.current_guess == last_winning_guess:
-                    winners_list.append(user.name)
+            if user.current_guess > last_winning_guess:
+                winners_list = [user.name]
+                last_winning_guess = user.current_guess
+            elif user.current_guess == last_winning_guess:
+                winners_list.append(user.name)
         if len(winners_list) == 1:
             winners_str = f"The winner is {winners_list[0]}."
+        elif len(winners_list) > 1:
+            winners_str = f'The winners are {", ".join(winners_list[:-1])} and {winners_list[-1]}!'
+        else:
+            caster = self.info['channel']
+            winners_str = f'You all guessed too high. You should have had more faith in {caster}. {caster} wins!'
+        utils.add_to_appropriate_chat_queue(self, message, winners_str)
+
+    @utils.mod_only
+    def total_winner(self, message, db_session):
+        """
+        Sends the name of the currently winning
+        player for the total guesses to the chat.
+        Should be used after game completion to display who won.
+
+        !total_winner
+        """
+        winners_list = []
+        total_deaths = self._get_total_deaths(db_session)
+        last_winning_guess = -1
+        # If your guess was over the number of deaths you lose due to the price is right rules.
+
+        users = db_session.query(models.User).filter(models.User.total_guess <= total_deaths).all()
+        for user in users:
+            if user.total_guess > last_winning_guess:
+                winners_list = [user.name]
+                last_winning_guess = user.total_guess
+            elif user.total_guess == last_winning_guess:
+                winners_list.append(user.name)
+        if len(winners_list) == 1:
+            winners_str = f"The winner is {winners_list[0]}!"
         elif len(winners_list) > 1:
             winners_str = f'The winners are {", ".join(winners_list[:-1])} and {winners_list[-1]}!'
         else:
