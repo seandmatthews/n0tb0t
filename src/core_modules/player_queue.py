@@ -1,4 +1,5 @@
 import collections
+import copy
 import json
 import os
 import random
@@ -40,7 +41,7 @@ class PlayerQueue:
 
     def pop(self):
         """
-        Removes one player, priority tuple from the player queue and returns them
+        Removes one player, priority tuple from the player queue and returns the player's name
         """
         return self.queue.pop()[0]
 
@@ -60,38 +61,30 @@ class PlayerQueueMixin:
     def __init__(self):
         self.ready_user_dict = dict()
 
-    def _delete_last_row(self):
-        """
-        Deletes the last row of the player_queue spreadsheet
-        """
-        spreadsheet_name, _ = self.spreadsheets['player_queue']
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        ws = sheet.worksheet('Player Queue')
-        records = ws.get_all_records()
-        last_row_index = len(records) + 1
 
-        ws.update_cell(last_row_index, 1, '')
-        ws.update_cell(last_row_index, 2, '')
-
-    def _insert_into_player_queue_spreadsheet(self, username, times_played, player_queue):
+    def _update_player_queue_spreadsheet(self, player_queue):
         """
         Used by the join command.
         """
         spreadsheet_name, _ = self.spreadsheets['player_queue']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
-        ws = sheet.worksheet('Player Queue')
+        pqs = sheet.worksheet('Player Queue')
+        worksheet_width = 2
 
-        records = ws.get_all_records()
-        records = records[1:]  # We don't want the blank space
-        for i, tup in enumerate(player_queue):
-            try:
-                if records[i]['User'] != tup[0]:
-                    ws.insert_row([username, times_played], index=i + 3)
-                    break
-            except IndexError:
-                ws.insert_row([username, times_played], index=i + 3)
+        cells = pqs.range(f'A2:B{len(player_queue)+11}')
+        for cell in cells:
+            cell.value = ''
+        pqs.update_cells(cells)
+
+        cells = pqs.range(f'A2:B{len(player_queue)+1}')
+        for index, tup in enumerate(reversed(player_queue)):
+            user_cell_index = index * worksheet_width
+            times_played_index = user_cell_index + 1
+
+            cells[user_cell_index].value = tup[0]
+            cells[times_played_index].value = tup[1]
+        pqs.update_cells(cells)
 
     def _write_player_queue(self):
         """
@@ -124,12 +117,12 @@ class PlayerQueueMixin:
                 del self.ready_user_dict[username]
             except KeyError:
                 pass
+            queue_snapshot = copy.deepcopy(self.player_queue.queue)
+            utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
         except RuntimeError:
             utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're already in the queue and can't join again.")
 
-            # queue_snapshot = copy.deepcopy(self.player_queue.queue)
-            # self.command_queue.appendleft(('_insert_into_player_queue_spreadsheet',
-            #                                {'username': username, 'times_played':user.times_played, 'player_queue': queue_snapshot}))
+
 
     @utils.private_message_allowed
     def leave(self, message):
@@ -143,6 +136,8 @@ class PlayerQueueMixin:
             if tup[0] == username:
                 self.player_queue.queue.remove(tup)
                 self._write_player_queue()
+                queue_snapshot = copy.deepcopy(self.player_queue.queue)
+                utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
                 utils.add_to_appropriate_chat_queue(self, message, f"{username}, you've left the queue.")
                 break
         else:
@@ -176,16 +171,16 @@ class PlayerQueueMixin:
         except UnboundLocalError:
             utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're not in the queue. Feel free to join it.")
 
-    # def show_player_queue(self, message):
-    #     """
-    #     Links the google spreadsheet containing the queue list
-    #
-    #     !show_player_queue
-    #     """
-    #     user = self.service.get_message_display_name(message)
-    #     web_view_link = self.spreadsheets['player_queue'][1]
-    #     short_url = self.shortener.short(web_view_link)
-    #     utils.add_to_appropriate_chat_queue(self, message, f'View the the queue at: {short_url}')
+    def show_player_queue(self, message):
+        """
+        Links the google spreadsheet containing the queue list
+
+        !show_player_queue
+        """
+        user = self.service.get_message_display_name(message)
+        web_view_link = self.spreadsheets['player_queue'][1]
+        short_url = self.shortener.short(web_view_link)
+        utils.add_to_appropriate_chat_queue(self, message, f'View the the queue at: {short_url}')
 
     def _create_credentials_message(self, channel, player, credentials=None):
         """
@@ -244,9 +239,10 @@ class PlayerQueueMixin:
                                             'credential_str': credentials_message}
             t = threading.Timer(45.0, self._update_user_ready_dict, [player])
             t.start()
-            # self.command_queue.appendleft(('_delete_last_row', {}))
+            queue_snapshot = copy.deepcopy(self.player_queue.queue)
+            utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
         utils.add_to_public_chat_queue(self, f"{players_str} it is your turn to play! Please whisper the bot !confirm to confirm that you're here.")
-        utils.add_to_public_chat_queue(self, 'There are {len(self.player_queue.queue)} people left in the queue')
+        utils.add_to_public_chat_queue(self, f'There are {len(self.player_queue.queue)} people left in the queue')
 
     @utils.private_message_allowed
     @utils.mod_only
@@ -280,7 +276,8 @@ class PlayerQueueMixin:
             t.start()
             utils.add_to_public_chat_queue(self, f'{player} it is your turn to play. Whisper !confirm to the bot')
             utils.add_to_public_chat_queue(self, f'There are {len(self.player_queue.queue)} people left in the queue.')
-            # self.command_queue.appendleft(('_delete_last_row', {}))
+            queue_snapshot = copy.deepcopy(self.player_queue.queue)
+            utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
         except IndexError:
             utils.add_to_public_chat_queue(self, 'Sorry, there are no more players in the queue')
 
@@ -293,9 +290,9 @@ class PlayerQueueMixin:
 
         !reset_queue
         """
-        # for _ in self.player_queue.queue:
-        #     self.command_queue.appendleft(('_delete_last_row', {}))
         self.player_queue = PlayerQueue()
+        queue_snapshot = copy.deepcopy(self.player_queue.queue)
+        utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
         try:
             os.remove(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"))
         except FileNotFoundError:
@@ -338,6 +335,9 @@ class PlayerQueueMixin:
                     self.player_queue.queue.remove(tup)
                     self.player_queue.push(player, times_played-1)
                     self._write_player_queue()
+                    queue_snapshot = copy.deepcopy(self.player_queue.queue)
+                    utils.add_to_command_queue(self, '_update_player_queue_spreadsheet',
+                                               {'player_queue': queue_snapshot})
                 else:
                     utils.add_to_appropriate_chat_queue(self, message, f'{player} cannot be promoted in the queue.')
                 break
@@ -361,6 +361,8 @@ class PlayerQueueMixin:
                 self.player_queue.queue.remove(tup)
                 self.player_queue.push(player, times_played+1)
                 self._write_player_queue()
+                queue_snapshot = copy.deepcopy(self.player_queue.queue)
+                utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
                 break
         else:
             utils.add_to_appropriate_chat_queue(self, message, f'{player} is not in the player queue.')

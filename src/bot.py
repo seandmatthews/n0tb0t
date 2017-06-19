@@ -324,7 +324,6 @@ class Bot(*mixin_classes):
         """
         Populate the player_queue google sheet with its initial data.
         """
-        caster = self.info['channel']
         gc = gspread.authorize(self.credentials)
         sheet = gc.open(spreadsheet_name)
         sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
@@ -332,19 +331,12 @@ class Bot(*mixin_classes):
         try:
             pqs = sheet.worksheet('Player Queue')
         except gspread.exceptions.WorksheetNotFound:
-            pqs = sheet.add_worksheet('Player Queue', 500, 3)
+            pqs = sheet.add_worksheet('Player Queue', 500, 2)
             sheet1 = sheet.get_worksheet(0)
             sheet.del_worksheet(sheet1)
 
-        info = """Priority is given to players with fewest times played.
-        The top of this spreadsheet is the back of the queue
-        and the bottom is the front. The closer you are to the bottom,
-        the closer you are to playing with {}.""".format(caster)
-
         pqs.update_acell('A1', 'User')
         pqs.update_acell('B1', 'Times played')
-        pqs.update_acell('C1', 'Info:')
-        pqs.update_acell('C2', info)
 
     def _process_chat_queue(self, chat_queue):
         """
