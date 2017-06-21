@@ -15,7 +15,7 @@ class NordMixin:
 
         if len(msg_list) > 1:
             belongs_str = ' '.join(msg_list[1:])
-            if belongs_str[0] == "!":
+            if belongs_str[0] in ["!", "/"]:
                 nord_str = 'Dirty cheaters belong to the Nords!'
                 utils.add_to_appropriate_chat_queue(self, message, nord_str)
                 utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')

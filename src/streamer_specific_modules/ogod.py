@@ -13,10 +13,9 @@ class OgodMixin:
         user = self.service.get_message_display_name(message)
         msg_list = self.service.get_message_content(message).split(' ')
 
-
         if len(msg_list) > 1:
             offender_str = ' '.join(msg_list[1:])
-            if offender_str[0] == "!":
+            if offender_str[0] in ["!", "/"]:
                 ogod_str = f'Your poor attempts at hax have offended {bot_info["user"]}\'s delicate sensibilities!'
                 utils.add_to_appropriate_chat_queue(self, message, ogod_str)
                 utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')

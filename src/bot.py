@@ -13,6 +13,7 @@ from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
 import src.google_auth as google_auth
+from src.message import Message
 import src.models as models
 import src.utils as utils
 from config import time_zone_choice
@@ -385,7 +386,13 @@ class Bot(*mixin_classes):
         Runs the command if the permissions check out.
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            utils.add_to_appropriate_chat_queue(self, message, self.service.get_message_content(message).replace('PING', 'PONG'))
+            if self.service.get_message_content(message)[0] in ['/', '!']:
+                utils.add_to_appropriate_chat_queue(self, message, "You see? This is why we can't have nice things.")
+                utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')
+                cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
+                self.ban_roulette(cheaty_message_object)
+            else:
+                utils.add_to_appropriate_chat_queue(self, message, self.service.get_message_content(message).replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)

@@ -61,10 +61,12 @@ class PlayerQueueMixin:
     def __init__(self):
         self.ready_user_dict = dict()
 
-
     def _update_player_queue_spreadsheet(self, player_queue):
         """
-        Used by the join command.
+        Updates the player queue spreadsheet by doing a batch update for blank cells
+        and then a batch update for the actual values.
+
+        Should be called by join, leave and all cycle commands.
         """
         spreadsheet_name, _ = self.spreadsheets['player_queue']
         gc = gspread.authorize(self.credentials)
@@ -121,8 +123,6 @@ class PlayerQueueMixin:
             utils.add_to_command_queue(self, '_update_player_queue_spreadsheet', {'player_queue': queue_snapshot})
         except RuntimeError:
             utils.add_to_appropriate_chat_queue(self, message, f"{username}, you're already in the queue and can't join again.")
-
-
 
     @utils.private_message_allowed
     def leave(self, message):
