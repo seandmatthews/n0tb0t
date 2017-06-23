@@ -387,6 +387,7 @@ class Bot(*mixin_classes):
         """
         if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
             if self.service.get_message_content(message)[0] in ['/', '!']:
+                user = self.service.get_message_display_name(message)
                 utils.add_to_appropriate_chat_queue(self, message, "You see? This is why we can't have nice things.")
                 utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')
                 cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
