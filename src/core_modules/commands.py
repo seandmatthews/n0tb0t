@@ -42,25 +42,34 @@ class CommandsMixin:
             else:
                 user_specific_commands.append(command)
 
-        # for index in range(len(everyone_commands) + 10):
-        #     cs.update_cell(index + 2, 7, '')
-        #     cs.update_cell(index + 2, 8, '')
-        #
-        # for index, command in enumerate(everyone_commands):
-        #     cs.update_cell(index + 2, 7, '!{}'.format(command.call))
-        #     cs.update_cell(index + 2, 8, command.response)
+        cells = cs.range(f'G2:H{len(everyone_commands) + 11}')
+        for cell in cells:
+            cell.value = ''
+        cs.update_cells(cells)
 
-        for index in range(len(user_specific_commands) + 10):
-            cs.update_cell(index + 2, 10, '')
-            cs.update_cell(index + 2, 11, '')
-            cs.update_cell(index + 2, 12, '')
+        cells = cs.range(f'G2:H{len(everyone_commands) + 1}')
+        cell_range_width = 2
+
+        for index, command in enumerate(everyone_commands):
+            cells[index*cell_range_width].value = f'!{command.call}'
+            cells[(index * cell_range_width) + 1].value = command.response
+        cs.update_cells(cells)
+
+        cells = cs.range(f'J2:L{len(user_specific_commands) + 11}')
+        for cell in cells:
+            cell.value = ''
+        cs.update_cells(cells)
+
+        cells = cs.range(f'J2:L{len(user_specific_commands) + 1}')
+        cell_range_width = 3
 
         for index, command in enumerate(user_specific_commands):
             users = [permission.user_entity for permission in command.permissions]
             users_str = ', '.join(users)
-            cs.update_cell(index + 2, 10, '!{}'.format(command.call))
-            cs.update_cell(index + 2, 11, command.response)
-            cs.update_cell(index + 2, 12, users_str)
+            cells[index * cell_range_width].value = f'!{command.call}'
+            cells[(index * cell_range_width) + 1].value = command.response
+            cells[(index * cell_range_width) + 2].value = users_str
+        cs.update_cells(cells)
 
         db_session.commit()
         db_session.close()
