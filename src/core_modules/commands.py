@@ -140,14 +140,14 @@ class CommandsMixin:
                 for index, word in enumerate(msg_list[2:]):  # exclude !command add
                     if word[0] == '!':
                         command_str = word[1:].lower()
-                        users = msg_list[2:index + 1]
+                        users = msg_list[2:index + 2]
                         response = ' '.join(msg_list[index + 3:])
                         response_str = self._add_command(db_session, command_str, users, response)
                         utils.add_to_appropriate_chat_queue(self, message, response_str)
                         break
-                    else:
-                        response_str = 'Sorry, the command needs to have an ! in it.'
-                        utils.add_to_appropriate_chat_queue(self, message, response_str)
+                else:
+                    response_str = 'Sorry, the command needs to have an ! in it.'
+                    utils.add_to_appropriate_chat_queue(self, message, response_str)
             elif action == 'edit':
                 command_str = msg_list[2][1:].lower()
                 response = ' '.join(msg_list[3:])
