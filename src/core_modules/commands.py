@@ -164,7 +164,7 @@ class CommandsMixin:
             response_str = 'You must follow command with either add edit or delete'
             utils.add_to_appropriate_chat_queue(self, message, response_str)
 
-    # These functions do most of the heavy lifting.
+    # These functions interact with the database
     def _add_command(self, db_session, command_str, users, response):
         if db_session.query(models.Command).filter(models.Command.call == command_str).one_or_none():
             return 'Sorry, that command already exists. Please delete it first.'

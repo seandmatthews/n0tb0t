@@ -22,7 +22,8 @@ class BanRouletteMixin:
         if user is not None:
             if random.randint(1, 6) == 6:
                 timeout_time = 30
-                utils.add_to_public_chat_queue(self, f'/timeout {user} {timeout_time}')
+                timeout_message_content = self.service.get_time_out_message(user, timeout_time)
+                utils.add_to_public_chat_queue(self, timeout_message_content)
                 utils.add_to_public_chat_queue(self, f'Bang! {user} was timed out.')
             else:
                 utils.add_to_public_chat_queue(self, f'{user} is safe for now.')
