@@ -1,3 +1,5 @@
+import threading
+
 import src.models as models
 import src.utils as utils
 
@@ -72,3 +74,28 @@ class AntiBotMixin:
         if bool(user_db_obj.whitelisted) is True:
             user_db_obj.whitelisted = False
             utils.add_to_appropriate_chat_queue(self, message, f'{msg_list[1]} has been removed from the whitelist.')
+
+    @utils.mod_only
+    def stop_speaking(self):
+        """
+        Stops the bot from putting stuff in chat to cut down on bot spam.
+        In long run, this should be replaced with rate limits.
+
+        !stop_speaking
+        """
+        self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.allowed_to_chat = False
+
+    @utils.mod_only
+    def start_speaking(self):
+        """
+        Allows the bot to start speaking again.
+
+        !start_speaking
+        """
+        self.allowed_to_chat = True
+        self.public_message_queue.clear()
+        self.chat_thread = threading.Thread(target=self._process_chat_queue,
+                                            kwargs={'chat_queue': self.public_message_queue})
+        self.chat_thread.daemon = True
+        self.chat_thread.start()
