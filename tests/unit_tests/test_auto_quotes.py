@@ -45,10 +45,9 @@ def autoquote_mixin_obj():
     autoquote_mixin_obj.command_queue = deque()
     autoquote_mixin_obj.service = Service()
     yield autoquote_mixin_obj
-    for timer in autoquote_mixin_obj.auto_quotes_timers.values():
-        timer.cancel()
-        time.sleep(1)
-        timer.cancel()
+    for AQnum in autoquote_mixin_obj.auto_quotes_timers.keys():
+        autoquote_mixin_obj.auto_quotes_timers[AQnum].cancel()
+    del autoquote_mixin_obj.auto_quotes_timers
 
 
 def test_add_autoquote(autoquote_mixin_obj, mock_db_session):
@@ -63,10 +62,9 @@ def test_delete_autoquote(autoquote_mixin_obj, mock_db_session):
     autoquote_mixin_obj.add_auto_quote(Message(content="!add_auto_quote 300 this is a test", message_type=MessageTypes.PUBLIC), mock_db_session)
     assert len(autoquote_mixin_obj.auto_quotes_timers) == 1
     # Cheese strats go here
-    for timer in autoquote_mixin_obj.auto_quotes_timers.values():
-        timer.cancel()
-        time.sleep(1)
-        timer.cancel()
+    for AQnum in autoquote_mixin_obj.auto_quotes_timers.keys():
+        autoquote_mixin_obj.auto_quotes_timers[AQnum].cancel()
+
     autoquote_mixin_obj.auto_quotes_timers = {}
     autoquote_mixin_obj._create_repeating_timer(1, "this is a test", 300)
     query_val = mock_db_session.query.return_value

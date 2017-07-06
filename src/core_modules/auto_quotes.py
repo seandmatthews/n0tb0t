@@ -260,8 +260,6 @@ class AutoQuoteMixin:
         """
         fullid = 'AQ{}'.format(auto_quote_object.id)
         self.auto_quotes_timers[fullid].cancel()
-        time.sleep(1)
-        self.auto_quotes_timers[fullid].cancel()
         del self.auto_quotes_timers[fullid]
 
     def _start_auto_quote(self, db_session, human_readable_auto_quote_index):
