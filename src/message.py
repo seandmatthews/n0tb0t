@@ -9,10 +9,11 @@ class Message:
     if more fields are required for a given service, this class should be subclassed
     the service class that uses those messages should provide helper functions
     """
-    def __init__(self, service=None, message_type=None, user=None, display_name=None, content=None, privilege = []):
+    def __init__(self, service=None, message_type=None, user=None, display_name=None, content=None, privilege=[], uuid=None):
         self.service = service
         self.message_type = message_type
         self.user = user
         self.display_name = display_name
         self.content = content
         self.privilege = privilege
+        self.uuid = uuid

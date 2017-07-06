@@ -36,10 +36,11 @@ class TwitchMessage(Message):
     def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False, uuid=None, privilige = []):
         super().__init__(self, service=Services.TWITCH,
                          message_type=message_type,
-                         user=user, content=content,
+                         user=user,
+                         content=content,
                          display_name=display_name
-                         privilige = privilige)
-        self.uuid = uuid
+                         privilige=privilige
+                         uuid=uuid)
 
 
 class TwitchService(Service):
