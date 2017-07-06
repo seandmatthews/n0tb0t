@@ -36,8 +36,8 @@ class TwitchMessage(Message):
         Message.__init__(self, service=Service.TWITCH,
                          message_type=message_type,
                          user=user, content=content,
-                         display_name=display_name,
-                         is_mod=is_mod)
+                         display_name=display_name)
+        self.is_mod = is_mod
 
 
 class TwitchService(object):
