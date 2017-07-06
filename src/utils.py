@@ -12,7 +12,13 @@ from config import reddit_client_secret
 from config import reddit_user_agent
 from config import bot_info
 from src.loggers import error_logger
-from src.service import Service
+
+
+#this is an enum of all services n0tb0t uses
+#it should probably me moved to utils.py in the future
+#good job, it got moved over
+class Services(Enum):
+    TWITCH = auto()
 
 
 # DECORATORS #

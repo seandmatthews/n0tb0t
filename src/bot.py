@@ -65,7 +65,7 @@ class Bot(*mixin_classes):
                 if callable(getattr(mixin_class, '__init__')):
                     mixin_class.__init__(self)
 
-        self.service = service
+        self.services = service
         self.info = bot_info
 
         self.sorted_methods = self._sort_methods()
@@ -348,7 +348,7 @@ class Bot(*mixin_classes):
         """
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
-                self.service.send_public_message(chat_queue.pop())
+                self.services.send_message(chat_queue.pop())
             time.sleep(.5)
 
     def _process_whisper_queue(self, whisper_queue):
@@ -361,7 +361,7 @@ class Bot(*mixin_classes):
         while True:
             if len(whisper_queue) > 0:
                 whisper_tuple = (whisper_queue.pop())
-                self.service.send_private_message(whisper_tuple[0], whisper_tuple[1])
+                self.services.send_private_message(whisper_tuple[0], whisper_tuple[1])
             time.sleep(1.5)
 
     def _process_command_queue(self, command_queue):
@@ -478,7 +478,7 @@ class Bot(*mixin_classes):
 
         !stop_speaking
         """
-        self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
+        self.services.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
         self.allowed_to_chat = False
 
     @utils.mod_only
