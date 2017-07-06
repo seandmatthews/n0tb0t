@@ -109,22 +109,6 @@ class TwitchService(object):
         # self.sock.send('CAP REQ :twitch.tv/membership\r\n'.encode('utf-8'))
 
     # Getter methods
-    @staticmethod
-    def get_message_display_name(message):
-        return message.display_name
-
-    @staticmethod
-    def get_message_content(message):
-        return message.content
-
-    @staticmethod
-    def get_mod_status(message):
-        return message.is_mod
-
-    @staticmethod
-    def get_message_type(message):
-        return message.message_type.name
-
     def _get_all_users(self):
         """
         Talks to twitch's unsupported TMI API to look at all chatters currently in the channel.
@@ -147,7 +131,7 @@ class TwitchService(object):
 
     def get_mods(self):
         return self._get_all_users()['moderators']
-        
+
     def get_viewers(self):
         return self._get_all_users()['viewers']
 
@@ -198,7 +182,7 @@ class TwitchService(object):
     def _line_to_message(self, line):
         """
         Takes a twitch IRC line and converts it to a Message
-        
+
         @params:
             line is a twitch IRC line
         """

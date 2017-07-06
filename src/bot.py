@@ -385,21 +385,21 @@ class Bot(*mixin_classes):
         Checks permissions for that command.
         Runs the command if the permissions check out.
         """
-        if 'PING' in self.service.get_message_content(message):  # PING/PONG silliness
-            if self.service.get_message_content(message)[0] in ['/', '!']:
-                user = self.service.get_message_display_name(message)
+        if 'PING' in message.content:  # PING/PONG silliness
+            if message.content[0] in ['/', '!']:
+                user = message.display_name
                 utils.add_to_appropriate_chat_queue(self, message, "You see? This is why we can't have nice things.")
                 utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')
                 cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
                 self.ban_roulette(cheaty_message_object)
             else:
-                utils.add_to_appropriate_chat_queue(self, message, self.service.get_message_content(message).replace('PING', 'PONG'))
+                utils.add_to_appropriate_chat_queue(self, message, message.content.replace('PING', 'PONG'))
 
         db_session = self.Session()
         command = self._get_command(message, db_session)
         if command is not None:
-            user = self.service.get_message_display_name(message)
-            user_is_mod = self.service.get_mod_status(message)
+            user = message.display_name
+            user_is_mod = message.is_mod
             if self._has_permission(user, user_is_mod, command) and self._is_valid_message_type(command, message):
                 self._run_command(command, message, db_session)
         db_session.commit()
@@ -412,7 +412,7 @@ class Bot(*mixin_classes):
         If it's a method, that place will be the key in the sorted_methods dictionary which
         has the corresponding list containing the command. Otherwise it will be the word 'Database'.
         """
-        first_word = self.service.get_message_content(message).split(' ')[0]
+        first_word = message.content.split(' ')[0]
         if len(first_word) > 1 and first_word[0] == '!':
             potential_command = first_word[1:].lower()
         else:
@@ -443,15 +443,15 @@ class Bot(*mixin_classes):
         return False
 
     def _is_valid_message_type(self, command, message):
-        if self.service.get_mod_status(message):
+        if message.is_mod:
             return True
         if command[0] == CommandTypes.HARDCODED:
-            if self.service.get_message_type(message) == 'PUBLIC':
+            if message.message_type.name == 'PUBLIC':
                 return command[1] not in self.sorted_methods['public_message_disallowed']
-            elif self.service.get_message_type(message) == 'PRIVATE':
+            elif message.message_type.name == 'PRIVATE':
                 return command[1] in self.sorted_methods['private_message_allowed']
         else:
-            return self.service.get_message_type(message) == 'PUBLIC'
+            return message.message_type.name == 'PUBLIC'
 
     def _run_command(self, command, message, db_session):
         """
