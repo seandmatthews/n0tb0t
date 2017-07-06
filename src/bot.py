@@ -56,7 +56,7 @@ class CommandTypes(Enum):
 
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
-    def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
+    def __init__(self, services, bot_info, bitly_access_token, current_dir, data_dir):
         # Run all the init methods of all the mixins that have them.
         # This currently doesn't use super because not all mixins have an init method that calls super
         # That would almost certainly break the method resolution order and cause things to fail.
@@ -65,16 +65,15 @@ class Bot(*mixin_classes):
                 if callable(getattr(mixin_class, '__init__')):
                     mixin_class.__init__(self)
 
-        self.services = service
+        self.services = services
         self.info = bot_info
 
         self.sorted_methods = self._sort_methods()
 
         # Most functions run in the main thread, but we can put slow ones here
         self.command_queue = collections.deque()
+        #after I async some shit that won't be happening
 
-        self.public_message_queue = collections.deque()
-        self.private_message_queue = collections.deque()
         try:
             with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
                 self.player_queue = PlayerQueue(input_iterable=json.loads(player_file.read()))
@@ -105,22 +104,12 @@ class Bot(*mixin_classes):
 
         self.allowed_to_chat = True
 
-        self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.public_message_queue})
-        self.chat_thread.daemon = True
-        self.chat_thread.start()
-
-        self.whisper_thread = threading.Thread(target=self._process_whisper_queue,
-                                               kwargs={'whisper_queue': self.private_message_queue})
-        self.whisper_thread.daemon = True
-        self.whisper_thread.start()
 
         self.command_thread = threading.Thread(target=self._process_command_queue,
-                                               kwargs={'command_queue': self.command_queue})
+                                               kwargs={'command_': self.command_queue})
         self.command_thread.daemon = True
         self.command_thread.start()
 
-        utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
 
         active_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         for aaq in active_auto_quotes:
@@ -339,31 +328,6 @@ class Bot(*mixin_classes):
         pqs.update_acell('A1', 'User')
         pqs.update_acell('B1', 'Times played')
 
-    def _process_chat_queue(self, chat_queue):
-        """
-        If there are messages in the chat queue that need
-        to be sent, pop off the oldest one and pass it
-        to the ts.send_message function. Then sleep for
-        half a second to stay below the twitch rate limit.
-        """
-        while self.allowed_to_chat:
-            if len(chat_queue) > 0:
-                self.services.send_message(chat_queue.pop())
-            time.sleep(.5)
-
-    def _process_whisper_queue(self, whisper_queue):
-        """
-        If there are whispers in the queue that need
-        to be sent, pop off the oldest one and pass it
-        to the ts.send_whisper function. Then sleep for
-        half a second to stay below the twitch rate limit.
-        """
-        while True:
-            if len(whisper_queue) > 0:
-                whisper_tuple = (whisper_queue.pop())
-                self.services.send_private_message(whisper_tuple[0], whisper_tuple[1])
-            time.sleep(1.5)
-
     def _process_command_queue(self, command_queue):
         """
         If there are commands in the queue, pop off the
@@ -385,6 +349,8 @@ class Bot(*mixin_classes):
         Checks permissions for that command.
         Runs the command if the permissions check out.
         """
+
+        #ugh this poing pong crap is going to be a pain
         if 'PING' in message.content:  # PING/PONG silliness
             if message.content[0] in ['/', '!']:
                 user = message.display_name
@@ -442,16 +408,17 @@ class Bot(*mixin_classes):
                 return True
         return False
 
-    def _is_valid_message_type(self, command, message):
-        if message.is_mod:
-            return True
-        if command[0] == CommandTypes.HARDCODED:
-            if message.message_type.name == 'PUBLIC':
-                return command[1] not in self.sorted_methods['public_message_disallowed']
-            elif message.message_type.name == 'PRIVATE':
-                return command[1] in self.sorted_methods['private_message_allowed']
-        else:
-            return message.message_type.name == 'PUBLIC'
+        #This will die with the queue moving to service
+    # def _is_valid_message_type(self, command, message):
+    #     if message.is_mod:
+    #         return True
+    #     if command[0] == CommandTypes.HARDCODED:
+    #         if message.message_type.name == 'PUBLIC':
+    #             return command[1] not in self.sorted_methods['public_message_disallowed']
+    #         elif message.message_type.name == 'PRIVATE':
+    #             return command[1] in self.sorted_methods['private_message_allowed']
+    #     else:
+    #         return message.message_type.name == 'PUBLIC'
 
     def _run_command(self, command, message, db_session):
         """
@@ -460,7 +427,8 @@ class Bot(*mixin_classes):
         """
         if command[0] == CommandTypes.DYNAMIC:
             db_command = command[1]
-            utils.add_to_appropriate_chat_queue(self, message, db_command.response)
+            message.content = db_command.response
+            utils.send_to_service(self, message)
         else:
             method_command = command[1]
             kwargs = {}
@@ -470,27 +438,5 @@ class Bot(*mixin_classes):
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
 
-    @utils.mod_only
-    def stop_speaking(self):
-        """
-        Stops the bot from putting stuff in chat to cut down on bot spam.
-        In long run, this should be replaced with rate limits.
-
-        !stop_speaking
-        """
-        self.services.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
-        self.allowed_to_chat = False
-
-    @utils.mod_only
-    def start_speaking(self):
-        """
-        Allows the bot to start speaking again.
-
-        !start_speaking
-        """
-        self.allowed_to_chat = True
-        self.public_message_queue.clear()
-        self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.public_message_queue})
-        self.chat_thread.daemon = True
-        self.chat_thread.start()
+    def send_to_service(self, message):
+        services[message.serice_uuid].add_to_message_queue(message)

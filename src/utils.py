@@ -63,32 +63,8 @@ def public_message_disallowed(f):
 
 # END DECORATORS #
 
-
-def add_to_public_chat_queue(bot, content):
-    """
-    Adds the message to the left side of the chat queue.
-    """
-    bot.public_message_queue.appendleft(content)
-
-
-def add_to_private_chat_queue(bot, user_display_name, content):
-    """
-    Creates a tuple of the user and message.
-    Appends that to the left side of the whisper queue.
-    """
-    whisper_tuple = (user_display_name, content)
-    bot.private_message_queue.appendleft(whisper_tuple)
-
-
-def add_to_appropriate_chat_queue(bot, message, content):
-    if message.message_type.name == 'PUBLIC':
-        bot.public_message_queue.appendleft(content)
-    elif message.message_type.name == 'PRIVATE':
-        user_display_name = message.display_name
-        whisper_tuple = (user_display_name, content)
-        bot.private_message_queue.appendleft(whisper_tuple)
-    else:
-        raise RuntimeError("Message class should have message_type enum with at least PRIVATE and PUBLIC fields")
+def send_to_service(bot, message):
+    bot.send_to_service(message)
 
 
 def add_to_command_queue(bot, function, kwargs=None):
