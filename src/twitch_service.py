@@ -33,16 +33,18 @@ class MessageTypes(Enum):
 
 
 class TwitchMessage(Message):
-    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False):
-        Message.__init__(self, service=Service.TWITCH,
+    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False, uuid=None, privilige = []):
+        super().__init__(self, service=Services.TWITCH,
                          message_type=message_type,
                          user=user, content=content,
-                         display_name=display_name)
-        self.is_mod = is_mod
+                         display_name=display_name
+                         privilige = privilige)
+        self.uuid = uuid
 
 
-class TwitchService(object):
+class TwitchService(Service):
     def __init__(self, pw, user, channel, error_logger, event_logger):
+        super().__init__
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
@@ -186,11 +188,14 @@ class TwitchService(object):
     def _get_user_id_from_line(self, line):
         return self._get_data_from_line(line, 'user-id')
 
-    def _check_mod_from_line(self, line):
+    def _get_privilige_from_line(self, line):#@todo(aaron) extract more priviliges from twich api
+        privilige = []
         if "PRIVMSG" in line:
-            return ('user-type=mod' in line) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
+            is_mod = ('user-type=mod' in line) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
         elif "WHISPER" in line:
-            return (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
+            is_mod = (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
+        if(is_mod):
+            privilige.append("moderator")
 
     def _line_to_message(self, line):
         """
@@ -199,7 +204,7 @@ class TwitchService(object):
         @params:
             line is a twitch IRC line
         """
-        kwargs = {}
+        kwargs = {uuid:self.uuid}
         try:
             if line == 'PING :tmi.twitch.tv':
                 kwargs['message_type'] = MessageTypes.PING
@@ -208,13 +213,13 @@ class TwitchService(object):
                 kwargs['display_name'] = self._get_display_name_from_line(line)
                 kwargs['message_type'] = MessageTypes.PUBLIC
                 kwargs['content'] = line.split(f'#{self.channel} :')[1]
-                kwargs['is_mod'] = self._check_mod_from_line(line)
+                kwargs['privilige'] = self._get_privilige_from_line(line)
             elif 'WHISPER' in line:
                 kwargs['user'] = self._get_user_id_from_line(line)
                 kwargs['display_name'] = self._get_display_name_from_line(line)
                 kwargs['message_type'] = MessageTypes.PRIVATE
                 kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
-                kwargs['is_mod'] = self._check_mod_from_line(line)
+                kwargs['is_mod'] = self._get_privilige_from_line(line)
             elif 'NOTICE' in line:
                 kwargs['message_type'] = MessageTypes.NOTICE
                 kwargs['content'] = line
