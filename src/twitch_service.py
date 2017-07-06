@@ -56,11 +56,21 @@ class TwitchService(object):
 
         self._join_room()
 
+
+    def send_message(self, message):
+        if message.message_type == MessageTypes.PUBLIC:
+            self._send_public_message(self, message)
+        elif message.message_type == MessageTypes.PRIVATE:
+            self._send_private_message(self,message)
+    (self, message)
+
+
     @reconnect_on_error
-    def send_public_message(self, message_content):
+    def _send_public_message(self, message):
         """
         Sends a message to the twitch public chat
         """
+        message_content = message.message_content
         message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'.encode('utf-8')
         print('{} PUBLIC {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -70,10 +80,12 @@ class TwitchService(object):
         self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
-    def send_private_message(self, recipient, whisper_content):
+    def _send_private_message(self, message):
         """
         Sends a whisper with the specified content to the specified user 
         """
+        whisper_content = message.content
+        recipient = message.display_name
         message_temp = f'PRIVMSG #{self.channel} :/w {recipient} {whisper_content}\r\n'.encode('utf-8')
         print('{} PRIVATE {} to {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -271,6 +283,6 @@ class TwitchService(object):
                         Message content: {last_message.content} 
                         User: {last_message.display_name}"""
                     )
-                    self.send_public_message('Something went wrong. The error has been logged.')
+                    self._send_public_message('Something went wrong. The error has been logged.')
 
             time.sleep(.02)
