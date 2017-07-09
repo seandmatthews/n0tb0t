@@ -7,7 +7,7 @@ class ShoutOutMixin:
     @utils.mod_only
     def so(self, message):
         """
-        Shouts out a fellow caster in chat. Uses the platform API to confirm
+        Shouts out a twitch caster in chat. Uses the twitch API to confirm
         that the caster is real and to fetch their last played game.
 
         !SO $caster

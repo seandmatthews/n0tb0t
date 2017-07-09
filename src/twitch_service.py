@@ -5,7 +5,6 @@ from enum import Enum, auto
 
 import requests
 
-from src.utils import Services
 from src.service import Service
 from src.message import Message
 
@@ -33,19 +32,16 @@ class MessageTypes(Enum):
 
 
 class TwitchMessage(Message):
-    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False, service_uuid=None, privilige = []):
-        super().__init__(self, service=Services.TWITCH,
+    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False):
+        Message.__init__(self, service=Service.TWITCH,
                          message_type=message_type,
-                         user=user,
-                         content=content,
-                         display_name=display_name
-                         privilige=privilige
-                         service_uuid=service_uuid)
+                         user=user, content=content,
+                         display_name=display_name,
+                         is_mod=is_mod)
 
 
-class TwitchService(Service):
+class TwitchService(object):
     def __init__(self, pw, user, channel, error_logger, event_logger):
-        super().__init__
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
@@ -59,35 +55,11 @@ class TwitchService(Service):
 
         self._join_room()
 
-        self.add_to_message_queue(self, TwitchMessage(content="{self.user} is online"))
-        '''
-        taken from bot __init__
-        chances are these will be removed after I do async
-        self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.public_message_queue})
-        self.chat_thread.daemon = True
-        self.chat_thread.start()
-
-        self.whisper_thread = threading.Thread(target=self._process_whisper_queue,
-                                               kwargs={'whisper_queue': self.private_message_queue})
-        self.whisper_thread.daemon = True
-        self.whisper_thread.start()
-        '''
-
-
-    def _send_message(self, message):
-        if message.message_type == MessageTypes.PUBLIC:
-            self._send_public_message(self, message)
-        elif message.message_type == MessageTypes.PRIVATE:
-            self._send_private_message(self,message)
-
-
     @reconnect_on_error
-    def _send_public_message(self, message):
+    def send_public_message(self, message_content):
         """
         Sends a message to the twitch public chat
         """
-        message_content = message.message_content
         message_temp = f'PRIVMSG #{self.channel} :{message_content}\r\n'.encode('utf-8')
         print('{} PUBLIC {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -97,12 +69,10 @@ class TwitchService(Service):
         self.event_logger.info(f'sent: {message_temp}')
 
     @reconnect_on_error
-    def _send_private_message(self, message):
+    def send_private_message(self, recipient, whisper_content):
         """
-        Sends a whisper with the specified content to the specified user
+        Sends a whisper with the specified content to the specified user 
         """
-        whisper_content = message.content
-        recipient = message.display_name
         message_temp = f'PRIVMSG #{self.channel} :/w {recipient} {whisper_content}\r\n'.encode('utf-8')
         print('{} PRIVATE {} to {}: {}'.format(
             time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -139,6 +109,22 @@ class TwitchService(Service):
         # self.sock.send('CAP REQ :twitch.tv/membership\r\n'.encode('utf-8'))
 
     # Getter methods
+    @staticmethod
+    def get_message_display_name(message):
+        return message.display_name
+
+    @staticmethod
+    def get_message_content(message):
+        return message.content
+
+    @staticmethod
+    def get_mod_status(message):
+        return message.is_mod
+
+    @staticmethod
+    def get_message_type(message):
+        return message.message_type.name
+
     def _get_all_users(self):
         """
         Talks to twitch's unsupported TMI API to look at all chatters currently in the channel.
@@ -159,13 +145,13 @@ class TwitchService(Service):
         else:
             raise RuntimeError('Error talking to the twitch API')
 
-    def _get_mods(self):
+    def get_mods(self):
         return self._get_all_users()['moderators']
-
-    def _get_viewers(self):
+        
+    def get_viewers(self):
         return self._get_all_users()['viewers']
 
-    def _get_all_chattersf(self):
+    def get_all_chatters(self):
         chatters = []
         for k, v in self._get_all_users().items():
             [chatters.append(user) for user in v]
@@ -203,48 +189,35 @@ class TwitchService(Service):
     def _get_user_id_from_line(self, line):
         return self._get_data_from_line(line, 'user-id')
 
-    def _get_privilige_from_line(self, line):#@todo(aaron) extract more priviliges from twich api
-        privilige = []
+    def _check_mod_from_line(self, line):
         if "PRIVMSG" in line:
-            is_mod = ('user-type=mod' in line) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
+            return ('user-type=mod' in line) or (self._get_display_name_from_line(line).lower() == self.channel.lower())
         elif "WHISPER" in line:
-            is_mod = (self._get_username_from_line(line) in self._get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
-        if(is_mod):
-            privilige.append("moderator")
+            return (self._get_username_from_line(line) in self.get_mods()) or (self._get_username_from_line(line) == self.channel.lower())
 
     def _line_to_message(self, line):
         """
         Takes a twitch IRC line and converts it to a Message
-
+        
         @params:
             line is a twitch IRC line
         """
-        kwargs = {service_uuid:self.uuid}
+        kwargs = {}
         try:
             if line == 'PING :tmi.twitch.tv':
                 kwargs['message_type'] = MessageTypes.PING
-                #ugh this poing pong crap is going to be a pain
-                if 'PING' in message.content:  # PING/PONG silliness
-                    if message.content[0] in ['/', '!']:
-                        user = message.display_name
-                        utils.add_to_appropriate_chat_queue(self, message, "You see? This is why we can't have nice things.")
-                        utils.add_to_appropriate_chat_queue(self, message, f'!ban_roulette {user}')
-                        cheaty_message_object = Message(content=f'!ban_roulette {user}', is_mod=True)
-                        self.ban_roulette(cheaty_message_object)
-                    else:
-                        utils.add_to_appropriate_chat_queue(self, message, message.content.replace('PING', 'PONG'))
             elif 'PRIVMSG' in line:
                 kwargs['user'] = self._get_user_id_from_line(line)
                 kwargs['display_name'] = self._get_display_name_from_line(line)
                 kwargs['message_type'] = MessageTypes.PUBLIC
                 kwargs['content'] = line.split(f'#{self.channel} :')[1]
-                kwargs['privilige'] = self._get_privilige_from_line(line)
+                kwargs['is_mod'] = self._check_mod_from_line(line)
             elif 'WHISPER' in line:
                 kwargs['user'] = self._get_user_id_from_line(line)
                 kwargs['display_name'] = self._get_display_name_from_line(line)
                 kwargs['message_type'] = MessageTypes.PRIVATE
                 kwargs['content'] = line.split(f'WHISPER {self.user} :')[1]
-                kwargs['is_mod'] = self._get_privilige_from_line(line)
+                kwargs['is_mod'] = self._check_mod_from_line(line)
             elif 'NOTICE' in line:
                 kwargs['message_type'] = MessageTypes.NOTICE
                 kwargs['content'] = line
@@ -255,14 +228,6 @@ class TwitchService(Service):
             print(str(e))
             print(line)
         return TwitchMessage(**kwargs)
-
-        #aaron says:
-        #not sure where this is used
-        #delete this if it isn't used
-    def get_time_out_message(self, username, seconds):
-        message = f'/timeout {username} {seconds}'
-        return message
-
 
     def run(self, bot):
         while True:
@@ -313,11 +278,10 @@ class TwitchService(Service):
                 except Exception as e:
                     print(e)
                     self.error_logger.exception(
-                        f"""Message type: {last_message.message_type}
-                        Message content: {last_message.content}
+                        f"""Message type: {last_message.message_type} 
+                        Message content: {last_message.content} 
                         User: {last_message.display_name}"""
                     )
-                    self._send_message(TwitchMessage(content='Something went wrong. The error has been logged.'))
+                    self.send_public_message('Something went wrong. The error has been logged.')
 
-            #todo async
             time.sleep(.02)

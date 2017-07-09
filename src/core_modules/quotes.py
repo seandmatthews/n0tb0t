@@ -163,7 +163,6 @@ class QuotesMixin:
                         response_str = self._delete_quote(db_session, quote_id)
                         utils.add_to_appropriate_chat_queue(self, message, response_str)
 
-    # These methods interact with the database
     @staticmethod
     def _get_quote(db_session, quote_id):
         # We grab all the quotes because we can't just use the quote ID
