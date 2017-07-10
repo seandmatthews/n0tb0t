@@ -1,3 +1,5 @@
 # n0tb0t
 
-A twitch bot that now has a README!
+n0tb0t is a flexible and extensible twitch bot written in Python 3
+
+Requires Python 3.6+

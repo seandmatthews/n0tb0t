@@ -7,6 +7,30 @@ import src.utils as utils
 
 
 class QuotesMixin:
+    def __init__(self):
+        self.starting_spreadsheets_list.append('quotes')
+
+    @utils.retry_gspread_func
+    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the quotes google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            qs = sheet.worksheet('Quotes')
+        except gspread.exceptions.WorksheetNotFound:
+            qs = sheet.add_worksheet('Quotes', 1000, 2)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        qs.update_acell('A1', 'Quote Index')
+        qs.update_acell('B1', 'Quote')
+
+        self.update_quote_spreadsheet()
+
     @utils.retry_gspread_func
     @utils.mod_only
     def update_quote_spreadsheet(self):

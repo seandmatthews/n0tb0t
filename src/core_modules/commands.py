@@ -7,6 +7,53 @@ import src.utils as utils
 
 
 class CommandsMixin:
+    def __init__(self):
+        self.starting_spreadsheets_list.append('commands')
+
+    @utils.retry_gspread_func
+    def _initialize_commands_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the commands google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            cs = sheet.worksheet('Commands')
+        except gspread.exceptions.WorksheetNotFound:
+            cs = sheet.add_worksheet('Commands', 1000, 20)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        cs.update_acell('A1', 'Commands\nfor\nEveryone')
+        cs.update_acell('B1', 'Command\nDescription')
+        cs.update_acell('D1', 'Commands\nfor\nMods')
+        cs.update_acell('E1', 'Command\nDescription')
+        cs.update_acell('G1', 'User\nCreated\nCommands')
+        cs.update_acell('H1', 'Bot Response')
+        cs.update_acell('J1', 'User\nSpecific\nCommands')
+        cs.update_acell('K1', 'Bot Response')
+        cs.update_acell('L1', 'User List')
+
+        for index in range(len(self.sorted_methods['for_all']) + 10):
+            cs.update_cell(index + 2, 1, '')
+            cs.update_cell(index + 2, 2, '')
+
+        for index, method in enumerate(self.sorted_methods['for_all']):
+            cs.update_cell(index + 2, 1, '!{}'.format(method))
+            cs.update_cell(index + 2, 2, getattr(self, method).__doc__)
+
+        for index in range(len(self.sorted_methods['for_mods']) + 10):
+            cs.update_cell(index + 2, 4, '')
+            cs.update_cell(index + 2, 5, '')
+
+        for index, method in enumerate(self.sorted_methods['for_mods']):
+            cs.update_cell(index + 2, 4, '!{}'.format(method))
+            cs.update_cell(index + 2, 5, getattr(self, method).__doc__)
+
+        self.update_command_spreadsheet()
+
     def show_commands(self, message):
         """
         Links the google spreadsheet containing all commands in chat
