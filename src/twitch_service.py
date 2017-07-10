@@ -229,6 +229,10 @@ class TwitchService(object):
             print(line)
         return TwitchMessage(**kwargs)
 
+    def get_time_out_message(self, username, seconds):
+        message = f'/timeout {username} {seconds}'
+        return message
+
     def run(self, bot):
         while True:
             messages = []

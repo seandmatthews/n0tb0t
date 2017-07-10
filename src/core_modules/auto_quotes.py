@@ -10,7 +10,31 @@ import src.utils as utils
 
 class AutoQuoteMixin:
     def __init__(self):
+        self.starting_spreadsheets_list.append('auto_quotes')
         self.auto_quotes_timers = {}
+
+    @utils.retry_gspread_func
+    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the auto_quotes google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            aqs = sheet.worksheet('Auto Quotes')
+        except gspread.exceptions.WorksheetNotFound:
+            aqs = sheet.add_worksheet('Auto Quotes', 1000, 4)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        aqs.update_acell('A1', 'Auto Quote Index')
+        aqs.update_acell('B1', 'Quote')
+        aqs.update_acell('C1', 'Period\n(In seconds)')
+        aqs.update_acell('D1', 'Active')
+
+        self.update_auto_quote_spreadsheet()
 
     @utils.mod_only
     @utils.retry_gspread_func
@@ -260,8 +284,7 @@ class AutoQuoteMixin:
         """
         fullid = 'AQ{}'.format(auto_quote_object.id)
         self.auto_quotes_timers[fullid].cancel()
-        time.sleep(1)
-        self.auto_quotes_timers[fullid].cancel()
+        del self.auto_quotes_timers[fullid]
 
     def _start_auto_quote(self, db_session, human_readable_auto_quote_index):
         """

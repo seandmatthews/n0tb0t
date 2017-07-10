@@ -6,6 +6,30 @@ from config import time_zone_choice
 
 
 class HighlightMixin:
+    def __init__(self):
+        self.starting_spreadsheets_list.append('highlights')
+
+    @utils.retry_gspread_func
+    def _initialize_highlights_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the highlights google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            hls = sheet.worksheet('Highlight List')
+        except gspread.exceptions.WorksheetNotFound:
+            hls = sheet.add_worksheet('Highlight List', 1000, 4)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        hls.update_acell('A1', 'User')
+        hls.update_acell('B1', 'Stream Start Time {}'.format(time_zone_choice))
+        hls.update_acell('C1', 'Highlight Time')
+        hls.update_acell('D1', 'User Note')
+
     def highlight(self, message):
         """
         Logs the time in the video when something amusing happened.

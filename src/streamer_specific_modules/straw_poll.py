@@ -7,6 +7,9 @@ import src.utils as utils
 
 
 class StrawPollMixin:
+    def __init__(self):
+        self.strawpoll_id = ''
+
     def _get_poll_info(self, poll_id):
         """
         Returns options and votes for poll ID in json format.

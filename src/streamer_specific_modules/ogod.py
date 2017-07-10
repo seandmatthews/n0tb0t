@@ -2,11 +2,11 @@ from config import bot_info
 from src.message import Message
 import src.utils as utils
 
+
 class OgodMixin:
     def ogod(self, message):
         """
         The bot responds with "X's delicate sensibilities have been offended!"
-
         !ogod
         !ogod an offensive thing
         """

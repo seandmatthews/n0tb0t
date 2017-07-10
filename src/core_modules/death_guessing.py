@@ -9,6 +9,28 @@ import src.utils as utils
 
 
 class DeathGuessingMixin:
+    def __init__(self):
+        self.starting_spreadsheets_list.append('player_guesses')
+
+    @utils.retry_gspread_func
+    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the player_guesses google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            pgs = sheet.worksheet('Player Guesses')
+        except gspread.exceptions.WorksheetNotFound:
+            pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        pgs.update_acell('A1', 'User')
+        pgs.update_acell('B1', 'Current Guess')
+        pgs.update_acell('C1', 'Total Guess')
 
     @utils.mod_only
     def start_guessing(self, db_session):

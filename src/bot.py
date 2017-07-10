@@ -1,23 +1,19 @@
 import collections
 import importlib
 import inspect
-import json
 import os
 import threading
 import time
 from enum import Enum, auto
 
-import gspread
 import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
 
 import src.google_auth as google_auth
-from src.message import Message
 import src.models as models
 import src.utils as utils
-from config import time_zone_choice
-from src.core_modules.player_queue import PlayerQueue
+from src.message import Message
 
 
 def collect_mixin_classes(directory_name):
@@ -57,14 +53,6 @@ class CommandTypes(Enum):
 # noinspection PyArgumentList,PyIncorrectDocstring
 class Bot(*mixin_classes):
     def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
-        # Run all the init methods of all the mixins that have them.
-        # This currently doesn't use super because not all mixins have an init method that calls super
-        # That would almost certainly break the method resolution order and cause things to fail.
-        for mixin_class in mixin_classes:
-            if getattr(mixin_class, '__init__', None):
-                if callable(getattr(mixin_class, '__init__')):
-                    mixin_class.__init__(self)
-
         self.service = service
         self.info = bot_info
 
@@ -75,11 +63,6 @@ class Bot(*mixin_classes):
 
         self.public_message_queue = collections.deque()
         self.private_message_queue = collections.deque()
-        try:
-            with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
-                self.player_queue = PlayerQueue(input_iterable=json.loads(player_file.read()))
-        except FileNotFoundError:
-            self.player_queue = PlayerQueue()
 
         self.shortener = Shortener('Bitly', bitly_token=bitly_access_token)
 
@@ -88,18 +71,8 @@ class Bot(*mixin_classes):
 
         self.credentials = google_auth.get_credentials(credentials_parent_dir=current_dir, client_secret_dir=current_dir)
 
-        print('Finding Google Sheets')
-        starting_spreadsheets_list = ['quotes', 'auto_quotes', 'commands', 'highlights', 'player_guesses', 'player_queue']
+        self.starting_spreadsheets_list = []
         self.spreadsheets = {}
-        for sheet in starting_spreadsheets_list:
-            sheet_name = '{}-{}-{}'.format(bot_info['channel'], bot_info['user'], sheet)
-            already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
-            web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
-            sheet_tuple = (sheet_name, web_view_link)
-            self.spreadsheets[sheet] = sheet_tuple
-            if not already_existed:
-                init_command = '_initialize_{}_spreadsheet'.format(sheet)
-                getattr(self, init_command)(sheet_name)
 
         self.guessing_enabled = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled') == 'True'
 
@@ -120,6 +93,25 @@ class Bot(*mixin_classes):
         self.command_thread.daemon = True
         self.command_thread.start()
 
+        # Run all the init methods of all the mixins that have them.
+        # This currently doesn't use super because not all mixins have an init method that calls super
+        # That would almost certainly break the method resolution order and cause things to fail.
+        for mixin_class in mixin_classes:
+            if getattr(mixin_class, '__init__', None):
+                if callable(getattr(mixin_class, '__init__')):
+                    mixin_class.__init__(self)
+
+        print('Finding Google Sheets')
+        for sheet in self.starting_spreadsheets_list:
+            sheet_name = '{}-{}-{}'.format(bot_info['channel'], bot_info['user'], sheet)
+            already_existed, spreadsheet_id = google_auth.ensure_file_exists(self.credentials, sheet_name)
+            web_view_link = 'https://docs.google.com/spreadsheets/d/{}'.format(spreadsheet_id)
+            sheet_tuple = (sheet_name, web_view_link)
+            self.spreadsheets[sheet] = sheet_tuple
+            if not already_existed:
+                init_command = '_initialize_{}_spreadsheet'.format(sheet)
+                getattr(self, init_command)(sheet_name)
+
         utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
 
         active_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
@@ -127,7 +119,6 @@ class Bot(*mixin_classes):
             self._create_timer_for_auto_quote_object(aaq)
         self.player_queue_credentials = None
         db_session.close()
-        self.strawpoll_id = ''
 
     def _sort_methods(self):
         """
@@ -190,154 +181,6 @@ class Bot(*mixin_classes):
         db_session.commit()
         db_session.close()
         return session_factory
-
-    @utils.retry_gspread_func
-    def _initialize_quotes_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the quotes google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            qs = sheet.worksheet('Quotes')
-        except gspread.exceptions.WorksheetNotFound:
-            qs = sheet.add_worksheet('Quotes', 1000, 2)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        qs.update_acell('A1', 'Quote Index')
-        qs.update_acell('B1', 'Quote')
-
-        self.update_quote_spreadsheet()
-
-    @utils.retry_gspread_func
-    def _initialize_auto_quotes_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the auto_quotes google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            aqs = sheet.worksheet('Auto Quotes')
-        except gspread.exceptions.WorksheetNotFound:
-            aqs = sheet.add_worksheet('Auto Quotes', 1000, 4)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        aqs.update_acell('A1', 'Auto Quote Index')
-        aqs.update_acell('B1', 'Quote')
-        aqs.update_acell('C1', 'Period\n(In seconds)')
-        aqs.update_acell('D1', 'Active')
-
-        self.update_auto_quote_spreadsheet()
-
-    @utils.retry_gspread_func
-    def _initialize_commands_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the commands google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            cs = sheet.worksheet('Commands')
-        except gspread.exceptions.WorksheetNotFound:
-            cs = sheet.add_worksheet('Commands', 1000, 20)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        cs.update_acell('A1', 'Commands\nfor\nEveryone')
-        cs.update_acell('B1', 'Command\nDescription')
-        cs.update_acell('D1', 'Commands\nfor\nMods')
-        cs.update_acell('E1', 'Command\nDescription')
-        cs.update_acell('G1', 'User\nCreated\nCommands')
-        cs.update_acell('H1', 'Bot Response')
-        cs.update_acell('J1', 'User\nSpecific\nCommands')
-        cs.update_acell('K1', 'Bot Response')
-        cs.update_acell('L1', 'User List')
-
-        for index in range(len(self.sorted_methods['for_all'])+10):
-            cs.update_cell(index+2, 1, '')
-            cs.update_cell(index+2, 2, '')
-
-        for index, method in enumerate(self.sorted_methods['for_all']):
-            cs.update_cell(index+2, 1, '!{}'.format(method))
-            cs.update_cell(index+2, 2, getattr(self, method).__doc__)
-
-        for index in range(len(self.sorted_methods['for_mods'])+10):
-            cs.update_cell(index+2, 4, '')
-            cs.update_cell(index+2, 5, '')
-
-        for index, method in enumerate(self.sorted_methods['for_mods']):
-            cs.update_cell(index+2, 4, '!{}'.format(method))
-            cs.update_cell(index+2, 5, getattr(self, method).__doc__)
-
-        self.update_command_spreadsheet()
-
-    @utils.retry_gspread_func
-    def _initialize_highlights_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the highlights google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            hls = sheet.worksheet('Highlight List')
-        except gspread.exceptions.WorksheetNotFound:
-            hls = sheet.add_worksheet('Highlight List', 1000, 4)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        hls.update_acell('A1', 'User')
-        hls.update_acell('B1', 'Stream Start Time {}'.format(time_zone_choice))
-        hls.update_acell('C1', 'Highlight Time')
-        hls.update_acell('D1', 'User Note')
-
-    @utils.retry_gspread_func
-    def _initialize_player_guesses_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the player_guesses google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            pgs = sheet.worksheet('Player Guesses')
-        except gspread.exceptions.WorksheetNotFound:
-            pgs = sheet.add_worksheet('Player Guesses', 1000, 3)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        pgs.update_acell('A1', 'User')
-        pgs.update_acell('B1', 'Current Guess')
-        pgs.update_acell('C1', 'Total Guess')
-
-    @utils.retry_gspread_func
-    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
-        """
-        Populate the player_queue google sheet with its initial data.
-        """
-        gc = gspread.authorize(self.credentials)
-        sheet = gc.open(spreadsheet_name)
-        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
-
-        try:
-            pqs = sheet.worksheet('Player Queue')
-        except gspread.exceptions.WorksheetNotFound:
-            pqs = sheet.add_worksheet('Player Queue', 500, 2)
-            sheet1 = sheet.get_worksheet(0)
-            sheet.del_worksheet(sheet1)
-
-        pqs.update_acell('A1', 'User')
-        pqs.update_acell('B1', 'Times played')
 
     def _process_chat_queue(self, chat_queue):
         """
@@ -469,28 +312,3 @@ class Bot(*mixin_classes):
             if 'db_session' in inspect.signature(getattr(self, method_command)).parameters:
                 kwargs['db_session'] = db_session
             getattr(self, method_command)(**kwargs)
-
-    @utils.mod_only
-    def stop_speaking(self):
-        """
-        Stops the bot from putting stuff in chat to cut down on bot spam.
-        In long run, this should be replaced with rate limits.
-
-        !stop_speaking
-        """
-        self.service.send_public_message("Okay, I'll shut up for a bit. !start_speaking when you want me to speak again.")
-        self.allowed_to_chat = False
-
-    @utils.mod_only
-    def start_speaking(self):
-        """
-        Allows the bot to start speaking again.
-
-        !start_speaking
-        """
-        self.allowed_to_chat = True
-        self.public_message_queue.clear()
-        self.chat_thread = threading.Thread(target=self._process_chat_queue,
-                                            kwargs={'chat_queue': self.public_message_queue})
-        self.chat_thread.daemon = True
-        self.chat_thread.start()

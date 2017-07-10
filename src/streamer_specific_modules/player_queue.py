@@ -59,7 +59,32 @@ class PlayerQueue:
 
 class PlayerQueueMixin:
     def __init__(self):
+        try:
+            with open(os.path.join(data_dir, f"{self.info['channel']}_player_queue.json"), 'r', encoding="utf-8") as player_file:
+                self.player_queue = PlayerQueue(input_iterable=json.loads(player_file.read()))
+        except FileNotFoundError:
+            self.player_queue = PlayerQueue()
         self.ready_user_dict = dict()
+        self.starting_spreadsheets_list.append('player_queue')
+
+    @utils.retry_gspread_func
+    def _initialize_player_queue_spreadsheet(self, spreadsheet_name):
+        """
+        Populate the player_queue google sheet with its initial data.
+        """
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        sheet.worksheets()  # Necessary to remind gspread that Sheet1 exists, otherwise gpsread forgets about it
+
+        try:
+            pqs = sheet.worksheet('Player Queue')
+        except gspread.exceptions.WorksheetNotFound:
+            pqs = sheet.add_worksheet('Player Queue', 500, 2)
+            sheet1 = sheet.get_worksheet(0)
+            sheet.del_worksheet(sheet1)
+
+        pqs.update_acell('A1', 'User')
+        pqs.update_acell('B1', 'Times played')
 
     def _update_player_queue_spreadsheet(self, player_queue):
         """

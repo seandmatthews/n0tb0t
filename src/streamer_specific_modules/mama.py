@@ -1,12 +1,12 @@
 import src.utils as utils
 
 
-class MotherMixin:
+class MamaMixin:
     def mama(self, message):
         """
         Checks to see if RizMomma is in chat.
         Mostly so Riz knows how lewd to be when playing Quiplash
-        
+
         !mama
         """
         chatters = self.service.get_all_chatters()

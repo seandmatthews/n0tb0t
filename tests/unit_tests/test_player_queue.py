@@ -1,8 +1,8 @@
+import os
+import sys
 from collections import deque
 from enum import Enum, auto
 from inspect import getsourcefile
-import os
-import sys
 from unittest.mock import Mock
 
 import pytest
@@ -13,8 +13,8 @@ root_dir = os.path.join(current_dir, os.pardir, os.pardir)
 sys.path.append(root_dir)
 
 from src.message import Message
-from src.core_modules.player_queue import PlayerQueue as PlayerQueue
-from src.core_modules.player_queue import PlayerQueueMixin as PlayerQueueMixin
+from src.streamer_specific_modules.player_queue import PlayerQueue as PlayerQueue
+from src.streamer_specific_modules.player_queue import PlayerQueueMixin as PlayerQueueMixin
 
 
 class Service:

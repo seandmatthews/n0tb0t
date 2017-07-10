@@ -2,11 +2,10 @@ import src.utils as utils
 from src.message import Message
 
 
-class NordMixin:
-    def nord(self, message):
+class NordsMixin:
+    def nords(self, message):
         """
         The bot responds with "X belongs to the Nords!"
-
         !nord
         !nord something that belongs to the Nords
         """
