@@ -18,7 +18,6 @@ class Service:
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
                 self._send_message(chat_queue.pop())
-
 '''
 These should be turned into a command or something, probably. So that we have a shutup message type or something.
     @utils.mod_only
