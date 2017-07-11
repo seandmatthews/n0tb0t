@@ -390,23 +390,6 @@ class Bot(*mixin_classes):
             return [CommandTypes.DYNAMIC, db_result[0]]
         return None
 
-    def _has_permission(self, user, user_is_mod, command):
-        """
-        Takes a message from the user, and a list which contains the
-        command and where it's found, and a database session.
-        Returns True or False depending on whether the user that
-        sent the command has the authority to use that command
-        """
-        if command[0] == CommandTypes.HARDCODED:
-            if command[1] in self.sorted_methods['for_all'] or (command[1] in self.sorted_methods['for_mods'] and user_is_mod):
-                return True
-        else:
-            db_command = command[1]
-            if bool(db_command.permissions) is False:
-                return True
-            elif user in [permission.user_entity for permission in db_command.permissions]:
-                return True
-        return False
 
         #This will die with the queue moving to service
     # def _is_valid_message_type(self, command, message):
@@ -420,6 +403,7 @@ class Bot(*mixin_classes):
     #     else:
     #         return message.message_type.name == 'PUBLIC'
 
+#@todo someone: move this code to service's act_on
     def _run_command(self, command, message, db_session):
         """
         If the command is a database command, send the response to the chat queue.
