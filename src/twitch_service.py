@@ -262,7 +262,8 @@ class TwitchService(Service):
         message = f'/timeout {username} {seconds}'
         return message
 
-
+        #@todo(aaron) move this functionality to generic service
+        #make it so it calls a bunch of functions which must be implemented perservice
     def run(self, bot):
         while True:
             messages = []
@@ -303,7 +304,7 @@ class TwitchService(Service):
             #     print(last_message.content)
             elif last_message.message_type in [MessageTypes.PUBLIC, MessageTypes.PRIVATE]:
                 try:
-                    bot._act_on(last_message)
+                    self._act_on(last_message)
                     print('{} {} {}: {}'.format(
                         time.strftime('%Y-%m-%d %H:%M:%S'),
                         last_message.message_type.name,
