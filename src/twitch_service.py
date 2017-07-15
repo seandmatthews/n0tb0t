@@ -33,14 +33,13 @@ class MessageTypes(Enum):
 
 
 class TwitchMessage(Message):
-    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False, service_uuid=None, privilige = []):
+    def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False, privilige = []):
         super().__init__(self, service=Services.TWITCH,
                          message_type=message_type,
                          user=user,
                          content=content,
-                         display_name=display_name
-                         privilige=privilige
-                         service_uuid=service_uuid)
+                         display_name=display_name,
+                         privilige=privilige)
 
 
 class TwitchService(Service):
@@ -219,7 +218,7 @@ class TwitchService(Service):
         @params:
             line is a twitch IRC line
         """
-        kwargs = {service_uuid:self.uuid}
+        kwargs = {}
         try:
             if line == 'PING :tmi.twitch.tv':
                 kwargs['message_type'] = MessageTypes.PING

@@ -371,6 +371,7 @@ class Bot(*mixin_classes):
         db_session.commit()
         db_session.close()
 
+        #this needs to get moved to service by sean
     def _get_command(self, message, db_session):
         """
         Takes a message from the user and a database session.

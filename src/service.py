@@ -1,11 +1,9 @@
-from enum import Enum, auto
-from uuid import uuid4
+from enum import Enum
 import collections
 
 
 class Service:
     def __init__(self):
-            self.uuid = uuid4().int
             self.message_queue = collections.deque()
             self.allowed_to_chat = True #potentally move this to twitch_service
     def _send_message(self, message):
@@ -18,6 +16,10 @@ class Service:
         while self.allowed_to_chat:
             if len(chat_queue) > 0:
                 self._send_message(chat_queue.pop())
+
+    def _act_on(self,message):
+        pass #this is going to replace bot's act_on
+
 '''
 These should be turned into a command or something, probably. So that we have a shutup message type or something.
     @utils.mod_only
