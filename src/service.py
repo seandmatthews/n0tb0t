@@ -35,11 +35,9 @@ class Service:
     def _act_on(self, message):
         pass #this is going to replace bot's act_on
 
-        #@todo(aaron) better variable names
     def _run(self):
         while self.keep_running:
             raw_data = self._read_from_service()
-            act_on_these = self._package_messages(raw_data)
-            for act_on_this in act_on_these:
-                self._act_on(act_on_this)
-
+            new_messages = self._package_messages(raw_data)
+            for new_message in new_messages:
+                self._act_on(new_message)
