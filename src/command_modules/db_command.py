@@ -1,4 +1,4 @@
-from Command import command
+from src.command_modules.command import Command
 
 class DatabaseCommand(Command):
     def __init__(self, allowed_privileges, disallowed_privileges, chat_command, echo_text):

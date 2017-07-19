@@ -1,4 +1,4 @@
-from command import Command
+from src.command_modules.command import Command
 
 class AliasCommmand(Command):
     def __init__(self, chat_command, command):
