@@ -11,9 +11,11 @@ an implementation of _act_on()
 class Service:
     def __init__(self):
             self.message_queue = collections.deque()
-            self.allowed_to_chat = True #potentally move this to twitch_service
+            self.allowed_to_chat = True
             self.keep_running = True
-            self._run()
+            self.ready_to_run = False
+            self.commands = dict()
+            self.prefix = None
 
     def _send_message(self, message):
         raise NotImplementedError()
@@ -35,7 +37,13 @@ class Service:
     def _act_on(self, message):
         pass #this is going to replace bot's act_on
 
-    def _run(self):
+    def configure(self, json_dict):
+        '''
+        json_dict is a dictionary containing data loaded from json
+        '''
+        commands_to_load = json_dict["commands"]
+
+    def run(self):
         while self.keep_running:
             raw_data = self._read_from_service()
             new_messages = self._package_messages(raw_data)
