@@ -9,7 +9,7 @@ from src.utils import Services
 from src.service import Service
 from src.message import Message
 
-
+#@todo(aaron): add an unimplemented version fo this wrapper to service
 def reconnect_on_error(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -29,7 +29,7 @@ class MessageTypes(Enum):
     PRIVATE = auto()
     NOTICE = auto()
     PING = auto()
-    SYSTEM_MESSAGE = auto()
+    SYSTEM = auto()
 
 
 class TwitchMessage(Message):
@@ -170,6 +170,8 @@ class TwitchService(Service):
             [chatters.append(user) for user in v]
         return chatters
 
+#@todo(aaron):
+#purge all these _get_whatever_from_line and put all the logic into _package_messages
     @staticmethod
     def _get_username_from_line(line):
         exclam_index = None
@@ -211,7 +213,7 @@ class TwitchService(Service):
         if(is_mod):
             privilige.append("moderator")
 
-    def _line_to_message(self, line):
+    def _package_messages(self, line):
         """
         Takes a twitch IRC line and converts it to a Message
 
@@ -248,7 +250,7 @@ class TwitchService(Service):
                 kwargs['message_type'] = MessageTypes.NOTICE
                 kwargs['content'] = line
             else:
-                kwargs['message_type'] = MessageTypes.SYSTEM_MESSAGE
+                kwargs['message_type'] = MessageTypes.SYSTEM
                 kwargs['content'] = line
         except Exception as e:
             print(str(e))
@@ -291,7 +293,7 @@ class TwitchService(Service):
                 self.error_logger.exception("Error Decoding the buffer")
                 continue
             for line in line_list:
-                messages.append(self._line_to_message(line))
+                messages.append(self._package_messages(line))
 
             last_message = messages[-2]
             if last_message.message_type == MessageTypes.NOTICE:
