@@ -1,7 +1,7 @@
 from src.command_modules.command import Command
 
-class DatabaseCommand(Command):
-    def __init__(self, allowed_privileges, disallowed_privileges, chat_command, echo_text):
+class SimpleCommand(Command):
+    def __init__(self, allowed_privileges=[], disallowed_privileges=[], chat_command, echo_text):
         super().__init__(allowed_privileges, disallowed_privileges, chat_command)
         self.echo_text = echo_text
 
@@ -10,8 +10,8 @@ class DatabaseCommand(Command):
         service.add_to_message_queue(message)
 
 
-class AddDatabaseCommand(Command)
-    def __init__(self, allowed_privileges, disallowed_privileges, chat_command):
+class SimpleCommandAdder(Command)
+    def __init__(self, allowed_privileges=['moderator'], disallowed_privileges=[], chat_command):
         super().__init__(allowed_privileges, disallowed_privileges, chat_command)
 
     def _execute(self, message, service):
