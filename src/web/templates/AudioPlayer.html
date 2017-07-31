@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<div id="currently_playing">
+    <div>
+        <span>Title: </span><span id="title_span"></span>
+    </div>
+    <audio id="music_player" autoplay controls>
+        <source id="audio_source" src="/next_song">
+        Your browser does not support the audio element.
+    </audio>
+    <div>
+        <button type="button" onclick="nextSong()">Skip</button>
+    </div>
+</div>
+
+<span>Queue:</span>
+<ol>
+    {% for song in playlist %}
+        <li>{{ song }}{# song.title eventually #}</li>
+    {% endfor %}
+</ol>
+
+<script src="/static/JavaScript/music.js"></script>
+</body>
+</html>

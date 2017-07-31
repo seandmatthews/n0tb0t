@@ -40,9 +40,9 @@ def collect_mixin_classes(directory_name):
     return mixin_classes
 
 
-mixin_classes = []
-mixin_classes += collect_mixin_classes('core_modules')
-mixin_classes += collect_mixin_classes('streamer_specific_modules')
+all_mixin_classes = []
+all_mixin_classes += collect_mixin_classes('core_modules')
+all_mixin_classes += collect_mixin_classes('streamer_specific_modules')
 
 
 class CommandTypes(Enum):
@@ -50,8 +50,7 @@ class CommandTypes(Enum):
     DYNAMIC = auto()
 
 
-# noinspection PyArgumentList,PyIncorrectDocstring
-class Bot(*mixin_classes):
+class Bot(*all_mixin_classes):
     def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
         self.service = service
         self.info = bot_info
@@ -96,7 +95,7 @@ class Bot(*mixin_classes):
         # Run all the init methods of all the mixins that have them.
         # This currently doesn't use super because not all mixins have an init method that calls super
         # That would almost certainly break the method resolution order and cause things to fail.
-        for mixin_class in mixin_classes:
+        for mixin_class in all_mixin_classes:
             if getattr(mixin_class, '__init__', None):
                 if callable(getattr(mixin_class, '__init__')):
                     mixin_class.__init__(self)
@@ -167,7 +166,6 @@ class Bot(*mixin_classes):
         channel = self.info['channel']
         self.db_path = os.path.join(db_location, f'{channel}.db')
         engine = sqlalchemy.create_engine(f'sqlite:///{self.db_path}', connect_args={'check_same_thread': False})
-        # noinspection PyPep8Naming
         session_factory = sessionmaker(bind=engine)
         models.Base.metadata.create_all(engine)
         db_session = session_factory()
