@@ -12,6 +12,11 @@ music_cache_dir = os.path.join(grandparent_dir, 'MusicCache')
 app = Flask(__name__, static_folder=os.path.join(current_dir, 'static'))
 
 
+@app.route('/')
+def welcome():
+    return render_template('index.html')
+
+
 @app.route('/audio')
 def audio():
     playlist = [song_tuple[0] for song_tuple in get_playlist()]
@@ -31,7 +36,6 @@ def next_song(ignore_cache_date=None):
     del ignore_cache_date
 
     song_file = random.choice(get_playlist())[1]
-    print(song_file)
     return send_from_directory(music_cache_dir, song_file, cache_timeout=0)
 
 

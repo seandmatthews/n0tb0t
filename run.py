@@ -1,8 +1,22 @@
+from inspect import getsourcefile
+import os
+import subprocess
+
 import config
 from src.bot import Bot
 from src.twitch_service import TwitchService
 from src.loggers import event_logger, error_logger
 
+
+# TODO: Ensure the venv exists and activate it.
+# If the venv must be created, install dependencies through pip
+
+
+# Fire up subprocess to start the webserver on localhost.
+current_path = os.path.abspath(getsourcefile(lambda: 0))
+current_dir = os.path.dirname(current_path)
+web_file = os.path.join(current_dir, 'src', 'web', 'web.py')
+subprocess.run(["python", web_file])
 
 bot_info = config.bot_info
 
