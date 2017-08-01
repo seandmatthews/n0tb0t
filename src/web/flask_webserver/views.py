@@ -1,15 +1,8 @@
-from inspect import getsourcefile
 import random
 import os
 
-from flask import Flask, render_template, send_from_directory
-
-current_path = os.path.abspath(getsourcefile(lambda: 0))
-current_dir = os.path.dirname(current_path)
-grandparent_dir = os.path.join(current_dir, os.pardir, os.pardir)
-music_cache_dir = os.path.join(grandparent_dir, 'MusicCache')
-
-app = Flask(__name__, static_folder=os.path.join(current_dir, 'static'))
+from flask import render_template, send_from_directory
+from src.web.flask_webserver import app, music_cache_dir
 
 
 @app.route('/')
@@ -37,9 +30,3 @@ def next_song(ignore_cache_date=None):
 
     song_file = random.choice(get_playlist())[1]
     return send_from_directory(music_cache_dir, song_file, cache_timeout=0)
-
-
-if __name__ == '__main__':
-    # Are you a dev who runs a bunch of different stuff on localhost?
-    # In that case, you may want to pick a different port.
-    app.run(port=80)
