@@ -1,7 +1,9 @@
+import datetime
 import functools
 import socket
 import time
 from enum import Enum, auto
+from dateutil.relativedelta import relativedelta
 
 import requests
 
@@ -41,19 +43,39 @@ class TwitchMessage(Message):
 
 
 class TwitchService(object):
-    def __init__(self, pw, user, channel, error_logger, event_logger):
+    def __init__(self, pw, user, channel, client_id, error_logger, event_logger):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
         self.user = user.lower()
         self.display_user = user
         self.channel = channel.lower()
+        self.client_id = client_id
         self.display_channel = channel
+        self.channel_id = self.get_channel_id(channel.lower(), client_id)
         self.error_logger = error_logger
         self.event_logger = event_logger
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self._join_room()
+
+    def get_channel_id(self, channel_name, client_id):
+        url = f'https://api.twitch.tv/kraken/users?login={channel_name}'
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={
+                    "Client-ID": client_id,
+                    "Accept": "application/vnd.twitchtv.v5+json"})
+                channel_id = r.json()['users'][0]['_id']
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return channel_id
+        else:
+            raise RuntimeError('Error talking to the twitch API')
+
 
     @reconnect_on_error
     def send_public_message(self, message_content):
@@ -156,6 +178,33 @@ class TwitchService(object):
         for k, v in self._get_all_users().items():
             [chatters.append(user) for user in v]
         return chatters
+
+    def follow_time(self, userid):
+        channel_id = self.channel_id
+        url = f'https://api.twitch.tv/kraken/users/{userid}/follows/channels/{channel_id}'
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={
+                    "Client-ID": self.client_id,
+                    "Accept": "application/vnd.twitchtv.v5+json"})
+                if "created_at" in r.json():
+                    follow_date = r.json()['created_at']
+                    follow_time_dt = datetime.datetime.strptime(follow_date, '%Y-%m-%dT%H:%M:%SZ')
+                    now_dt = datetime.datetime.utcnow()
+                    myrelativedelta = relativedelta(now_dt, follow_time_dt)
+                    print(myrelativedelta.__dict__)
+                    response_str = f'You have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
+                else:
+                    response_str = 'You aren\'t following this channel.'
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return response_str
+        else:
+            raise RuntimeError('Error talking to the twitch API')
+
 
     @staticmethod
     def _get_username_from_line(line):
