@@ -16,7 +16,7 @@ from src.loggers import event_logger, error_logger
 current_path = os.path.abspath(getsourcefile(lambda: 0))
 current_dir = os.path.dirname(current_path)
 web_file = os.path.join(current_dir, 'src', 'web', 'run_webserver.py')
-subprocess.run(["python", web_file])
+subprocess.Popen(["python", web_file], creationflags=subprocess.CREATE_NEW_CONSOLE)
 
 bot_info = config.bot_info
 

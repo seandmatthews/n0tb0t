@@ -1,10 +1,8 @@
-from __future__ import print_function
 import httplib2
 import os
 
 from apiclient import discovery
 import oauth2client
-from oauth2client import client
 from oauth2client import tools
 
 # If modifying these scopes, delete your previously saved credentials
@@ -25,8 +23,7 @@ def get_credentials(credentials_parent_dir, client_secret_dir=None):
     credential_dir = os.path.join(credentials_parent_dir, '.credentials')
     if not os.path.exists(credential_dir):
         os.makedirs(credential_dir)
-    credential_path = os.path.join(credential_dir,
-                                   'n0tb0t-credentials.json')
+    credential_path = os.path.join(credential_dir, 'n0tb0t-credentials.json')
 
     store = oauth2client.file.Storage(credential_path)
     credentials = store.get()
@@ -35,7 +32,7 @@ def get_credentials(credentials_parent_dir, client_secret_dir=None):
             client_secret_path = os.path.join(client_secret_dir, CLIENT_SECRET_FILE)
         else:
             client_secret_path = CLIENT_SECRET_FILE
-        flow = client.flow_from_clientsecrets(client_secret_path, SCOPES)
+        flow = oauth2client.client.OAuth2WebServerFlow(client_secret_path, SCOPES, redirect_uri='localhost:80/redirect/')
         flow.user_agent = APPLICATION_NAME
         credentials = tools.run_flow(flow, store)
         print('Storing credentials to ' + credential_path)

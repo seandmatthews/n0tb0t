@@ -1,8 +1,9 @@
 import random
-import os
 
 from flask import render_template, send_from_directory
+
 from src.web.flask_webserver import app, music_cache_dir
+from src.web.flask_webserver.web_utils import get_playlist
 
 
 @app.route('/')
@@ -10,14 +11,15 @@ def welcome():
     return render_template('index.html')
 
 
+@app.route('/auth_return')
+def handle_redirect():
+    return "Hello World!"
+
+
 @app.route('/audio')
 def audio():
     playlist = [song_tuple[0] for song_tuple in get_playlist()]
     return render_template('AudioPlayer.html', playlist=playlist)
-
-
-def get_playlist():
-    return [(file.split(".")[0], file) for file in os.listdir(music_cache_dir)]
 
 
 @app.route('/next_song')
