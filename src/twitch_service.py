@@ -179,7 +179,7 @@ class TwitchService(object):
             [chatters.append(user) for user in v]
         return chatters
 
-    def follow_time(self, userid):
+    def follow_time(self, userid, username):
         channel_id = self.channel_id
         url = f'https://api.twitch.tv/kraken/users/{userid}/follows/channels/{channel_id}'
         for attempt in range(5):
@@ -193,9 +193,9 @@ class TwitchService(object):
                     now_dt = datetime.datetime.utcnow()
                     myrelativedelta = relativedelta(now_dt, follow_time_dt)
                     print(myrelativedelta.__dict__)
-                    response_str = f'You have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
+                    response_str = f'{username}, you have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
                 else:
-                    response_str = 'You aren\'t following this channel.'
+                    response_str = f'{username}, you aren\'t following this channel.'
             except ValueError:
                 continue
             except TypeError:

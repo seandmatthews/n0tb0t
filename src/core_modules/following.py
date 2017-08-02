@@ -1,5 +1,6 @@
 import src.utils as utils
 
+
 class FollowingMixin:
     def following(self, message):
         """
@@ -8,4 +9,5 @@ class FollowingMixin:
         !following
         """
         userid = message.user
-        utils.add_to_appropriate_chat_queue(self, message, self.service.follow_time(userid))
+        username = self.service.get_message_display_name(message)
+        utils.add_to_appropriate_chat_queue(self, message, self.service.follow_time(userid, username))
