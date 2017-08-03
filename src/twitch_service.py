@@ -192,7 +192,6 @@ class TwitchService(object):
                     follow_time_dt = datetime.datetime.strptime(follow_date, '%Y-%m-%dT%H:%M:%SZ')
                     now_dt = datetime.datetime.utcnow()
                     myrelativedelta = relativedelta(now_dt, follow_time_dt)
-                    print(myrelativedelta.__dict__)
                     response_str = f'{username}, you have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
                 else:
                     response_str = f'{username}, you aren\'t following this channel.'
