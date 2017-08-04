@@ -9,7 +9,7 @@ class UptimeMixin:
         !uptime
         """
         try:
-            time_dict = utils.get_live_time()
+            time_dict = self.service.get_live_time()
         except RuntimeError as e:
             time_dict = None
             utils.add_to_appropriate_chat_queue(self, message, str(e))
