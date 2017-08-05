@@ -1,0 +1,9 @@
+/* you should put stuff in here Derrick */
+* {
+    font-family: Arial, Helvetica, sans-serif;
+    background-image: url("https://cdn.pixabay.com/photo/2017/07/28/17/48/background-2549332_960_720.jpg")
+}
+h1 {
+    font: bold 20px/150% Serif;
+    color: #6441A4;
+}
