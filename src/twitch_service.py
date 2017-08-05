@@ -1,7 +1,9 @@
+import datetime
 import functools
 import socket
 import time
 from enum import Enum, auto
+from dateutil.relativedelta import relativedelta
 
 import requests
 
@@ -41,19 +43,28 @@ class TwitchMessage(Message):
 
 
 class TwitchService(object):
-    def __init__(self, pw, user, channel, error_logger, event_logger):
+    def __init__(self, pw, user, channel, twitch_api_client_id, error_logger, event_logger):
         self.host = 'irc.chat.twitch.tv'
         self.port = 6667
         self.pw = pw
         self.user = user.lower()
         self.display_user = user
         self.channel = channel.lower()
+        self.twitch_api_client_id = twitch_api_client_id
         self.display_channel = channel
+        self.channel_id = self._get_channel_id_from_channel_name(channel.lower())
         self.error_logger = error_logger
         self.event_logger = event_logger
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self._join_room()
+
+    def _get_channel_id_from_channel_name(self, channel_name):
+        """
+        In twitch your channel id is your user id
+        and your channel name is your user name
+        """
+        return self._get_user_id_from_user_name(channel_name)
 
     @reconnect_on_error
     def send_public_message(self, message_content):
@@ -125,6 +136,53 @@ class TwitchService(object):
     def get_message_type(message):
         return message.message_type.name
 
+    def _get_user_id_from_user_name(self, username):
+        """
+        Talks to the twitch kraken api to fetch the user's id when given their name.
+        """
+        # TODO: Cache the user IDs in the database, pull from there first.
+        url = f'https://api.twitch.tv/kraken/users?login={username}'
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={
+                    "Client-ID": self.twitch_api_client_id,
+                    "Accept": "application/vnd.twitchtv.v5+json"})
+                user_id = r.json()['users'][0]['_id']
+            except IndexError:
+                raise RuntimeError("That's not a twitch user")
+            except KeyError:
+                raise RuntimeError("That's not a twitch user")
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return user_id
+        else:
+            raise RuntimeError('Error talking to the twitch API')
+
+    def get_user_creation_date(self, username):
+        """
+        Returns the creation date of a given twitch user.
+        """
+        user_id = self._get_user_id_from_user_name(username)
+        url = 'https://api.twitch.tv/kraken/users/{}'.format(user_id)
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.twitch_api_client_id,
+                                               "Accept": "application/vnd.twitchtv.v5+json"})
+                creation_date = r.json()['created_at']
+                cut_creation_date = creation_date[:10]
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return cut_creation_date
+        else:
+            raise RuntimeError(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
     def _get_all_users(self):
         """
         Talks to twitch's unsupported TMI API to look at all chatters currently in the channel.
@@ -156,6 +214,92 @@ class TwitchService(object):
         for k, v in self._get_all_users().items():
             [chatters.append(user) for user in v]
         return chatters
+
+    def get_live_time(self):
+        """
+        Uses the kraken API to fetch the start time of the current stream.
+        Computes how long the stream has been running, returns that value in a dictionary.
+        """
+        channel_id = self._get_channel_id_from_channel_name(self.channel)
+
+        url = 'https://api.twitch.tv/kraken/streams/{}'.format(channel_id)
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.twitch_api_client_id,
+                                               "Accept": "application/vnd.twitchtv.v5+json"})
+                r.raise_for_status()
+                start_time_str = r.json()['stream']['created_at']
+                start_time_dt = datetime.datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%SZ')
+                now_dt = datetime.datetime.utcnow()
+                time_delta = now_dt - start_time_dt
+                time_dict = {'hour': None,
+                             'minute': None,
+                             'second': None}
+
+                time_dict['hour'], remainder = divmod(time_delta.seconds, 3600)
+                time_dict['minute'], time_dict['second'] = divmod(remainder, 60)
+                for time_var in time_dict:
+                    if time_dict[time_var] == 1:
+                        time_dict[time_var] = "{} {}".format(time_dict[time_var], time_var)
+                    else:
+                        time_dict[time_var] = "{} {}s".format(time_dict[time_var], time_var)
+                time_dict['stream_start'] = start_time_dt
+                time_dict['now'] = now_dt
+            except requests.exceptions.HTTPError:
+                continue
+            except TypeError:
+                raise RuntimeError("Sorry, the channel doesn't seem to be live at the moment.")
+            except ValueError:
+                continue
+            else:
+                return time_dict
+        else:
+            raise RuntimeError(
+                "Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
+
+    def follow_time(self, userid, username):
+        channel_id = self.channel_id
+        url = f'https://api.twitch.tv/kraken/users/{userid}/follows/channels/{channel_id}'
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={
+                    "Client-ID": self.twitch_api_client_id,
+                    "Accept": "application/vnd.twitchtv.v5+json"})
+                if "created_at" in r.json():
+                    follow_date = r.json()['created_at']
+                    follow_time_dt = datetime.datetime.strptime(follow_date, '%Y-%m-%dT%H:%M:%SZ')
+                    now_dt = datetime.datetime.utcnow()
+                    myrelativedelta = relativedelta(now_dt, follow_time_dt)
+                    response_str = f'{username}, you have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
+                else:
+                    response_str = f'{username}, you aren\'t following this channel.'
+            except ValueError:
+                continue
+            except TypeError:
+                continue
+            else:
+                return response_str
+        else:
+            raise RuntimeError('Error talking to the twitch API')
+
+    def get_channel_url_and_last_played_game(self, username):
+        channel_id = self._get_channel_id_from_channel_name(username)
+        url = f'https://api.twitch.tv/kraken/channels/{channel_id}'
+        for attempt in range(5):
+            try:
+                r = requests.get(url, headers={"Client-ID": self.twitch_api_client_id,
+                                               "Accept": "application/vnd.twitchtv.v5+json"})
+                r.raise_for_status()
+                game = r.json()['game']
+                channel_url = r.json()['url']
+
+                return channel_url, game
+            except IndexError:
+                raise RuntimeError("That's not a real streamer!")
+            except ValueError:
+                continue
+        else:
+            raise RuntimeError("Sorry, there was a problem talking to the twitch api. Maybe wait a bit and retry your command?")
 
     @staticmethod
     def _get_username_from_line(line):

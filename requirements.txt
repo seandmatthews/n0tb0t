@@ -26,6 +26,7 @@ pyglet==1.2.4
 pynput==1.3.5
 pyshorteners==0.6.1
 pytest==3.1.3
+python-dateutil==2.6.1
 pytz==2017.2
 requests==2.18.1
 rsa==3.4.2

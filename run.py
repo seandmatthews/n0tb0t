@@ -24,6 +24,7 @@ if config.service == config.Service.TWITCH:
     ts = TwitchService(pw=bot_info['pw'],
                        user=bot_info['user'],
                        channel=bot_info['channel'],
+                       twitch_api_client_id=bot_info['twitch_api_client_id'],
                        error_logger=error_logger,
                        event_logger=event_logger)
 
