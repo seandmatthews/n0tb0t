@@ -1,9 +1,90 @@
-/* you should put stuff in here Derrick */
+
 * {
     font-family: Arial, Helvetica, sans-serif;
-    background-image: url("https://cdn.pixabay.com/photo/2017/07/28/17/48/background-2549332_960_720.jpg")
+}
+
+body {
+    background-color: White;
+    Background-image: url("https://burst.shopifycdn.com/photos/dark-brick-texture_925x.jpg");
+    background-size: cover;
 }
 h1 {
-    font: bold 20px/150% Serif;
-    color: #6441A4;
+    text-align: center;
+    color: black;
+    font-size: 35px;
 }
+a {
+    color: black;
+    text-decoration: none;
+}
+
+#Title1 {
+    background-color:Orange;
+}
+
+#Title2 {
+    background-color: purple;
+}
+
+#Title3 {
+    background-color: skyblue;
+}
+#Title4 {
+    background-color: seagreen;
+}
+
+#Title5 {
+    background-color: lightsalmon;
+}
+
+#Title6 {
+    background-color: pink;
+}
+
+.strmrOpt {
+
+}
+
+.Title {
+    Font-size: 25px;
+    margin: 0px;
+    padding: 10px;
+
+}
+
+.button { 
+    border: none;
+    background-color: white;
+    text-decoration: none;
+    text-align: center;
+    font-size: 20px;
+    transition-duration: 0.4s;
+}
+
+.toDo {
+    margin: auto;
+    display: block;
+    width: 1356px;
+}
+
+.toDo1{
+    font: bold 20px/150% Serif;
+    text-align: center;
+    width: 400px;
+    height: 400px;
+    border: 1px solid black;
+    margin: 25px;
+    display: block;
+    float: left;
+    Background-color: rgba(255, 255, 255, 0.7);
+}
+
+.toDo1:hover{
+    box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+}
+
+.toDoBody {
+    margin-top: 5px;
+    margin-bottom: 0px;
+}
+
