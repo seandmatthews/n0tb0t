@@ -1,6 +1,3 @@
-
-
-
 #currently_playing {
 background-color: #2B2B2B;
     color: white;
@@ -23,10 +20,15 @@ background-color: #2B2B2B;
     position: relative;
     top: 25px;
 }
-}
 
 #audio_source {
 
+}
+
+#queue-span {
+    font-size: 21px;
+    display: block;
+    padding-top: 15px;
 }
 
 #skip_button {
@@ -44,7 +46,7 @@ background-color: #2B2B2B;
     left: 310px;
 }
 
-#remove_button { 
+.remove_button {
     background-color: #7F7F7F;
     border: none;
     color: white;
@@ -56,8 +58,24 @@ background-color: #2B2B2B;
     font-size: 16px;
     position: relative;
 }
- .song {
+
+.remove_button_div {
+    float: left;
+    display: block;
+    height: 20px;
+    padding-left: 3px;
+    margin-top: -2px;
+}
+
+.song {
     position: relative;
     float: left;
     display: block;
-} 
+    height: 20px;
+}
+
+.song-li {
+    font-size: 21px;
+    padding-top: 0px;
+    height: 50px;
+}

@@ -19,11 +19,13 @@
     </div>
 </div>
 <div id="queue">
-<span>Queue:</span>
+<span id="queue-span">Queue:</span>
 <ol>
     {% for song in playlist %}
-        <li><div><button type="button" id="remove_button" onclick="nextSong()">Remove</button>
-        </div><div class="song">{{ song }}{# song.title eventually #}</div></li>
+        <li class="song-li">
+            <div class="song">{{ song }}{# song.title eventually #}</div>
+            <div class="remove_button_div"><button type="button" class="remove_button" onclick="nextSong()">Remove</button></div>
+        </li>
     {% endfor %}
 </ol>
 
