@@ -1,0 +1,63 @@
+
+
+
+#currently_playing {
+background-color: #2B2B2B;
+    color: white;
+    height: 85px;
+    width: 351px;
+}
+
+#title_span {
+
+}
+
+#music_player {
+    background-color: #7F7F7F;
+    color: white;
+    padding: 5px 5px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    position: relative;
+    top: 25px;
+}
+}
+
+#audio_source {
+
+}
+
+#skip_button {
+    background-color: #7F7F7F;
+    border: none;
+    color: white;
+    padding: 12px 5px;
+    text-align: center;
+    text-decoration: none;
+    text-shadow: 1px 1px 0 #000;
+    display: inline-block;
+    font-size: 16px;
+    position: relative;
+    top: -21px;
+    left: 310px;
+}
+
+#remove_button { 
+    background-color: #7F7F7F;
+    border: none;
+    color: white;
+    padding: 5px 5px;
+    text-align: center;
+    text-decoration: none;
+    text-shadow: 1px 1px 0 #000;
+    display: inline-block;
+    font-size: 16px;
+    position: relative;
+}
+ .song {
+    position: relative;
+    float: left;
+    display: block;
+} 

@@ -5,7 +5,7 @@
 
 body {
     background-color: White;
-    Background-image: url("https://burst.shopifycdn.com/photos/dark-brick-texture_925x.jpg");
+    Background-image: url("https://c1.staticflickr.com/6/5221/5623339500_f2731bf763_b.jpg");
     background-size: cover;
 }
 h1 {
@@ -18,7 +18,7 @@ a {
     text-decoration: none;
 }
 
-#Title1 {
+#songReq {
     background-color:Orange;
 }
 
@@ -45,10 +45,11 @@ a {
 
 }
 
-.Title {
+.titles {
     Font-size: 25px;
     margin: 0px;
     padding: 10px;
+    border-radius: 20px 20px 0px 0px;
 
 }
 
@@ -61,13 +62,13 @@ a {
     transition-duration: 0.4s;
 }
 
-.toDo {
+.allBoxes {
     margin: auto;
     display: block;
     width: 1356px;
 }
 
-.toDo1{
+.boxes{
     font: bold 20px/150% Serif;
     text-align: center;
     width: 400px;
@@ -77,14 +78,19 @@ a {
     display: block;
     float: left;
     Background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 20px;
 }
 
-.toDo1:hover{
+.boxes:hover{
     box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
 }
 
-.toDoBody {
+.boxBody {
     margin-top: 5px;
     margin-bottom: 0px;
+}
+
+#AudioList {
+    text-align: left;
 }
 
