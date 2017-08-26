@@ -14,14 +14,20 @@ from src.message import Message
 def reconnect_on_error(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        try:
-            f(*args, **kwargs)
-        except Exception as e:
-            print(f'{str(e)}: Attempting to reconnecting to the socket.')
-            args[0].event_logger.info(f'{str(e)}: Attempting to reconnecting to the socket.')
-            args[0].sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            args[0]._join_room()
-            f(*args, **kwargs)
+        while True:
+            try:
+                f(*args, **kwargs)
+            except Exception as e:
+                print(f'{str(e)}: Attempting to reconnect to the socket.')
+                args[0].event_logger.info(f'{str(e)}: Attempting to reconnect to the socket.')
+                time.sleep(5)
+                try:
+                    args[0].sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    args[0]._join_room()
+                except Exception as e:
+                    continue
+                continue
+            break
     return wrapper
 
 
@@ -93,7 +99,6 @@ class TwitchService(object):
         self.sock.send(message_temp)
         self.event_logger.info(f'sent: {message_temp}')
 
-    @reconnect_on_error
     def _join_room(self):
         self.sock.connect((self.host, self.port))
         self.sock.send('PASS {PASS}\r\n'.format(PASS=self.pw).encode('utf-8'))
@@ -385,15 +390,23 @@ class TwitchService(object):
                 read_buffer = self.sock.recv(2048)
             except Exception as e:
                 print('{}: Attempting to reconnecting to the socket.'.format(str(e)))
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._join_room()
+                try:
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self._join_room()
+                except Exception as e:
+                    time.sleep(5)
+                    continue
                 read_buffer = self.sock.recv(2048)
 
             if len(read_buffer) == 0:
                 print('Disconnected: Attempting to reconnecting to the socket.')
                 self.event_logger.info(r'Disconnected: Attempting to reconnecting to the socket.'.encode('utf-8'))
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._join_room()
+                try:
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self._join_room()
+                except Exception as e:
+                    time.sleep(5)
+                    continue
                 read_buffer = self.sock.recv(2048)
             try:
                 lines = lines + read_buffer.decode(encoding='utf-8', errors='strict')
