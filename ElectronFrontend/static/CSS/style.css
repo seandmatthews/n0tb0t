@@ -1,0 +1,100 @@
+
+* {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    background-color: White;
+    Background-image: url("https://c1.staticflickr.com/6/5221/5623339500_f2731bf763_b.jpg");
+    background-size: cover;
+}
+h1 {
+    text-align: center;
+    color: black;
+    font-size: 35px;
+}
+a {
+    color: black;
+    text-decoration: none;
+}
+
+#PageTitle {
+    color: cornsilk;
+}
+
+#songReq {
+    background-color:Orange;
+}
+
+#Title2 {
+    background-color: purple;
+}
+
+#Title3 {
+    background-color: skyblue;
+}
+#Title4 {
+    background-color: seagreen;
+}
+
+#Title5 {
+    background-color: lightsalmon;
+}
+
+#Title6 {
+    background-color: pink;
+}
+
+.strmrOpt {
+
+}
+
+.titles {
+    Font-size: 25px;
+    margin: 0px;
+    padding: 10px;
+    border-radius: 20px 20px 0px 0px;
+
+}
+
+.button { 
+    border: none;
+    background-color: white;
+    text-decoration: none;
+    text-align: center;
+    font-size: 20px;
+    transition-duration: 0.4s;
+}
+
+.allBoxes {
+    margin: auto;
+    display: block;
+    width: 1356px;
+}
+
+.boxes{
+    font: bold 20px/150% Serif;
+    text-align: center;
+    width: 400px;
+    height: 250px;
+    border: 1px solid black;
+    margin: 25px;
+    display: block;
+    float: left;
+    Background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 20px;
+}
+
+.boxes:hover{
+    box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+}
+
+.boxBody {
+    margin-top: 5px;
+    margin-bottom: 0px;
+}
+
+#AudioList {
+    text-align: left;
+}
+

@@ -1,0 +1,14 @@
+{
+  "name": "n0tb0t-frontend",
+  "version": "0.0.1",
+  "description": "",
+  "main": "App.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Sean Matthews",
+  "license": "ICO",
+  "devDependencies": {
+    "electron": "~1.6.2"
+  }
+}
