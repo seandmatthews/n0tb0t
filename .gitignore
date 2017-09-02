@@ -4,9 +4,9 @@
 .cache/
 .credentials/
 DataAndLogs/
-ElectronFrontend/node_modules
+ElectronFrontend/node_modules/
 MusicCache/
-PythonCore/src/streamer_specific_modules
+PythonCore/src/streamer_specific_modules/
 PythonCore/n0tb0tvenv
 PythonCore/config.py
 
