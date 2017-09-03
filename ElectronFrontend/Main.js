@@ -13,7 +13,7 @@ var Main = (function () {
     };
     Main.onReady = function () {
         Main.mainWindow = new Main.BrowserWindow({ width: 1400, height: 800 });
-        Main.mainWindow.loadURL('file://' + __dirname + '/templates/index.html');
+        Main.mainWindow.loadURL('file://' + __dirname + '/templates/Index.html');
         Main.mainWindow.on('closed', Main.onClose);
     };
     Main.main = function (app, browserWindow) {

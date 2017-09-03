@@ -13,7 +13,7 @@ export default class Main {
     }
     private static onReady(){
         Main.mainWindow = new Main.BrowserWindow({width: 1400, height: 800});
-        Main.mainWindow.loadURL('file://' + __dirname + '/templates/index.html');
+        Main.mainWindow.loadURL('file://' + __dirname + '/templates/Index.html');
         Main.mainWindow.on('closed', Main.onClose);
     }
     static main(

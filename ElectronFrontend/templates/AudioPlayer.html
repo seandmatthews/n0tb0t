@@ -6,6 +6,11 @@
 </head>
 <body>
 
+<ul id="navbar">
+    <li><a class="nav-link" href="Index.html">Home</a></li>
+    <li><a class="nav-link" href="AudioPlayer.html">Music</a></li>
+</ul>
+
 <div id="currently_playing">
     <div>
         <span>Title: </span><span id="title_span"></span>
@@ -19,17 +24,15 @@
     </div>
 </div>
 <div id="queue">
-<span id="queue-span">Queue:</span>
-<ol>
-    {% for song in playlist %}
+    <span id="queue-span">Queue:</span>
+    <ol>
         <li class="song-li">
             <div class="song">{{ song }}{# song.title eventually #}</div>
             <div class="remove_button_div"><button type="button" class="remove_button" onclick="nextSong()">Remove</button></div>
         </li>
-    {% endfor %}
-</ol>
-
-<script src="/static/JavaScript/music.js"></script>
+    </ol>
 </div>
 </body>
+
+<script src="/static/JavaScript/music.js"></script>
 </html>
