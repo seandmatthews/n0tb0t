@@ -51,7 +51,7 @@ class CommandTypes(Enum):
 
 
 class Bot(*all_mixin_classes):
-    def __init__(self, service, bot_info, bitly_access_token, current_dir, data_dir):
+    def __init__(self, service, bot_info, bitly_access_token, top_level_dir, data_dir):
         self.service = service
         self.info = bot_info
 
@@ -68,7 +68,7 @@ class Bot(*all_mixin_classes):
         self.Session = self._initialize_db(data_dir)
         db_session = self.Session()
 
-        self.credentials = google_auth.get_credentials(credentials_parent_dir=current_dir, client_secret_dir=current_dir)
+        self.credentials = google_auth.get_credentials(credentials_parent_dir=top_level_dir, client_secret_dir=top_level_dir)
 
         self.starting_spreadsheets_list = []
         self.spreadsheets = {}

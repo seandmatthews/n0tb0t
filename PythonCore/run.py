@@ -25,7 +25,7 @@ if config.service == config.Service.TWITCH:
     bot = Bot(bot_info=bot_info,
               service=ts,
               bitly_access_token=config.bitly_access_token,
-              current_dir=config.current_dir,
+              top_level_dir=config.top_level_dir,
               data_dir=config.data_dir)
     ts.run(bot)
 
