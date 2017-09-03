@@ -1,7 +1,3 @@
-import os
-import subprocess
-from inspect import getsourcefile
-
 from PythonCore.src.bot import Bot
 from PythonCore.src.loggers import event_logger, error_logger
 from PythonCore.src.twitch_service import TwitchService
@@ -27,6 +23,7 @@ if config.service == config.Service.TWITCH:
               bitly_access_token=config.bitly_access_token,
               top_level_dir=config.top_level_dir,
               data_dir=config.data_dir)
+
     ts.run(bot)
 
 else:
