@@ -8,15 +8,15 @@
 
 <ul id="navbar">
     <li><a class="nav-link" href="Index.html">Home</a></li>
-    <li><a class="nav-link" href="AudioPlayer.html">Music</a></li>
+    <li><a class="nav-link" href="MusicPlayer.html">Music</a></li>
 </ul>
 
 <div id="currently_playing">
     <div>
         <span>Title: </span><span id="title_span"></span>
     </div>
-    <audio id="music_player" autoplay controls>
-        <source id="audio_source" src="/next_song">
+    <audio id="music_player" controls>
+        <source id="audio_source" src="">
         Your browser does not support the audio element.
     </audio>
     <div>
@@ -27,12 +27,15 @@
     <span id="queue-span">Queue:</span>
     <ol>
         <li class="song-li">
-            <div class="song">{{ song }}{# song.title eventually #}</div>
-            <div class="remove_button_div"><button type="button" class="remove_button" onclick="nextSong()">Remove</button></div>
+            <div class="song">Song goes here</div>
+            <div class="remove_button_div"><button type="button" class="remove_button" onclick="removeSong()">Remove</button></div>
         </li>
     </ol>
 </div>
 </body>
 
-<script src="/static/JavaScript/music.js"></script>
+<script src="../static/JavaScript/Music.js"></script>
+<script type="application/javascript">
+    window.onload = readyNextSong;
+</script>
 </html>
