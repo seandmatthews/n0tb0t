@@ -67,7 +67,7 @@ background-color: #2B2B2B;
     left: 310px;
 }
 
-.remove_button {
+.music_button {
     background-color: #7F7F7F;
     border: none;
     color: white;
@@ -80,7 +80,7 @@ background-color: #2B2B2B;
     position: relative;
 }
 
-.remove_button_div {
+.music_button_div {
     float: left;
     display: block;
     height: 20px;

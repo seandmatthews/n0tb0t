@@ -4,9 +4,11 @@ import threading
 import time
 from inspect import getsourcefile
 
+import grpc
 import gspread
 import pafy
 
+from PythonCore.src.base_module import BaseMixin
 import PythonCore.src.utils as utils
 
 
@@ -33,14 +35,15 @@ class SongQueue:
         return list(reversed(self._queue))
 
 
-class MusicMixin:
+class MusicMixin(BaseMixin):
     def __init__(self):
+        super().__init__()
         self.starting_spreadsheets_list.append('songs')
 
         current_path = os.path.abspath(getsourcefile(lambda: 0))
         current_dir = os.path.dirname(current_path)
-        grandparent_dir = os.path.join(current_dir, os.pardir, os.pardir)
-        self.music_cache_dir = os.path.join(grandparent_dir, 'MusicCache')
+        greatgrandparent_dir = os.path.join(current_dir, os.pardir, os.pardir, os.pardir)  # Should be "n0tb0t"
+        self.music_cache_dir = os.path.join(greatgrandparent_dir, 'MusicCache')
         if not os.path.exists(self.music_cache_dir):
             os.mkdir(self.music_cache_dir)
 

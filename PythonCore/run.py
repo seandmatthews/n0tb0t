@@ -1,7 +1,8 @@
+import PythonCore.src.grpc_server as grpc_server
 from PythonCore.src.bot import Bot
 from PythonCore.src.loggers import event_logger, error_logger
+from PythonCore.src.base_service import Services
 from PythonCore.src.twitch_service import TwitchService
-
 from PythonCore import config
 
 # TODO: Ensure the venv exists and activate it.
@@ -10,7 +11,10 @@ from PythonCore import config
 
 bot_info = config.bot_info
 
-if config.service == config.Service.TWITCH:
+# Start the grpc server
+grpc_server.serve()
+
+if config.service == Services.TWITCH:
     ts = TwitchService(pw=bot_info['pw'],
                        user=bot_info['user'],
                        channel=bot_info['channel'],
@@ -25,6 +29,7 @@ if config.service == config.Service.TWITCH:
               data_dir=config.data_dir)
 
     ts.run(bot)
+
 
 else:
     raise NotImplementedError("We don't actually care about anything but Twitch yet. Sorry")

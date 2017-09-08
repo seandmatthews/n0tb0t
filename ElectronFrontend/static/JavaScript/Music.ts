@@ -35,3 +35,7 @@ const getNextSongFromQueue = () => {
 const removeSong = () => {
 
 };
+
+const promoteSong = () => {
+
+};

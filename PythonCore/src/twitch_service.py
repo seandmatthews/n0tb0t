@@ -7,7 +7,7 @@ from enum import Enum, auto
 import requests
 from dateutil.relativedelta import relativedelta
 from PythonCore.src.message import Message
-from PythonCore.src.service import Service
+from PythonCore.src.base_service import Services
 
 
 def reconnect_on_error(f):
@@ -40,7 +40,7 @@ class MessageTypes(Enum):
 
 class TwitchMessage(Message):
     def __init__(self, message_type=None, user=None, content=None, display_name=None, is_mod=False):
-        Message.__init__(self, service=Service.TWITCH,
+        Message.__init__(self, service=Services.TWITCH,
                          message_type=message_type,
                          user=user, content=content,
                          display_name=display_name,
@@ -276,7 +276,7 @@ class TwitchService(object):
                     myrelativedelta = relativedelta(now_dt, follow_time_dt)
                     response_str = f'{username}, you have been following {self.display_channel} for {myrelativedelta.years} year{"s" * int(myrelativedelta.years != 1)}, {myrelativedelta.months} month{"s" * int(myrelativedelta.months != 1)} and {myrelativedelta.days} day{"s" * int(myrelativedelta.days != 1)}.'
                 else:
-                    response_str = f'{username}, you aren\'t following this channel.'
+                    response_str = f"{username}, you aren't following this channel."
             except ValueError:
                 continue
             except TypeError:
