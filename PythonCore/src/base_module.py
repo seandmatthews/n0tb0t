@@ -4,14 +4,13 @@ import os
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 
-import PythonCore.src.bot
 import PythonCore.config as config
 from PythonCore.src.base_service import BaseService
 
 
 class BaseMixin:
     def __init__(self):
-        if not isinstance(self, PythonCore.src.bot.Bot):
+        if self.__class__.__name__ != "Bot":
             self.public_message_queue = collections.deque()
             self.private_message_queue = collections.deque()
             self.command_queue = collections.deque()

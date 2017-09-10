@@ -1,4 +1,4 @@
-import PythonCore.src.grpc_server as grpc_server
+# import PythonCore.src.grpc_server as grpc_server
 from PythonCore.src.bot import Bot
 from PythonCore.src.loggers import event_logger, error_logger
 from PythonCore.src.base_service import Services
@@ -12,7 +12,7 @@ from PythonCore import config
 bot_info = config.bot_info
 
 # Start the grpc server
-grpc_server.serve()
+# grpc_server.serve()
 
 if config.service == Services.TWITCH:
     ts = TwitchService(pw=bot_info['pw'],

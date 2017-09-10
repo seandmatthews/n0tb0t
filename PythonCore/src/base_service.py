@@ -16,19 +16,19 @@ class BaseService:
     # Getter methods
     @staticmethod
     def get_message_display_name(message):
-        pass
+        return message.display_name
 
     @staticmethod
     def get_message_content(message):
-        pass
+        return message.content
 
     @staticmethod
     def get_mod_status(message):
-        pass
+        return message.is_mod
 
     @staticmethod
     def get_message_type(message):
-        pass
+        return message.message_type.name
 
     def get_user_creation_date(self, username):
         pass

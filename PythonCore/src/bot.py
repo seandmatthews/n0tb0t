@@ -31,7 +31,7 @@ def collect_mixin_classes(directory_name):
     for file in module_files:
         if file != '__init__.py' and file[-3:] == '.py':
             # Take these .py files and import them, turning them into module objects
-            imported = importlib.import_module(f'src.{directory_name}.{file[:-3]}')
+            imported = importlib.import_module(f'PythonCore.src.{directory_name}.{file[:-3]}')
             for item in dir(imported):
                 if item[0] != '_':
                     if isinstance(getattr(imported, item), type) and 'Mixin' in item:
@@ -43,6 +43,8 @@ def collect_mixin_classes(directory_name):
 all_mixin_classes = []
 all_mixin_classes += collect_mixin_classes('core_modules')
 all_mixin_classes += collect_mixin_classes('streamer_specific_modules')
+
+all_mixin_classes = [cls for cls in all_mixin_classes if cls.__name__ != 'BaseMixin']
 
 
 class CommandTypes(Enum):

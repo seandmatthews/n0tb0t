@@ -4,10 +4,12 @@ import gspread
 
 import PythonCore.src.models as models
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
 
 
-class AutoQuoteMixin:
+class AutoQuoteMixin(BaseMixin):
     def __init__(self):
+        super().__init__()
         self.starting_spreadsheets_list.append('auto_quotes')
         self.auto_quotes_timers = {}
 

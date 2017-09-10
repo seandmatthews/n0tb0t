@@ -9,12 +9,12 @@ import pytest
 
 current_path = os.path.abspath(getsourcefile(lambda: 0))
 current_dir = os.path.dirname(current_path)
-root_dir = os.path.join(current_dir, os.pardir, os.pardir)
+root_dir = os.path.join(current_dir, os.pardir, os.pardir, os.pardir)
 sys.path.append(root_dir)
 
-import src.core_modules.auto_quotes as auto_quotes
-from src.message import Message
-from src.models import AutoQuote
+import PythonCore.src.core_modules.auto_quotes as auto_quotes
+from PythonCore.src.message import Message
+from PythonCore.src.models import AutoQuote
 
 
 class Service:
@@ -40,9 +40,6 @@ def mock_db_session():
 @pytest.fixture
 def auto_quote_mixin_obj():
     auto_quote_mixin_obj = auto_quotes.AutoQuoteMixin()
-    auto_quote_mixin_obj.public_message_queue = deque()
-    auto_quote_mixin_obj.command_queue = deque()
-    auto_quote_mixin_obj.service = Service()
     yield auto_quote_mixin_obj
     for AQnum in auto_quote_mixin_obj.auto_quotes_timers.keys():
         auto_quote_mixin_obj.auto_quotes_timers[AQnum].cancel()
