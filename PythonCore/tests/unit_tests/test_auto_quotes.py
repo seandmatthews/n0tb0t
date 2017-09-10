@@ -1,7 +1,5 @@
 import os
 import sys
-from collections import deque
-from enum import Enum, auto
 from inspect import getsourcefile
 from unittest.mock import Mock
 
@@ -13,23 +11,9 @@ root_dir = os.path.join(current_dir, os.pardir, os.pardir, os.pardir)
 sys.path.append(root_dir)
 
 import PythonCore.src.core_modules.auto_quotes as auto_quotes
-from PythonCore.src.message import Message
 from PythonCore.src.models import AutoQuote
-
-
-class Service:
-    @staticmethod
-    def get_message_content(message):
-        return message.content
-
-    @staticmethod
-    def get_mod_status(message):
-        return message.is_mod
-
-
-class MessageTypes(Enum):
-    PUBLIC = auto()
-    PRIVATE = auto()
+from PythonCore.src.message import Message
+from PythonCore.src.base_service import MessageTypes
 
 
 @pytest.fixture

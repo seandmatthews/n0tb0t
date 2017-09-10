@@ -6,6 +6,13 @@ class Services(Enum):
     MIXER = auto()
 
 
+class MessageTypes(Enum):
+    # When you define your own service it must have its bot instance process messages
+    # its message_type attribute must be able to be at least PUBLIC and PRIVATE
+    PUBLIC = auto()
+    PRIVATE = auto()
+
+
 class BaseService:
     def send_public_message(self):
         pass
