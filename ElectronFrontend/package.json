@@ -10,5 +10,8 @@
   "license": "ICO",
   "devDependencies": {
     "electron": "~1.6.2"
+  },
+  "dependencies": {
+    "protobufjs": "~6.8.0"
   }
 }

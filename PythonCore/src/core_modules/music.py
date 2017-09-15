@@ -8,8 +8,12 @@ import grpc
 import gspread
 import pafy
 
-from PythonCore.src.base_module import BaseMixin
+import proto.songqueuer_pb2
+import proto.songqueuer_pb2_grpc
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
+
+
 
 
 class Song:
@@ -35,6 +39,20 @@ class SongQueue:
         return list(reversed(self._queue))
 
 
+class SongQueueExchangeServicer(proto.songqueuer_pb2_grpc.SongQueueExchangeServicer):
+    def AddSong(self, request, context):
+        print('Adding song')
+        return proto.songqueuer_pb2.AddSongResponse(response_text='Song added')
+
+    def DeleteSong(self, request, context):
+        print('Deleting song')
+        return proto.songqueuer_pb2.AddSongResponse(response_text='Song deleted')
+
+    def PromoteSong(self, request, context):
+        print('Promoting song')
+        return proto.songqueuer_pb2.AddSongResponse(response_text='Song promoted')
+
+
 class MusicMixin(BaseMixin):
     def __init__(self):
         super().__init__()
@@ -55,6 +73,8 @@ class MusicMixin(BaseMixin):
                                                      kwargs={})
         self.song_download_thread.daemon = True
         self.song_download_thread.start()
+
+        proto.songqueuer_pb2_grpc.add_SongQueueExchangeServicer_to_server(SongQueueExchangeServicer(), self.grpc_server)
 
     @utils.retry_gspread_func
     def _initialize_songs_spreadsheet(self, spreadsheet_name):

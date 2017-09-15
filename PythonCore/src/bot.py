@@ -1,4 +1,5 @@
 import collections
+import concurrent.futures as futures
 import importlib
 import inspect
 import os
@@ -6,6 +7,7 @@ import threading
 import time
 from enum import Enum, auto
 
+import grpc
 import sqlalchemy
 from pyshorteners import Shortener
 from sqlalchemy.orm import sessionmaker
@@ -56,6 +58,8 @@ class Bot(*all_mixin_classes):
     def __init__(self, service, bot_info, bitly_access_token, top_level_dir, data_dir):
         self.service = service
         self.info = bot_info
+
+        self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
         self.sorted_methods = self._sort_methods()
 
@@ -120,6 +124,9 @@ class Bot(*all_mixin_classes):
             self._create_timer_for_auto_quote_object(aaq)
         self.player_queue_credentials = None
         db_session.close()
+
+        self.grpc_server.add_insecure_port('[::]:50051')
+        self.grpc_server.start()
 
     def _sort_methods(self):
         """

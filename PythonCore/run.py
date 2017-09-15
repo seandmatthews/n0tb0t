@@ -11,9 +11,6 @@ from PythonCore import config
 
 bot_info = config.bot_info
 
-# Start the grpc server
-# grpc_server.serve()
-
 if config.service == Services.TWITCH:
     ts = TwitchService(pw=bot_info['pw'],
                        user=bot_info['user'],
@@ -29,8 +26,6 @@ if config.service == Services.TWITCH:
               data_dir=config.data_dir)
 
     ts.run(bot)
-
-
 else:
     raise NotImplementedError("We don't actually care about anything but Twitch yet. Sorry")
 

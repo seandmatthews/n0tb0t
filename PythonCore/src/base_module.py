@@ -1,6 +1,8 @@
 import collections
+import concurrent.futures as futures
 import os
 
+import grpc
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 
@@ -19,8 +21,11 @@ class BaseMixin:
             self.spreadsheets = []
             self.Session = self._get_dummy_Session()
             self.service = BaseService()
+            self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
     def _get_dummy_Session(self):
+        if self.__class__.__name__ == "Bot":
+            raise RuntimeError('This function should not be used in this context. use self.Session instead')
         self.db_path = os.path.join(config.data_dir, 'test.db')
         engine = sqlalchemy.create_engine(f'sqlite:///{self.db_path}', connect_args={'check_same_thread': False})
         session_factory = sessionmaker(bind=engine)
