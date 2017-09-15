@@ -5,9 +5,11 @@ import os
 import grpc
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
-
 import PythonCore.config as config
 from PythonCore.src.base_service import BaseService
+
+
+# TODO: Mock out shortener and maybe Session and other stuff
 
 
 class BaseMixin:
@@ -21,7 +23,13 @@ class BaseMixin:
             self.spreadsheets = []
             self.Session = self._get_dummy_Session()
             self.service = BaseService()
+            self.shortener = None
             self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+            self.sorted_methods = {
+                'for_all': [],
+                'for_mods': []
+            }
+            self.info = config.bot_info
 
     def _get_dummy_Session(self):
         if self.__class__.__name__ == "Bot":

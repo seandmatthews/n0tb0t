@@ -25,6 +25,7 @@ def setup_logger(logger_name, log_file, level=logging.INFO):
 
     return logger
 
+
 if not os.path.exists(config.data_dir):
     os.makedirs(config.data_dir)
 

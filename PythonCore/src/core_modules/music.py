@@ -4,7 +4,6 @@ import threading
 import time
 from inspect import getsourcefile
 
-import grpc
 import gspread
 import pafy
 
@@ -12,8 +11,6 @@ import proto.songqueuer_pb2
 import proto.songqueuer_pb2_grpc
 import PythonCore.src.utils as utils
 from PythonCore.src.base_module import BaseMixin
-
-
 
 
 class Song:
@@ -182,6 +179,6 @@ class MusicMixin(BaseMixin):
             video_id, song_title, file_name = self._ensure_song_is_downloaded(video)
             song = Song(video_id, song_title, file_name, requester_id, requester_name)
             self.song_queue.insert(song)
-            utils.add_to_command_queue(self, 'update_songs_spreadsheet')
+            self.add_to_command_queue('update_songs_spreadsheet')
         except RuntimeError as e:
-            utils.add_to_appropriate_chat_queue(self, message, str(e))
+            self.add_to_appropriate_chat_queue(message, str(e))

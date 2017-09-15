@@ -1,7 +1,8 @@
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
 
 
-class ShoutOutMixin:
+class ShoutOutMixin(BaseMixin):
     @utils.mod_only
     def so(self, message):
         """
@@ -20,6 +21,6 @@ class ShoutOutMixin:
                 shout_out_str = f"Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {channel_url}! Tell 'em {i} sent you!"
             except RuntimeError as e:
                 shout_out_str = str(e)
-            utils.add_to_public_chat_queue(self, shout_out_str)
+            self.add_to_public_chat_queue(shout_out_str)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, you need to specify a caster to shout out.')
+            self.add_to_appropriate_chat_queue(message, f'Sorry {user}, you need to specify a caster to shout out.')

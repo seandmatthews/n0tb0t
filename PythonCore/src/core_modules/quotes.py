@@ -4,10 +4,12 @@ import gspread
 
 import PythonCore.src.models as models
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
 
 
-class QuotesMixin:
+class QuotesMixin(BaseMixin):
     def __init__(self):
+        super().__init__()
         self.starting_spreadsheets_list.append('quotes')
 
     @utils.retry_gspread_func
@@ -105,7 +107,7 @@ class QuotesMixin:
         msg_list = self.service.get_message_content(message).split(' ')
         quote_str = ' '.join(msg_list[1:])
         response_str = self._add_quote(db_session, quote_str)
-        utils.add_to_appropriate_chat_queue(self, message, response_str)
+        self.add_to_appropriate_chat_queue(message, response_str)
 
     @utils.mod_only
     def edit_quote(self, message, db_session):
@@ -120,9 +122,9 @@ class QuotesMixin:
             quote_id = int(msg_list[1])
             quote_str = ' '.join(msg_list[2:])
             response_str = self._edit_quote(db_session, quote_id, quote_str)
-            utils.add_to_appropriate_chat_queue(self, message, response_str)
+            self.add_to_appropriate_chat_queue(message, response_str)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, 'You must use a digit to specify a quote.')
+            self.add_to_appropriate_chat_queue(message, 'You must use a digit to specify a quote.')
 
     @utils.mod_only
     def delete_quote(self, message, db_session):
@@ -136,7 +138,7 @@ class QuotesMixin:
         if len(msg_list) > 1 and msg_list[1].isdigit() and int(msg_list[1]) > 0:
             quote_id = int(msg_list[1])
             response_str = self._delete_quote(db_session, quote_id)
-            utils.add_to_appropriate_chat_queue(self, message, response_str)
+            self.add_to_appropriate_chat_queue(message, response_str)
 
     def show_quotes(self, message):
         """
@@ -146,7 +148,7 @@ class QuotesMixin:
         """
         web_view_link = self.spreadsheets['quotes'][1]
         short_url = self.shortener.short(web_view_link)
-        utils.add_to_appropriate_chat_queue(self, message, 'View the quotes at: {}'.format(short_url))
+        self.add_to_appropriate_chat_queue(message, 'View the quotes at: {}'.format(short_url))
 
     def quote(self, message, db_session):
         """
@@ -162,30 +164,30 @@ class QuotesMixin:
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 1:  # !quote
             quote_str = self._get_random_quote(db_session)
-            utils.add_to_appropriate_chat_queue(self, message, quote_str)
+            self.add_to_appropriate_chat_queue(message, quote_str)
         elif msg_list[1].isdigit():  # !quote 50
             quote_id = int(msg_list[1])
             quote_str = self._get_quote(db_session, quote_id)
-            utils.add_to_appropriate_chat_queue(self, message, quote_str)
+            self.add_to_appropriate_chat_queue(message, quote_str)
         else:  # !quote add/edit/delete
             action = msg_list[1].lower()
             if action == 'add':  # !quote add Oh look, the caster has uttered an innuendo!
                 quote_str = ' '.join(msg_list[2:])
                 response_str = self._add_quote(db_session, quote_str)
-                utils.add_to_appropriate_chat_queue(self, message, response_str)
+                self.add_to_appropriate_chat_queue(message, response_str)
             elif action == 'edit':  # !quote edit 5 This quote is now different
                 if self.service.get_mod_status(message):
                     if msg_list[2].isdigit():
                         quote_id = int(msg_list[2])
                         quote_str = ' '.join(msg_list[3:])
                         response_str = self._edit_quote(db_session, quote_id, quote_str)
-                        utils.add_to_appropriate_chat_queue(self, message, response_str)
+                        self.add_to_appropriate_chat_queue(message, response_str)
             elif action == 'delete':  # !quote delete 5
                 if self.service.get_mod_status(message):
                     if msg_list[2].isdigit():
                         quote_id = int(msg_list[2])
                         response_str = self._delete_quote(db_session, quote_id)
-                        utils.add_to_appropriate_chat_queue(self, message, response_str)
+                        self.add_to_appropriate_chat_queue(message, response_str)
 
     # These methods interact with the database
     @staticmethod
@@ -215,7 +217,7 @@ class QuotesMixin:
         quote_obj = models.Quote(quote=quote_str)
         db_session.add(quote_obj)
         response_str = f'Quote added as quote #{db_session.query(models.Quote).count()}.'
-        utils.add_to_command_queue(self, 'update_quote_spreadsheet')
+        self.add_to_command_queue('update_quote_spreadsheet')
         return response_str
 
     def _edit_quote(self, db_session, quote_index, quote_str):
@@ -226,7 +228,7 @@ class QuotesMixin:
             quote_obj = quote_objs[quote_index - 1]
             quote_obj.quote = quote_str
             response_str = 'Quote has been edited.'
-            utils.add_to_command_queue(self, 'update_quote_spreadsheet')
+            self.add_to_command_queue('update_quote_spreadsheet')
         else:
             response_str = 'That quote does not exist'
         return response_str
@@ -239,7 +241,7 @@ class QuotesMixin:
             quote_obj = quote_objs[quote_id - 1]
             db_session.delete(quote_obj)
             response_str = 'Quote deleted'
-            utils.add_to_command_queue(self, 'update_quote_spreadsheet')
+            self.add_to_command_queue('update_quote_spreadsheet')
         else:
             response_str = 'That quote does not exist'
         return response_str

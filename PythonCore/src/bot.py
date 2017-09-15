@@ -117,7 +117,7 @@ class Bot(*all_mixin_classes):
                 init_command = '_initialize_{}_spreadsheet'.format(sheet)
                 getattr(self, init_command)(sheet_name)
 
-        utils.add_to_public_chat_queue(self, f"{bot_info['user']} is online")
+        self.public_message_queue.appendleft(f"{bot_info['user']} is online")
 
         active_auto_quotes = db_session.query(models.AutoQuote).filter(models.AutoQuote.active == True).all()
         for aaq in active_auto_quotes:

@@ -1,4 +1,3 @@
-# import PythonCore.src.grpc_server as grpc_server
 from PythonCore.src.bot import Bot
 from PythonCore.src.loggers import event_logger, error_logger
 from PythonCore.src.base_service import Services

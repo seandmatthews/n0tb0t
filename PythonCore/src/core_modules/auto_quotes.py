@@ -88,7 +88,7 @@ class AutoQuoteMixin(BaseMixin):
         """
         web_view_link = self.spreadsheets['auto_quotes'][1]
         short_url = self.shortener.short(web_view_link)
-        utils.add_to_appropriate_chat_queue(self, message, 'View the auto quotes at: {}'.format(short_url))
+        self.add_to_appropriate_chat_queue(message, 'View the auto quotes at: {}'.format(short_url))
 
     @utils.mod_only
     def start_auto_quote(self, message, db_session):
@@ -103,9 +103,9 @@ class AutoQuoteMixin(BaseMixin):
             human_readable_auto_quote_index = int(msg_list[1])
             response = self._start_auto_quote(db_session, human_readable_auto_quote_index)
             if response is not None:
-                utils.add_to_appropriate_chat_queue(self, message, response)
+                self.add_to_appropriate_chat_queue(message, response)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, the command isn't formatted properly.")
 
     @utils.mod_only
     def stop_auto_quote(self, message, db_session):
@@ -120,9 +120,9 @@ class AutoQuoteMixin(BaseMixin):
             human_readable_auto_quote_index = int(msg_list[1])
             response = self._stop_auto_quote(db_session, human_readable_auto_quote_index)
             if response is not None:
-                utils.add_to_appropriate_chat_queue(self, message, response)
+                self.add_to_appropriate_chat_queue(message, response)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, the command isn't formatted properly.")
 
     @utils.mod_only
     def start_all_auto_quotes(self, db_session):
@@ -135,7 +135,7 @@ class AutoQuoteMixin(BaseMixin):
         for iaq in inactive_auto_quotes:
             iaq.active = True
             self._create_timer_for_auto_quote_object(iaq)
-        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        self.add_to_command_queue('update_auto_quote_spreadsheet')
 
     @utils.mod_only
     def stop_all_auto_quotes(self, message, db_session):
@@ -148,8 +148,8 @@ class AutoQuoteMixin(BaseMixin):
         for aaq in active_auto_quotes:
             aaq.active = False
             self._delete_timer_for_auto_quote_object(aaq)
-        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
-        utils.add_to_appropriate_chat_queue(self, message, 'All auto quotes have been stopped')
+        self.add_to_command_queue('update_auto_quote_spreadsheet')
+        self.add_to_appropriate_chat_queue(message, 'All auto quotes have been stopped')
 
     @utils.mod_only
     def add_auto_quote(self, message, db_session):
@@ -166,9 +166,9 @@ class AutoQuoteMixin(BaseMixin):
             quote_str = ' '.join(msg_list[2:])
 
             displayed_feedback_message = self._add_auto_quote(db_session, delay, quote_str)
-            utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
+            self.add_to_appropriate_chat_queue(message, displayed_feedback_message)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted properly.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, the command isn't formatted properly.")
 
     @utils.mod_only
     def edit_auto_quote(self, message, db_session):
@@ -184,9 +184,9 @@ class AutoQuoteMixin(BaseMixin):
             auto_quote = ' '.join(msg_list[3:])
 
             displayed_feedback_message = self._edit_auto_quote(db_session, auto_quote_id, auto_quote, auto_quote_period)
-            utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
+            self.add_to_appropriate_chat_queue(message, displayed_feedback_message)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted correctly.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, the command isn't formatted correctly.")
 
     @utils.mod_only
     def delete_auto_quote(self, message, db_session):
@@ -200,9 +200,9 @@ class AutoQuoteMixin(BaseMixin):
         if len(msg_list) > 1 and msg_list[1].isdigit():
             auto_quote_id = int(msg_list[1])
             displayed_feedback_message = self._delete_auto_quote(db_session, auto_quote_id)
-            utils.add_to_appropriate_chat_queue(self, message, displayed_feedback_message)
+            self.add_to_appropriate_chat_queue(message, displayed_feedback_message)
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, the command isn't formatted correctly.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, the command isn't formatted correctly.")
 
     @utils.mod_only
     def auto_quote(self, message, db_session):
@@ -224,37 +224,37 @@ class AutoQuoteMixin(BaseMixin):
                 auto_quote_period = int(msg_list[2])
                 auto_quote_str = ' '.join(msg_list[3:])
                 response = self._add_auto_quote(db_session, auto_quote_period, auto_quote_str)
-                utils.add_to_appropriate_chat_queue(self, message, response)
+                self.add_to_appropriate_chat_queue(message, response)
 
             elif msg_list[1].lower() == 'edit' and len(msg_list) > 4 and msg_list[2].isdigit() and msg_list[3].isdigit():
                 auto_quote_index = int(msg_list[2])
                 auto_quote_str = ' '.join(msg_list[4:])
                 auto_quote_period = int(msg_list[3])
                 response = self._edit_auto_quote(db_session, auto_quote_index, auto_quote_str, auto_quote_period)
-                utils.add_to_appropriate_chat_queue(self, message, response)
+                self.add_to_appropriate_chat_queue(message, response)
 
             elif msg_list[1].lower() == 'delete' and len(msg_list) > 2 and msg_list[2].isdigit():
                 auto_quote_index = int(msg_list[2])
                 response = self._delete_auto_quote(db_session, auto_quote_index)
-                utils.add_to_appropriate_chat_queue(self, message, response)
+                self.add_to_appropriate_chat_queue(message, response)
 
             elif msg_list[1].lower() == 'start' and len(msg_list) > 2 and msg_list[2].isdigit():
                 human_readable_auto_quote_index = int(msg_list[2])
                 response = self._start_auto_quote(db_session, human_readable_auto_quote_index)
                 if response is not None:
-                    utils.add_to_appropriate_chat_queue(self, message, response)
+                    self.add_to_appropriate_chat_queue(message, response)
 
             elif msg_list[1].lower() == 'stop' and len(msg_list) > 2 and msg_list[2].isdigit():
                 human_readable_auto_quote_index = int(msg_list[2])
                 response = self._stop_auto_quote(db_session, human_readable_auto_quote_index)
                 if response is not None:
-                    utils.add_to_appropriate_chat_queue(self, message, response)
+                    self.add_to_appropriate_chat_queue(message, response)
 
             else:
-                utils.add_to_appropriate_chat_queue(self, message, "Sorry, that command wasn't properly formatted.")
+                self.add_to_appropriate_chat_queue(message, "Sorry, that command wasn't properly formatted.")
 
         else:
-            utils.add_to_appropriate_chat_queue(self, message, "Sorry, auto_quote must be followed by add, edit, delete, start, or stop.")
+            self.add_to_appropriate_chat_queue(message, "Sorry, auto_quote must be followed by add, edit, delete, start, or stop.")
 
     def _create_repeating_timer(self, index, quote, period):
         """
@@ -267,7 +267,7 @@ class AutoQuoteMixin(BaseMixin):
         self.auto_quotes_timers[key] = threading.Timer(period, self._create_repeating_timer,
                                                        kwargs={'index': index, 'quote': quote, 'period': period})
         self.auto_quotes_timers[key].start()
-        utils.add_to_public_chat_queue(self, quote)
+        self.add_to_public_chat_queue(quote)
 
     def _create_timer_for_auto_quote_object(self, auto_quote_object):
         """
@@ -299,7 +299,7 @@ class AutoQuoteMixin(BaseMixin):
             auto_quote_obj.active = True
             self._create_timer_for_auto_quote_object(auto_quote_obj)
             db_session.flush()
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            self.add_to_command_queue('update_auto_quote_spreadsheet')
         else:
             return 'The auto_quote was already active'
 
@@ -316,7 +316,7 @@ class AutoQuoteMixin(BaseMixin):
             auto_quote_obj.active = False
             self._delete_timer_for_auto_quote_object(auto_quote_obj)
             db_session.flush()
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            self.add_to_command_queue('update_auto_quote_spreadsheet')
             return 'The auto_quote has been stopped'
         else:
             return 'The auto_quote was already inactive'
@@ -331,7 +331,7 @@ class AutoQuoteMixin(BaseMixin):
         db_session.flush()
         self._create_timer_for_auto_quote_object(auto_quote_obj)
         response_str = f'Auto quote added as auto quote #{db_session.query(models.AutoQuote).count()}.'
-        utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+        self.add_to_command_queue('update_auto_quote_spreadsheet')
         return response_str
 
     def _edit_auto_quote(self, db_session, human_readable_auto_quote_index, auto_quote_str, auto_quote_period):
@@ -351,7 +351,7 @@ class AutoQuoteMixin(BaseMixin):
                 self._create_timer_for_auto_quote_object(auto_quote_obj)
             response_str = 'Auto quote has been edited.'
             db_session.flush()
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            self.add_to_command_queue('update_auto_quote_spreadsheet')
         else:
             response_str = 'That auto quote does not exist'
         return response_str
@@ -369,7 +369,7 @@ class AutoQuoteMixin(BaseMixin):
             db_session.delete(auto_quote_obj)
             response_str = 'Auto quote deleted'
             db_session.flush()
-            utils.add_to_command_queue(self, 'update_auto_quote_spreadsheet')
+            self.add_to_command_queue('update_auto_quote_spreadsheet')
             if auto_quote_obj.active:
                 self._delete_timer_for_auto_quote_object(auto_quote_obj)
         else:

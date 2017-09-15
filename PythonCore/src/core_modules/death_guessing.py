@@ -1,15 +1,15 @@
-import concurrent.futures
-
 import gspread
 import sqlalchemy
 
 import PythonCore.src.models as models
 import PythonCore.src.utils as utils
 from PythonCore import config
+from PythonCore.src.base_module import BaseMixin
 
 
-class DeathGuessingMixin:
+class DeathGuessingMixin(BaseMixin):
     def __init__(self):
+        super().__init__()
         self.starting_spreadsheets_list.append('player_guesses')
 
     @utils.retry_gspread_func
@@ -43,7 +43,7 @@ class DeathGuessingMixin:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "True"
-        utils.add_to_public_chat_queue(self, "Guessing is now enabled.")
+        self.add_to_public_chat_queue("Guessing is now enabled.")
 
     @utils.mod_only
     def stop_guessing(self, db_session):
@@ -56,7 +56,7 @@ class DeathGuessingMixin:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guessing-enabled').one()
         mv_obj.mv_value = "False"
-        utils.add_to_public_chat_queue(self, "Guessing is now disabled.")
+        self.add_to_public_chat_queue("Guessing is now disabled.")
 
     def guess(self, message, db_session):
         """
@@ -75,13 +75,13 @@ class DeathGuessingMixin:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
                     self._set_current_guess(user, guess, db_session)
-                    utils.add_to_appropriate_chat_queue(self, message, f"{user} your guess has been recorded.")
+                    self.add_to_appropriate_chat_queue(message, f"{user} your guess has been recorded.")
                 else:
-                    utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, that's not a non-negative integer.")
+                    self.add_to_appropriate_chat_queue(message, f"Sorry {user}, that's not a non-negative integer.")
             else:
-                utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, !guess must be followed by a non-negative integer.")
+                self.add_to_appropriate_chat_queue(message, f"Sorry {user}, !guess must be followed by a non-negative integer.")
         else:
-            utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing is disabled.")
+            self.add_to_appropriate_chat_queue(message, f"Sorry {user}, guessing is disabled.")
 
     @utils.mod_only
     def start_guesstotal(self, db_session):
@@ -94,7 +94,7 @@ class DeathGuessingMixin:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "True"
-        utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now enabled.")
+        self.add_to_public_chat_queue("Guessing for the total amount of deaths is now enabled.")
 
     @utils.mod_only
     def stop_guesstotal(self, db_session):
@@ -105,7 +105,7 @@ class DeathGuessingMixin:
         """
         mv_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'guess-total-enabled').one()
         mv_obj.mv_value = "False"
-        utils.add_to_public_chat_queue(self, "Guessing for the total amount of deaths is now disabled.")
+        self.add_to_public_chat_queue("Guessing for the total amount of deaths is now disabled.")
 
     def guesstotal(self, message, db_session):
         """
@@ -125,13 +125,13 @@ class DeathGuessingMixin:
                 guess = msg_list[1]
                 if guess.isdigit() and int(guess) >= 0:
                     self._set_total_guess(user, guess, db_session)
-                    utils.add_to_appropriate_chat_queue(self, message, f"{user} your guess has been recorded.")
+                    self.add_to_appropriate_chat_queue(message, f"{user} your guess has been recorded.")
                 else:
-                    utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, that's not a non-negative integer.")
+                    self.add_to_appropriate_chat_queue(message, f"Sorry {user}, that's not a non-negative integer.")
             else:
-                utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, you need to include a number after your guess.")
+                self.add_to_appropriate_chat_queue(message, f"Sorry {user}, you need to include a number after your guess.")
         else:
-            utils.add_to_appropriate_chat_queue(self, message, f"Sorry {user}, guessing for the total number of deaths is disabled.")
+            self.add_to_appropriate_chat_queue(message, f"Sorry {user}, guessing for the total number of deaths is disabled.")
 
     @utils.mod_only
     def reset_guesses(self, db_session):
@@ -144,7 +144,7 @@ class DeathGuessingMixin:
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={
             models.User.__table__.c.current_guess: None}))
-        utils.add_to_public_chat_queue(self, "Guesses have been cleared.")
+        self.add_to_public_chat_queue("Guesses have been cleared.")
 
     @utils.mod_only
     def reset_total_guesses(self, db_session):
@@ -156,41 +156,40 @@ class DeathGuessingMixin:
         !reset_total_guesses
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={models.User.__table__.c.total_guess: None}))
-        utils.add_to_public_chat_queue(self, "Guesses for the total number of deaths have been cleared.")
+        self.add_to_public_chat_queue("Guesses for the total number of deaths have been cleared.")
 
     @utils.retry_gspread_func
     def update_player_guesses_spreadsheet(self):
         """
         Updates the player guesses spreadsheet from the database.
         """
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            db_session = self.Session()
-            spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
-            gc = gspread.authorize(self.credentials)
-            sheet = gc.open(spreadsheet_name)
-            ws = sheet.worksheet('Player Guesses')
+        db_session = self.Session()
+        spreadsheet_name, web_view_link = self.spreadsheets['player_guesses']
+        gc = gspread.authorize(self.credentials)
+        sheet = gc.open(spreadsheet_name)
+        ws = sheet.worksheet('Player Guesses')
 
-            worksheet_width = 3
+        worksheet_width = 3
 
-            all_users = db_session.query(models.User).all()
-            users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
+        all_users = db_session.query(models.User).all()
+        users = [user for user in all_users if user.current_guess is not None or user.total_guess is not None]
 
-            cells = ws.range(f'A2:C{len(users)+11}')
-            for cell in cells:
-                cell.value = ''
-            ws.update_cells(cells)
+        cells = ws.range(f'A2:C{len(users)+11}')
+        for cell in cells:
+            cell.value = ''
+        ws.update_cells(cells)
 
-            cells = ws.range(f'A2:C{len(users)+1}')
-            for index, user in enumerate(users):
-                name_cell_index = index * worksheet_width
-                current_guess_cell_index = name_cell_index + 1
-                total_guess_cell_index = current_guess_cell_index + 1
+        cells = ws.range(f'A2:C{len(users)+1}')
+        for index, user in enumerate(users):
+            name_cell_index = index * worksheet_width
+            current_guess_cell_index = name_cell_index + 1
+            total_guess_cell_index = current_guess_cell_index + 1
 
-                cells[name_cell_index].value = user.name
-                cells[current_guess_cell_index].value = user.current_guess
-                cells[total_guess_cell_index].value = user.total_guess
+            cells[name_cell_index].value = user.name
+            cells[current_guess_cell_index].value = user.current_guess
+            cells[total_guess_cell_index].value = user.total_guess
 
-            ws.update_cells(cells)
+        ws.update_cells(cells)
         return web_view_link
 
     @utils.mod_only
@@ -202,7 +201,7 @@ class DeathGuessingMixin:
 
         !show_guesses
         """
-        utils.add_to_command_queue(self, '_update_guess_spreadsheet')
+        self.add_to_command_queue('_update_guess_spreadsheet')
 
     def _update_guess_spreadsheet(self):
         """
@@ -211,7 +210,7 @@ class DeathGuessingMixin:
         web_view_link = self.spreadsheets['player_guesses'][1]
         short_url = self.shortener.short(web_view_link)
         self.update_player_guesses_spreadsheet()
-        utils.add_to_public_chat_queue(self, f"Spreadsheet updated. {short_url}")
+        self.add_to_public_chat_queue(f"Spreadsheet updated. {short_url}")
 
     @utils.mod_only
     def set_deaths(self, message, db_session):
@@ -227,11 +226,11 @@ class DeathGuessingMixin:
             deaths_num = msg_list[1]
             if deaths_num.isdigit() and int(deaths_num) >= 0:
                 self._set_deaths(deaths_num, db_session)
-                utils.add_to_appropriate_chat_queue(self, message, f'Current deaths: {deaths_num}')
+                self.add_to_appropriate_chat_queue(message, f'Current deaths: {deaths_num}')
             else:
-                utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
+                self.add_to_appropriate_chat_queue(message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
         else:
-            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
+            self.add_to_appropriate_chat_queue(message, f'Sorry {user}, !set_deaths should be followed by a non-negative integer')
 
     @utils.mod_only
     def set_total_deaths(self, message, db_session):
@@ -247,11 +246,11 @@ class DeathGuessingMixin:
             total_deaths_num = msg_list[1]
             if total_deaths_num.isdigit() and int(total_deaths_num) >= 0:
                 self._set_total_deaths(total_deaths_num, db_session)
-                utils.add_to_appropriate_chat_queue(self, message, f'Total deaths: {total_deaths_num}')
+                self.add_to_appropriate_chat_queue(message, f'Total deaths: {total_deaths_num}')
             else:
-                utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
+                self.add_to_appropriate_chat_queue(message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
         else:
-            utils.add_to_appropriate_chat_queue(self, message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
+            self.add_to_appropriate_chat_queue(message, f'Sorry {user}, !set_total_deaths should be followed by a non-negative integer')
 
     @utils.mod_only
     def adddeath(self, message, db_session):
@@ -263,7 +262,7 @@ class DeathGuessingMixin:
         """
         current_deaths, total_deaths = self._add_death(db_session)
         whisper_msg = f'Current Deaths: {current_deaths}, Total Deaths: {total_deaths}'
-        utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
+        self.add_to_appropriate_chat_queue(message, whisper_msg)
 
     @utils.mod_only
     def removedeath(self, message, db_session):
@@ -275,7 +274,7 @@ class DeathGuessingMixin:
         """
         current_deaths, total_deaths = self._remove_death(db_session)
         whisper_msg = f'Current Deaths: {current_deaths}, Total Deaths: {total_deaths}'
-        utils.add_to_appropriate_chat_queue(self, message, whisper_msg)
+        self.add_to_appropriate_chat_queue(message, whisper_msg)
 
     @utils.mod_only
     def reset_deaths(self, db_session):
@@ -298,7 +297,7 @@ class DeathGuessingMixin:
         """
         deaths = self._get_current_deaths(db_session)
         total_deaths = self._get_total_deaths(db_session)
-        utils.add_to_public_chat_queue(self, f"Current Boss Deaths: {deaths}, Total Deaths: {total_deaths}")
+        self.add_to_public_chat_queue(f"Current Boss Deaths: {deaths}, Total Deaths: {total_deaths}")
 
     @utils.mod_only
     def winner(self, message, db_session):
@@ -327,7 +326,7 @@ class DeathGuessingMixin:
         else:
             caster = self.info['channel']
             winners_str = f'You all guessed too high. You should have had more faith in {caster}. {caster} wins!'
-        utils.add_to_appropriate_chat_queue(self, message, winners_str)
+        self.add_to_appropriate_chat_queue(message, winners_str)
 
     @utils.mod_only
     def total_winner(self, message, db_session):
@@ -357,9 +356,10 @@ class DeathGuessingMixin:
         else:
             caster = self.info['channel']
             winners_str = f'You all guessed too high. You should have had more faith in {caster}. {caster} wins!'
-        utils.add_to_appropriate_chat_queue(self, message, winners_str)
+        self.add_to_appropriate_chat_queue(message, winners_str)
 
-    def _set_current_guess(self, user, guess, db_session):
+    @staticmethod
+    def _set_current_guess(user, guess, db_session):
         """
         Takes a user and a guess.
         Adds the user (if they don't already exist)
@@ -371,7 +371,8 @@ class DeathGuessingMixin:
             db_session.add(db_user)
         db_user.current_guess = guess
 
-    def _set_total_guess(self, user, guess, db_session):
+    @staticmethod
+    def _set_total_guess(user, guess, db_session):
         """
         Takes a user and a guess
         for the total number of deaths.
@@ -384,7 +385,8 @@ class DeathGuessingMixin:
             db_session.add(db_user)
         db_user.total_guess = guess
 
-    def _get_current_deaths(self, db_session):
+    @staticmethod
+    def _get_current_deaths(db_session):
         """
         Returns the current number of deaths
         for the current leg of the run.
@@ -392,7 +394,8 @@ class DeathGuessingMixin:
         deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
         return deaths_obj.mv_value
 
-    def _get_total_deaths(self, db_session):
+    @staticmethod
+    def _get_total_deaths(db_session):
         """
         Returns the total deaths that
         have occurred in the run so far.
@@ -424,7 +427,8 @@ class DeathGuessingMixin:
         self._set_total_deaths(str(total_deaths), db_session)
         return deaths, total_deaths
 
-    def _set_deaths(self, deaths_num, db_session):
+    @staticmethod
+    def _set_deaths(deaths_num, db_session):
         """
         Takes a string for the number of deaths.
         Updates the miscellaneous values table and the txt file specified in the config.
@@ -435,7 +439,8 @@ class DeathGuessingMixin:
         deaths_obj = db_session.query(models.MiscValue).filter(models.MiscValue.mv_key == 'current-deaths').one()
         deaths_obj.mv_value = deaths_num
 
-    def _set_total_deaths(self, total_deaths_num, db_session):
+    @staticmethod
+    def _set_total_deaths(total_deaths_num, db_session):
         """
         Takes a string for the total number of deaths.
         Updates the miscellaneous values table and the txt file specified in the config.

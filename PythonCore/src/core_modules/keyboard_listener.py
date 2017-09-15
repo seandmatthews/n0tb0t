@@ -1,10 +1,12 @@
 from pynput.keyboard import Listener, KeyCode
 
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
 
 
-class KeyboardListenerMixin:
+class KeyboardListenerMixin(BaseMixin):
     def __init__(self):
+        super().__init__()
         self.keyboard_listener = None
 
     def _on_press(self, key):
@@ -42,7 +44,7 @@ class KeyboardListenerMixin:
             self.keyboard_listener.stop()
         self.keyboard_listener = Listener(on_press=self._on_press, on_release=self._on_release)
         self.keyboard_listener.start()
-        utils.add_to_public_chat_queue(self, 'Now listening for keyboard input')
+        self.add_to_public_chat_queue('Now listening for keyboard input')
 
     @utils.mod_only
     def stop_keylogger(self):
@@ -52,4 +54,4 @@ class KeyboardListenerMixin:
         !stop_keylogger
         """
         self.keyboard_listener.stop()
-        utils.add_to_public_chat_queue(self, 'No longer listening for keyboard input')
+        self.add_to_public_chat_queue('No longer listening for keyboard input')

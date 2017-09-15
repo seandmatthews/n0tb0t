@@ -4,9 +4,10 @@ import sqlalchemy
 
 import PythonCore.src.models as models
 import PythonCore.src.utils as utils
+from PythonCore.src.base_module import BaseMixin
 
 
-class ChatterSelectionMixin:
+class ChatterSelectionMixin(BaseMixin):
     def giveaway(self, message, db_session):
         """
         Adds the user to the contest entrants
@@ -38,9 +39,9 @@ class ChatterSelectionMixin:
         users_contest_list = db_session.query(models.User).filter(models.User.entered_in_contest == True).all()
         if len(users_contest_list) > 0:
             winner = random.choice(users_contest_list)
-            utils.add_to_public_chat_queue(self, f'The winner is {winner.name}!')
+            self.add_to_public_chat_queue(f'The winner is {winner.name}!')
         else:
-            utils.add_to_appropriate_chat_queue(self, message, 'There are currently no entrants for the giveaway.')
+            self.add_to_appropriate_chat_queue(message, 'There are currently no entrants for the giveaway.')
 
     @utils.mod_only
     def reset_giveaway(self, message, db_session):
@@ -51,4 +52,4 @@ class ChatterSelectionMixin:
         """
         db_session.execute(sqlalchemy.update(models.User.__table__, values={
             models.User.__table__.c.entered_in_contest: False}))
-        utils.add_to_appropriate_chat_queue(self, message, 'Giveaway entrants cleared.')
+        self.add_to_appropriate_chat_queue(message, 'Giveaway entrants cleared.')
