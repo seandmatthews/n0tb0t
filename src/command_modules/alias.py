@@ -7,8 +7,8 @@ class AliasCommmand(Command):
 
 
 class Alias(Command):
-    def __init__(self, allowed_privileges=["moderator"], disallowed_privileges, chat_command="alias"):
-        super().__init__(allowed_privileges, disallowed_privileges, chat_command)
+    def __init__(self, name="alias", allowed_privileges=["moderator"], disallowed_privileges):
+        super().__init__(name, allowed_privileges, disallowed_privileges
 
     def _execute(self, message, service):
         '''

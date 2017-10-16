@@ -13,8 +13,8 @@ class StopSpeaking(Command):
         Metruption: !stop_speaking
         <the bot no longer speaks>
     """
-    def __init__(self, allowed_privileges=["moderator"], disallowed_privileges, chat_command="stop_speaking"):
-        super().__init__(allowed_privileges, disallowed_privileges, chat_command)
+    def __init__(self, name="stop_speaking", allowed_privileges=["moderator"], disallowed_privileges=[]):
+        super().__init__(allowed_privileges, disallowed_privileges, name)
 
     def _execute(self, message, service):
         service.allowed_to_chat = False

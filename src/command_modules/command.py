@@ -21,10 +21,10 @@
 #whats a dalit
 
 class Command:
-    def __init__(self, allowed_privileges, disallowed_privileges, chat_command):
+    def __init__(self, name, allowed_privileges=[], disallowed_privileges=[]):
+        self.name = name
         self.allowed_privileges = allowed_privileges
         self.disallowed_privileges = disallowed_privileges
-        self.chat_command = chat_command
 
     def check_privileges(self, privileges):
         for p in privileges:

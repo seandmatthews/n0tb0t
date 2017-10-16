@@ -5,7 +5,7 @@ from src.message import Message
 
 #@todo(someone): do proper mocking if necessary
 class FakeService:
-    def __init__():
+    def __init__(self):
         pass#@todo(aaron) add command dict mocking
 
     def add_to_message_queue(self, message):
@@ -28,7 +28,6 @@ def test_SimpleCommandAdder():
 
     fservice = FakeService()
     adder = SimpleCommandAdder(adder_command_name)
-    valid_message = Message(contents="!{} {} {}".format(adder_command_name, new_command_name, echo_string))
+    valid_message = Message(content="!{} {} {}".format(adder_command_name, new_command_name, echo_string))
 
     assert adder.call(valid_message, fservice) == "Successfully added command {}.".format(command_name_valid)
-    assert True == False #@todo(aaron): create service's ability to store commands
