@@ -4,6 +4,7 @@
 .credentials/
 venv/
 n0tb0tVenv/*
+*.pyc
 
 
 DataAndLogs/
