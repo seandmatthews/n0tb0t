@@ -186,6 +186,18 @@ class QuotesMixin:
                         quote_id = int(msg_list[2])
                         response_str = self._delete_quote(db_session, quote_id)
                         utils.add_to_appropriate_chat_queue(self, message, response_str)
+            else:
+                search_str = ' '.join(msg_list[1:])
+                search_result = db_session.query(models.Quote).filter(models.Quote.quote.contains(search_str)).all()
+                if len(search_result) == 0:
+                    response_str = 'Sorry, that didn\'t return anything'
+                elif len(search_result) == 1:
+                    response_str = f'{search_result[0].quote}'
+                else:
+                    random_quote_obj = random.choice(search_result)
+                    response_str = random_quote_obj.quote
+                utils.add_to_appropriate_chat_queue(self, message, response_str)
+
 
     # These methods interact with the database
     @staticmethod
