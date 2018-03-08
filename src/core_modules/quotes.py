@@ -152,12 +152,15 @@ class QuotesMixin:
         """
         Displays a quote in chat. Takes a 1 indexed quote index.
         If no index is specified, displays a random quote.
+        If no index is specified, but a string is provided, searches the quote database for a matching quote. If there
+        is more than one result, displays one at random.
         
         !quote
         !quote 5
         !quote add Oh look, the caster has uttered an innuendo!
         !quote edit 5 This quote is now different
         !quote delete 5
+        !quote A string
         """
         msg_list = self.service.get_message_content(message).split(' ')
         if len(msg_list) == 1:  # !quote
@@ -190,12 +193,20 @@ class QuotesMixin:
                 search_str = ' '.join(msg_list[1:])
                 search_result = db_session.query(models.Quote).filter(models.Quote.quote.contains(search_str)).all()
                 if len(search_result) == 0:
-                    response_str = 'Sorry, that didn\'t return anything'
+                    response_str = 'Sorry, no matches found.'
                 elif len(search_result) == 1:
-                    response_str = f'{search_result[0].quote}'
+                    quote_objs = db_session.query(models.Quote).all()
+                    for index, quote_obj in enumerate(quote_objs):
+                        if quote_obj.id == search_result[0].id:
+                            response_str = f'#{index + 1} {search_result[0].quote}'
+                            break
                 else:
                     random_quote_obj = random.choice(search_result)
-                    response_str = random_quote_obj.quote
+                    quote_objs = db_session.query(models.Quote).all()
+                    for index, quote_obj in enumerate(quote_objs):
+                        if quote_obj.id == random_quote_obj.id:
+                            response_str = f'#{index + 1} {random_quote_obj.quote}'
+                            break
                 utils.add_to_appropriate_chat_queue(self, message, response_str)
 
 
