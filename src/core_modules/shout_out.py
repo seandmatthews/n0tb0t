@@ -24,7 +24,7 @@ class ShoutOutMixin:
                     r.raise_for_status()
                     game = r.json()['game']
                     channel_url = r.json()['url']
-                    shout_out_str = f'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {channel_url}! Tell \'em {me} sent you!'
+                    shout_out_str = f'Friends, {channel} is worth a follow. They last played {game}. If that sounds appealing to you, check out {channel} at {channel_url} ! Tell \'em {me} sent you!'
                     utils.add_to_public_chat_queue(self, shout_out_str)
                 except requests.exceptions.HTTPError:
                     utils.add_to_public_chat_queue(self, f"Hey {user}, that's not a real streamer!")
