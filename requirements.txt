@@ -35,6 +35,6 @@ six==1.10.0
 SQLAlchemy==1.1.11
 update-checker==0.16
 uritemplate==3.0.0
-urllib3==1.21.1
+urllib3==1.26.5
 Werkzeug==0.12.2
 youtube-dl==2017.7.23
